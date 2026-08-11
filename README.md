@@ -1,5 +1,17 @@
 # glpi-mcp-docker
 
+## ⚠️ Development / planning branch
+
+This `v2` branch prepares a future migration toward GLPI High-Level API v2.3.
+
+It is not a functional V2 implementation yet. The stable branch remains:
+
+```text
+main
+```
+
+At this stage, this branch only contains planning documentation and must not be presented as production-ready for GLPI API v2.3.
+
 ## Présentation
 
 Ce dépôt fournit une couche Docker propre autour du serveur MCP upstream [`GMS64260/mcp-glpi`](https://github.com/GMS64260/mcp-glpi), sans modifier son code source.
