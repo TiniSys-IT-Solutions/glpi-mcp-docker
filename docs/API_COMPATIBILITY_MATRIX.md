@@ -13,12 +13,12 @@ Status values:
 
 | MCP capability | Legacy | High-Level | Hybrid | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Create ticket | OK | TODO | OK VIA LEGACY | Unit mapper | Supports friendly fields and Legacy mapping. |
-| Update ticket | OK | TODO | OK VIA LEGACY | Unit mapper | Supports `location_id`, `entity_id`, `category_id`. |
-| Ticket location | OK | TODO | OK VIA LEGACY | Unit mapper | `location_id -> locations_id`. |
-| List tickets | OK | TODO | OK VIA LEGACY | Upstream unit coverage | Uses Legacy list/search behavior. |
-| Get ticket | OK | TODO | OK VIA LEGACY | Upstream unit coverage | Detail reads default to expanded dropdowns where supported. |
-| Search tickets | OK | TODO | OK VIA LEGACY | Search tests | Friendly filters are mapped through Legacy search options. |
+| Create ticket | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Supports friendly fields and Legacy mapping. |
+| Update ticket | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Supports `location_id`, `entity_id`, `category_id`, requester, assignment, priority fields, and `time_to_resolve`. |
+| Ticket location | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Create and update map `location_id -> locations_id`. |
+| List tickets | OK | TODO | OK VIA LEGACY | TicketService + inherited tests | Routed through `TicketService`. |
+| Get ticket | OK | TODO | OK VIA LEGACY | TicketService + inherited tests | Routed through `TicketService`; output adds friendly aliases while keeping Legacy fields. |
+| Search tickets | OK | TODO | OK VIA LEGACY | Search tests | Routed through `TicketService`; friendly filters are mapped through Legacy search options. |
 | Ticket timeline | OK | TODO | OK VIA LEGACY | Inherited | Followups, tasks, solutions, validations. |
 | Followups/tasks/solutions | OK | TODO | OK VIA LEGACY | Inherited | Write operations remain explicit. |
 | Validations | OK | TODO | OK VIA LEGACY | Inherited | High-Level pending Swagger. |
@@ -37,7 +37,8 @@ Status values:
 | Contracts/suppliers | OK | TODO | OK VIA LEGACY | Inherited | Lower priority. |
 | Knowledge base | OK | TODO | OK VIA LEGACY | Inherited | Search options tested upstream. |
 | Generic search/count | OK | TODO | OK VIA LEGACY | Search tests | `glpi_search_v2`, `glpi_count`. |
-| High-Level client | N/A | PARTIAL | N/A | Router tests | Base URL scaffold only; no domain calls yet. |
+| High-Level client | N/A | PARTIAL | N/A | High-Level URL + router tests | Base URL normalizes to `/api.php/v2.3`; no domain calls yet. |
+| High-Level ticket service | N/A | TODO | N/A | Router tests | Contract exists; methods return clear not-supported errors pending Swagger. |
 | Per-user auth | N/A | TODO | TODO | N/A | Requires OAuth/session confirmation. |
 
 ## Code Matrix

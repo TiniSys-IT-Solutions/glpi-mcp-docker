@@ -37,9 +37,12 @@ Supported configuration values:
 
 Legacy calls `/apirest.php`.
 
-High-Level will call `/api.php/{GLPI_API_VERSION}` once implemented. Until the
-target GLPI 11 Swagger/OpenAPI confirms a domain, return a clear not-supported
-error instead of guessing.
+High-Level will call `/api.php/v{GLPI_API_VERSION}` once implemented. Until
+the target GLPI 11 Swagger/OpenAPI confirms a domain, return a clear
+not-supported error instead of guessing.
+
+`GLPI_API_VERSION` accepts `2.3` or `v2.3`; code must normalize both to
+`/api.php/v2.3`.
 
 Hybrid must use the explicit compatibility matrix in code and docs. Never
 implement this pattern:
@@ -65,6 +68,15 @@ MCP-facing names should be durable and friendly:
 
 Adapters map those fields to API-specific payloads. For Legacy tickets,
 `location_id` maps to `locations_id`.
+
+The ticket vertical slice now uses a common `TicketService` contract:
+
+```text
+MCP ticket tools -> TicketService -> LegacyTicketService / HighLevelTicketService
+```
+
+Continue this pattern domain by domain. Do not force High-Level adapters to
+pretend they are `GlpiClient`.
 
 ## Authentication
 

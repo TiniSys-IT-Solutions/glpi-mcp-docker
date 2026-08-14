@@ -35,7 +35,7 @@ src/index.ts
 src/routing/api-router.ts
   |
   +-- legacy    -> src/api/legacy -> /apirest.php
-  +-- highlevel -> src/api/highlevel -> /api.php/{GLPI_API_VERSION}
+  +-- highlevel -> src/api/highlevel -> /api.php/v{GLPI_API_VERSION}
   +-- hybrid    -> explicit compatibility matrix
 ```
 
@@ -51,7 +51,8 @@ src/
 |   |   |-- search.ts
 |   |   `-- search-options.ts
 |   `-- highlevel/
-|       `-- client.ts
+|       |-- client.ts
+|       `-- tickets.ts
 |-- auth/
 |-- config/
 |   `-- env.ts
@@ -63,9 +64,28 @@ src/
 `-- index.ts
 ```
 
-`src/index.ts` still contains the upstream MCP tool registration and dispatch.
-The next cleanup step is to move ticket, asset, project, and identity tools out
-of this file gradually.
+`src/index.ts` still contains most upstream MCP tool registration and dispatch.
+The first vertical slice is now decoupled for tickets:
+
+```text
+MCP ticket tools
+  |
+  v
+TicketService
+  |
+  +-- LegacyTicketService
+  `-- HighLevelTicketService
+```
+
+The refactored ticket tools are:
+
+- `glpi_list_tickets`
+- `glpi_get_ticket`
+- `glpi_search_tickets`
+- `glpi_create_ticket`
+- `glpi_update_ticket`
+
+Other domains still use the Legacy client directly while parity is validated.
 
 ## Adapter Rules
 
@@ -74,6 +94,8 @@ of this file gradually.
 - Runtime code must not import from `upstream/legacy-mcp-glpi`.
 - High-Level implementation must be based on the target Swagger/OpenAPI, not on
   Legacy endpoint guessing.
+- High-Level API versions are normalized so `2.3` and `v2.3` both build
+  `/api.php/v2.3`.
 
 ## Supergateway Decision
 

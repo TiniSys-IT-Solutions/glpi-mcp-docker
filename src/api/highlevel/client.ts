@@ -3,6 +3,15 @@ export interface HighLevelClientConfig {
   apiVersion: string;
 }
 
+export function normalizeHighLevelApiVersion(apiVersion: string): string {
+  const trimmed = apiVersion.trim();
+  const withoutPrefix = trimmed.replace(/^v/i, '');
+  if (!withoutPrefix) {
+    throw new Error('GLPI_API_VERSION must not be empty');
+  }
+  return `v${withoutPrefix}`;
+}
+
 export class HighLevelNotSupportedError extends Error {
   constructor(toolName: string) {
     super(`Not supported in GLPI_API_MODE=highlevel: ${toolName}`);
@@ -15,8 +24,8 @@ export class HighLevelClient {
   readonly apiVersion: string;
 
   constructor(config: HighLevelClientConfig) {
-    this.apiVersion = config.apiVersion;
-    this.baseUrl = `${config.url.replace(/\/$/, '')}/api.php/${config.apiVersion}`;
+    this.apiVersion = normalizeHighLevelApiVersion(config.apiVersion);
+    this.baseUrl = `${config.url.replace(/\/$/, '')}/api.php/${this.apiVersion}`;
   }
 
   async initSession(): Promise<void> {

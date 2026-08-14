@@ -1,8 +1,10 @@
 import { AppConfig } from '../config/env.js';
 import { GlpiClient } from '../api/legacy/glpi-client.js';
 import { HighLevelClient, HighLevelNotSupportedError } from '../api/highlevel/client.js';
+import { HighLevelTicketService } from '../api/highlevel/tickets.js';
+import { LegacyTicketService } from '../api/legacy/tickets.js';
+import { GlpiServices } from '../core/tickets/service.js';
 
-export type RoutedGlpiClient = GlpiClient;
 export type BackendName = 'legacy' | 'highlevel';
 
 export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
@@ -105,7 +107,8 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
 };
 
 export interface ApiRouter {
-  client: RoutedGlpiClient;
+  legacyClient?: GlpiClient;
+  services: GlpiServices;
   backendForTool(toolName: string): BackendName;
   describeStartup(): string;
 }
@@ -122,53 +125,28 @@ function legacyClient(config: AppConfig): GlpiClient {
   });
 }
 
-function highLevelProxy(config: AppConfig): RoutedGlpiClient {
-  const highlevel = new HighLevelClient({
-    url: config.glpiUrl,
-    apiVersion: config.apiVersion,
-  });
-  const unsupportedNested = new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        if (typeof prop === 'string') {
-          return () => highlevel.unsupported(prop);
-        }
-        return undefined;
-      },
-    }
-  );
-
-  return new Proxy(highlevel, {
-    get(target, prop) {
-      if (prop in target) {
-        return Reflect.get(target, prop);
-      }
-      if (prop === 'search' || prop === 'searchOptions') {
-        return unsupportedNested;
-      }
-      if (typeof prop === 'string') {
-        return () => target.unsupported(prop);
-      }
-      return undefined;
-    },
-  }) as unknown as RoutedGlpiClient;
-}
-
 export function createApiRouter(config: AppConfig): ApiRouter {
   if (config.apiMode === 'highlevel') {
-    const client = highLevelProxy(config);
+    const highlevel = new HighLevelClient({
+      url: config.glpiUrl,
+      apiVersion: config.apiVersion,
+    });
     return {
-      client,
+      services: {
+        tickets: new HighLevelTicketService(highlevel),
+      },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
-        `api_mode=highlevel highlevel_version=${config.apiVersion} auth_mode=${config.authMode}`,
+        `api_mode=highlevel highlevel_version=${highlevel.apiVersion} auth_mode=${config.authMode}`,
     };
   }
 
   const client = legacyClient(config);
   return {
-    client,
+    legacyClient: client,
+    services: {
+      tickets: new LegacyTicketService(client),
+    },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';
       const backend = HYBRID_TOOL_BACKENDS[toolName];
@@ -176,6 +154,9 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       return backend;
     },
     describeStartup: () =>
-      `api_mode=${config.apiMode} highlevel_version=${config.apiVersion} auth_mode=${config.authMode}`,
+      `api_mode=${config.apiMode} highlevel_version=${new HighLevelClient({
+        url: config.glpiUrl,
+        apiVersion: config.apiVersion,
+      }).apiVersion} auth_mode=${config.authMode}`,
   };
 }

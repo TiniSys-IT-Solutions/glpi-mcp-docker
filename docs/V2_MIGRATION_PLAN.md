@@ -16,12 +16,13 @@ Current implementation order:
 2. Own the source and Docker build in this repository.
 3. Add central config and API routing.
 4. Support friendly ticket write fields, including `location_id`.
-5. Keep High-Level API scaffolded but blocked until target Swagger/OpenAPI is
+5. Route ticket list/get/search/create/update through `TicketService`.
+6. Keep High-Level API scaffolded but blocked until target Swagger/OpenAPI is
    inspected.
-6. Move tool domains gradually out of the large upstream-style `src/index.ts`.
-7. Implement High-Level read paths first.
-8. Implement High-Level write paths after tests and Swagger validation.
-9. Add per-user auth only after confirming GLPI 11 OAuth/session behavior.
+7. Move tool domains gradually out of the large upstream-style `src/index.ts`.
+8. Implement High-Level read paths first.
+9. Implement High-Level write paths after tests and Swagger validation.
+10. Add per-user auth only after confirming GLPI 11 OAuth/session behavior.
 
 ## Reference Documents
 

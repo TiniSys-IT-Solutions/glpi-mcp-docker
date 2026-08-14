@@ -3,7 +3,7 @@
  *
  * Usage:
  *   npm run smoke              # read-only checks
- *   npm run smoke -- --write   # also run the write cycle (test ticket create -> soft delete)
+ *   npm run smoke -- --write   # also run the write cycle (test ticket create -> update -> soft delete)
  *
  * Reads GLPI_URL / GLPI_APP_TOKEN / GLPI_USER_TOKEN (or GLPI_USERNAME+GLPI_PASSWORD)
  * from the environment, falling back to a .env file at the repo root.
@@ -39,12 +39,21 @@ const client = new GlpiClient({
   username: process.env.GLPI_USERNAME,
   password: process.env.GLPI_PASSWORD,
   timeoutMs: process.env.GLPI_TIMEOUT_MS ? parseInt(process.env.GLPI_TIMEOUT_MS, 10) : 15000,
+  maxRetries: process.env.GLPI_MAX_RETRIES ? parseInt(process.env.GLPI_MAX_RETRIES, 10) : 2,
 });
 
 // --- harness ----------------------------------------------------------------
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
+
+function envNumber(name: string): number | undefined {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+  const value = Number.parseInt(raw, 10);
+  if (Number.isNaN(value)) throw new Error(`${name} must be a number`);
+  return value;
+}
 
 async function check(name: string, fn: () => Promise<string | void>): Promise<boolean> {
   const t0 = Date.now();
@@ -176,6 +185,10 @@ async function main() {
     const e = (await client.getEntities({ range: '0-4' })) as any[];
     return `${e.length} rows`;
   });
+  await check('getLocations(limit 5)', async () => {
+    const l = (await client.getLocations({ range: '0-4' })) as any[];
+    return `${l.length} rows`;
+  });
 
   // ---- write cycle ----
   if (WRITE) {
@@ -186,7 +199,19 @@ async function main() {
       const created = (await client.createTicket({
         name: `[MCP-SMOKE] test ${new Date().toISOString()}`,
         content: 'Automated smoke test from mcp-glpi. Safe to delete.',
-        urgency: 1,
+        type: envNumber('SMOKE_TICKET_TYPE') ?? 1,
+        status: envNumber('SMOKE_TICKET_STATUS'),
+        urgency: envNumber('SMOKE_TICKET_URGENCY') ?? 1,
+        impact: envNumber('SMOKE_TICKET_IMPACT'),
+        priority: envNumber('SMOKE_TICKET_PRIORITY'),
+        category_id: envNumber('SMOKE_TICKET_CATEGORY_ID'),
+        entity_id: envNumber('SMOKE_TICKET_ENTITY_ID'),
+        location_id: envNumber('SMOKE_TICKET_LOCATION_ID'),
+        requester_user_id: envNumber('SMOKE_TICKET_REQUESTER_USER_ID'),
+        requester_group_id: envNumber('SMOKE_TICKET_REQUESTER_GROUP_ID'),
+        assigned_user_id: envNumber('SMOKE_TICKET_ASSIGNED_USER_ID'),
+        assigned_group_id: envNumber('SMOKE_TICKET_ASSIGNED_GROUP_ID'),
+        time_to_resolve: process.env.SMOKE_TICKET_TIME_TO_RESOLVE,
       })) as any;
       testId = created?.id;
       if (!testId) throw new Error(`no id in response: ${JSON.stringify(created).slice(0, 200)}`);
@@ -194,11 +219,35 @@ async function main() {
     });
 
     if (testId) {
+      await check('getTicket after create', async () => {
+        const t = (await client.getTicket(testId!)) as any;
+        return `#${testId} entity=${t.entities_id ?? 'n/a'} location=${t.locations_id ?? 'n/a'}`;
+      });
       await check('addTicketFollowup', async () => {
         await client.addTicketFollowup(testId!, 'Smoke-test followup.');
       });
-      await check('updateTicket (rename)', async () => {
-        await client.updateTicket(testId!, { name: `[MCP-SMOKE] renamed ${Date.now()}` } as any);
+      await check('updateTicket (business fields)', async () => {
+        await client.updateTicket(testId!, {
+          name: `[MCP-SMOKE] renamed ${Date.now()}`,
+          content: 'Smoke test ticket updated before soft delete.',
+          type: envNumber('SMOKE_TICKET_UPDATE_TYPE'),
+          status: envNumber('SMOKE_TICKET_UPDATE_STATUS'),
+          urgency: envNumber('SMOKE_TICKET_UPDATE_URGENCY'),
+          impact: envNumber('SMOKE_TICKET_UPDATE_IMPACT'),
+          priority: envNumber('SMOKE_TICKET_UPDATE_PRIORITY'),
+          category_id: envNumber('SMOKE_TICKET_UPDATE_CATEGORY_ID') ?? envNumber('SMOKE_TICKET_CATEGORY_ID'),
+          entity_id: envNumber('SMOKE_TICKET_UPDATE_ENTITY_ID') ?? envNumber('SMOKE_TICKET_ENTITY_ID'),
+          location_id: envNumber('SMOKE_TICKET_UPDATE_LOCATION_ID') ?? envNumber('SMOKE_TICKET_LOCATION_ID'),
+          requester_user_id: envNumber('SMOKE_TICKET_UPDATE_REQUESTER_USER_ID'),
+          requester_group_id: envNumber('SMOKE_TICKET_UPDATE_REQUESTER_GROUP_ID'),
+          assigned_user_id: envNumber('SMOKE_TICKET_UPDATE_ASSIGNED_USER_ID'),
+          assigned_group_id: envNumber('SMOKE_TICKET_UPDATE_ASSIGNED_GROUP_ID'),
+          time_to_resolve: process.env.SMOKE_TICKET_UPDATE_TIME_TO_RESOLVE,
+        });
+      });
+      await check('getTicket after update', async () => {
+        const t = (await client.getTicket(testId!)) as any;
+        return `#${testId} entity=${t.entities_id ?? 'n/a'} location=${t.locations_id ?? 'n/a'}`;
       });
       await check('followup visible in getTicketFollowups', async () => {
         const f = (await client.getTicketFollowups(testId!)) as any[];

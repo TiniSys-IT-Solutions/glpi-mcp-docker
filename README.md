@@ -29,6 +29,30 @@ The immediate ticket-location need is implemented on the MCP contract as:
 The Legacy adapter maps those fields to GLPI Legacy names such as
 `entities_id`, `locations_id`, and `itilcategories_id`.
 
+Ticket create/update now supports these MCP-facing fields in Legacy mode:
+
+```text
+name
+content
+type
+status
+urgency
+impact
+priority
+category_id
+entity_id
+location_id
+requester_user_id
+requester_group_id
+assigned_user_id
+assigned_group_id
+time_to_resolve
+```
+
+`user_id_assign` and `group_id_assign` are still accepted as temporary
+compatibility aliases. New clients should prefer `assigned_user_id` and
+`assigned_group_id`.
+
 ## Quick Start
 
 ```bash
@@ -64,7 +88,7 @@ GLPI_URL=https://glpi.example.local
 # legacy | highlevel | hybrid
 GLPI_API_MODE=legacy
 
-# High-Level API version for /api.php/{version}
+# High-Level API version for /api.php/v{version}
 GLPI_API_VERSION=2.3
 
 # service_account | per_user
@@ -103,6 +127,10 @@ npm run smoke -- --write
 ```
 
 Never run write smoke tests against a production GLPI instance.
+
+The optional write smoke cycle can use `SMOKE_TICKET_*` variables to exercise
+ticket create/get/update with `entity_id`, `location_id`, `category_id`,
+requester, assignment, priority fields, and `time_to_resolve`.
 
 ## Docker
 

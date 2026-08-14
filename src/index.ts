@@ -28,11 +28,13 @@ import {
 import { readFile } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { z } from 'zod';
-import { ListOptions } from './api/legacy/glpi-client.js';
+import { GlpiClient, ListOptions } from './api/legacy/glpi-client.js';
 import { GlpiError } from './api/legacy/http.js';
 import { SearchCriterion, SearchType, SearchLink } from './api/legacy/search.js';
 import { loadConfig } from './config/env.js';
-import { ApiRouter, createApiRouter, RoutedGlpiClient } from './routing/api-router.js';
+import { TICKET_FIELDS, TICKET_STATUS, TICKET_URGENCY } from './core/tickets/constants.js';
+import { TicketService } from './core/tickets/service.js';
+import { ApiRouter, createApiRouter } from './routing/api-router.js';
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -75,23 +77,6 @@ const ticketSearchSchema = z.object({
 // Constants
 // ---------------------------------------------------------------------------
 
-const TICKET_STATUS: Record<number, string> = {
-  1: 'New',
-  2: 'Processing (assigned)',
-  3: 'Processing (planned)',
-  4: 'Pending',
-  5: 'Solved',
-  6: 'Closed',
-};
-
-const TICKET_URGENCY: Record<number, string> = {
-  1: 'Very low',
-  2: 'Low',
-  3: 'Medium',
-  4: 'High',
-  5: 'Very high',
-};
-
 const PROBLEM_STATUS: Record<number, string> = {
   1: 'New', 2: 'Accepted', 3: 'Planned', 4: 'Pending', 5: 'Solved', 6: 'Closed',
 };
@@ -104,27 +89,6 @@ const CHANGE_STATUS: Record<number, string> = {
 
 const VALIDATION_STATUS: Record<number, string> = {
   1: 'Waiting', 2: 'Granted', 3: 'Refused',
-};
-
-// Standard Ticket search-option field ids (GLPI ≥ 9.5). Fallbacks; the
-// SearchOptions cache is used to resolve friendly names dynamically.
-const TICKET_FIELDS = {
-  id: 2,
-  name: 1,
-  status: 12,
-  date: 15,
-  date_mod: 19,
-  solvedate: 17,
-  closedate: 16,
-  priority: 3,
-  urgency: 10,
-  impact: 11,
-  category: 7,
-  entity: 80,
-  requester_user: 4,
-  technician_user: 5,
-  technician_group: 8,
-  type: 14,
 };
 
 // ---------------------------------------------------------------------------
@@ -171,7 +135,7 @@ interface CriteriaArg {
 }
 
 async function resolveCriteria(
-  client: RoutedGlpiClient,
+  client: GlpiClient,
   itemtype: string,
   raw: CriteriaArg[]
 ): Promise<SearchCriterion[]> {
@@ -214,7 +178,27 @@ const server = new Server(
 );
 
 let apiRouter: ApiRouter;
-let client: RoutedGlpiClient;
+let client: GlpiClient;
+let ticketService: TicketService;
+
+const TICKET_SERVICE_TOOLS = new Set([
+  'glpi_list_tickets',
+  'glpi_get_ticket',
+  'glpi_search_tickets',
+  'glpi_create_ticket',
+  'glpi_update_ticket',
+]);
+
+function isTicketServiceTool(toolName: string): boolean {
+  return TICKET_SERVICE_TOOLS.has(toolName);
+}
+
+function requireLegacyClient(toolName: string): GlpiClient {
+  if (!client) {
+    throw new McpError(ErrorCode.InvalidRequest, `Not supported in GLPI_API_MODE=highlevel: ${toolName}`);
+  }
+  return client;
+}
 
 // ---------------------------------------------------------------------------
 // Tool registration
@@ -1093,7 +1077,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const backend = apiRouter.backendForTool(name);
     console.error(`[MCP] ${name} -> ${backend}`);
-    if (backend === 'highlevel') {
+    if (backend === 'highlevel' && !isTicketServiceTool(name)) {
       throw new McpError(ErrorCode.InvalidRequest, `Not supported in GLPI_API_MODE=highlevel: ${name}`);
     }
 
@@ -1102,33 +1086,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_list_tickets': {
         const validated = listArgsSchema.parse(args);
         const opts = parseListArgs(validated);
-        let tickets = await client.getTickets({ ...opts, order: opts.order ?? 'DESC' });
-        if (typeof validated.status === 'number') {
-          tickets = tickets.filter((t: any) => t.status === validated.status);
-        }
+        const tickets = await ticketService.list({
+          ...opts,
+          order: opts.order ?? 'DESC',
+          status: validated.status as number,
+        });
         return text(tickets.map(formatTicketSummary));
       }
 
       case 'glpi_get_ticket': {
         const validated = ticketReadSchema.parse(args);
         const { id, with_logs } = validated;
-        const [ticket, followups, tasks, solutions] = await Promise.all([
-          client.getTicket(id, { with_logs }),
-          client.getTicketFollowups(id),
-          client.getTicketTasks(id),
-          client.getTicketSolutions(id),
-        ]);
-        return text({
-          ...ticket,
-          status_label: TICKET_STATUS[(ticket as any).status],
-          urgency_label: TICKET_URGENCY[(ticket as any).urgency],
-          priority_label: TICKET_URGENCY[(ticket as any).priority],
-          counts: {
-            followups: followups.length,
-            tasks: tasks.length,
-            solutions: solutions.length,
-          },
-        });
+        return text(await ticketService.get(id, { with_logs }));
       }
 
       case 'glpi_get_ticket_timeline': {
@@ -1155,41 +1124,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'glpi_search_tickets': {
-        ticketSearchSchema.parse(args);
-        const criteria: SearchCriterion[] = [];
-        const push = (c: SearchCriterion) => {
-          if (criteria.length > 0 && !c.link) c.link = 'AND';
-          criteria.push(c);
-        };
-        if (args.status !== undefined) push({ field: TICKET_FIELDS.status, searchtype: 'equals', value: args.status as number });
-        if (args.assigned_user_id !== undefined) push({ field: TICKET_FIELDS.technician_user, searchtype: 'equals', value: args.assigned_user_id as number });
-        if (args.assigned_group_id !== undefined) push({ field: TICKET_FIELDS.technician_group, searchtype: 'equals', value: args.assigned_group_id as number });
-        if (args.requester_user_id !== undefined) push({ field: TICKET_FIELDS.requester_user, searchtype: 'equals', value: args.requester_user_id as number });
-        if (args.category_id !== undefined) push({ field: TICKET_FIELDS.category, searchtype: 'equals', value: args.category_id as number });
-        if (args.entity_id !== undefined) push({ field: TICKET_FIELDS.entity, searchtype: 'equals', value: args.entity_id as number });
-        if (args.priority !== undefined) push({ field: TICKET_FIELDS.priority, searchtype: 'equals', value: args.priority as number });
-        if (args.urgency !== undefined) push({ field: TICKET_FIELDS.urgency, searchtype: 'equals', value: args.urgency as number });
-        if (args.date_from) push({ field: TICKET_FIELDS.date, searchtype: 'morethan', value: args.date_from as string });
-        if (args.date_to) push({ field: TICKET_FIELDS.date, searchtype: 'lessthan', value: args.date_to as string });
-        if (args.text_search) push({ field: TICKET_FIELDS.name, searchtype: 'contains', value: args.text_search as string });
-        if (args.open_only) push({ field: TICKET_FIELDS.status, searchtype: 'lessthan', value: 5 });
-
-        const result = await client.search.search('Ticket', {
-          criteria,
-          start: (args.start as number) ?? 0,
-          limit: (args.limit as number) ?? 50,
-          fetchAll: args.fetch_all as boolean,
-          maxRows: args.max_rows as number,
-          sort: args.sort as number,
-          order: (args.order as 'ASC' | 'DESC') ?? 'DESC',
-          expandDropdowns: true,
-        });
-
-        return text({
-          totalcount: result.totalcount,
-          count: result.count,
-          data: result.data,
-        });
+        const validated = ticketSearchSchema.parse(args);
+        return text(await ticketService.search(validated));
       }
 
       case 'glpi_get_ticket_followups': {
@@ -1223,9 +1159,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const name = args.name as string;
         const content = args.content as string;
         if (!name || !content) throw new McpError(ErrorCode.InvalidParams, 'name and content required');
-        const result = await client.createTicket({
+        const result = await ticketService.create({
           name,
           content,
+          status: args.status as number,
           urgency: (args.urgency as number) ?? 3,
           impact: args.impact as number,
           priority: args.priority as number,
@@ -1239,7 +1176,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           requester_group_id: args.requester_group_id as number,
           time_to_resolve: args.time_to_resolve as string,
         });
-        return text({ success: true, ...result });
+        return text({ success: true, ...(result as Record<string, unknown>) });
       }
 
       case 'glpi_update_ticket': {
@@ -1261,13 +1198,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           'requester_group_id',
           'assigned_user_id',
           'assigned_group_id',
+          'user_id_assign',
+          'group_id_assign',
           'time_to_resolve',
           'itilcategories_id',
+          'entities_id',
+          'locations_id',
         ].forEach((k) => {
           if (args[k] !== undefined) updates[k] = args[k];
         });
-        await client.updateTicket(id, updates);
-        return text({ success: true, id });
+        return text(await ticketService.update(id, updates));
       }
 
       case 'glpi_delete_ticket': {
@@ -1867,6 +1807,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => ({
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const { uri } = request.params;
   try {
+    requireLegacyClient(uri);
     switch (uri) {
       case 'glpi://tickets/open': {
         const result = await client.search.search('Ticket', {
@@ -1922,19 +1863,22 @@ async function main() {
   try {
     const config = loadConfig();
     apiRouter = createApiRouter(config);
-    client = apiRouter.client;
+    client = apiRouter.legacyClient as GlpiClient;
+    ticketService = apiRouter.services.tickets;
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 
     // Try to open the session eagerly, but don't die if GLPI is momentarily
     // unreachable: the HTTP layer re-authenticates lazily on first request.
-    try {
-      await client.initSession();
-      console.error('GLPI session initialized');
-    } catch (error) {
-      console.error(
-        `Warning: could not reach GLPI at startup (${error instanceof Error ? error.message : error}). ` +
-        'The session will be established on the first request.'
-      );
+    if (apiRouter.legacyClient) {
+      try {
+        await client.initSession();
+        console.error('GLPI session initialized');
+      } catch (error) {
+        console.error(
+          `Warning: could not reach GLPI at startup (${error instanceof Error ? error.message : error}). ` +
+          'The session will be established on the first request.'
+        );
+      }
     }
 
     const transport = new StdioServerTransport();
@@ -1942,10 +1886,12 @@ async function main() {
     console.error('MCP GLPI Server v3.0 running on stdio');
 
     const shutdown = async () => {
-      try {
-        await client.killSession();
-      } catch (error) {
-        console.error('Warning: killSession failed during shutdown:', error instanceof Error ? error.message : error);
+      if (apiRouter.legacyClient) {
+        try {
+          await client.killSession();
+        } catch (error) {
+          console.error('Warning: killSession failed during shutdown:', error instanceof Error ? error.message : error);
+        }
       }
       process.exit(0);
     };

@@ -18,6 +18,8 @@ export interface AppConfig {
   highlevel: {
     oauthClientId?: string;
     oauthClientSecret?: string;
+    oauthUsername?: string;
+    oauthPassword?: string;
     oauthRedirectUri?: string;
   };
   http: {
@@ -102,6 +104,8 @@ export function loadConfig(): AppConfig {
     highlevel: {
       oauthClientId: optionalEnv('GLPI_OAUTH_CLIENT_ID'),
       oauthClientSecret: optionalEnv('GLPI_OAUTH_CLIENT_SECRET'),
+      oauthUsername: optionalEnv('GLPI_OAUTH_USERNAME'),
+      oauthPassword: optionalEnv('GLPI_OAUTH_PASSWORD'),
       oauthRedirectUri: optionalEnv('GLPI_OAUTH_REDIRECT_URI'),
     },
     http: {
