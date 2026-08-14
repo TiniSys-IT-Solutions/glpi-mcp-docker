@@ -1,260 +1,137 @@
 # glpi-mcp-docker
 
-## ⚠️ Development / planning branch
+Docker-first MCP server for GLPI.
 
-This `v2` branch prepares a future migration toward GLPI High-Level API v2.3.
+This repository now contains the application code, Docker build, tests, and
+documentation for the DooSys GLPI MCP server. The stable V1 remains on
+`main`. Active V2 development happens only on `v2`.
 
-It is not a functional V2 implementation yet. The stable branch remains:
+## Status
 
-```text
-main
+V2 has started.
+
+- `GLPI_API_MODE=legacy` is the first functional mode.
+- `GLPI_API_MODE=highlevel` is scaffolded and intentionally returns clear
+  not-supported errors until the target GLPI 11 Swagger/OpenAPI is inspected.
+- `GLPI_API_MODE=hybrid` uses an explicit compatibility matrix. It never tries
+  High-Level and then silently falls back to Legacy after an error.
+
+The immediate ticket-location need is implemented on the MCP contract as:
+
+```json
+{
+  "entity_id": 12,
+  "location_id": 42,
+  "category_id": 7
+}
 ```
 
-At this stage, this branch only contains planning documentation and must not be presented as production-ready for GLPI API v2.3.
+The Legacy adapter maps those fields to GLPI Legacy names such as
+`entities_id`, `locations_id`, and `itilcategories_id`.
 
-## Présentation
-
-Ce dépôt fournit une couche Docker propre autour du serveur MCP upstream [`GMS64260/mcp-glpi`](https://github.com/GMS64260/mcp-glpi), sans modifier son code source.
-
-L'objectif est de construire une image immuable à partir d'un tag upstream explicite, puis d'exposer le serveur MCP GLPI sur le réseau local via le transport MCP Streamable HTTP.
-
-La version upstream embarquée par défaut est :
-
-```text
-MCP_GLPI_VERSION=v3.3.0
-```
-
-Le tag `v3.3.0` existe côté Git upstream. Le paquet NPM `mcp-glpi` peut être en retard par rapport aux tags Git ; l'image construit donc depuis GitHub, sur le tag demandé, et pas depuis `main` ni depuis `npx mcp-glpi@latest`.
-
-## Architecture
-
-```text
-                        GLPI
-                         ^
-                         | API HTTP/HTTPS
-                         |
-                  mcp-glpi upstream
-                         ^
-                         | stdio
-                         |
-                 supergateway
-                         ^
-                         | MCP Streamable HTTP
-                         |
-                 reseau local uniquement
-                         |
-        +----------------+----------------+
-        |                |                |
-      Cursor           Codex            Claude
-```
-
-`mcp-glpi` fonctionne nativement en MCP stdio. La passerelle retenue est [`supergateway`](https://www.npmjs.com/package/supergateway), car elle supporte explicitement `stdio -> Streamable HTTP`, expose un endpoint de healthcheck et reste simple à embarquer dans une image Node. La version est figée par `SUPERGATEWAY_VERSION`.
-
-## Prérequis
-
-- Docker
-- Docker Compose v2
-- Un GLPI joignable depuis le serveur Docker
-
-Node.js, npm, Git et les dépendances applicatives ne sont pas requis sur l'hôte au runtime.
-
-## Installation
+## Quick Start
 
 ```bash
 git clone git@github.com:DooSys/glpi-mcp-docker.git
 cd glpi-mcp-docker
+git checkout v2
+
 cp .env.example .env
 nano .env
-docker compose build
-docker compose up -d
+
+docker compose up -d --build
 ```
 
-Le service écoute par défaut sur :
+The MCP HTTP endpoint defaults to:
 
 ```text
-http://IP_SERVEUR:8000/mcp
+http://127.0.0.1:8000/mcp
 ```
 
-Pour limiter l'écoute à l'hôte local ou à une IP précise, modifiez `MCP_BIND_ADDRESS` dans `.env`.
+The healthcheck endpoint defaults to:
 
-## Vérification
-
-```bash
-docker compose config
-docker compose ps
-docker compose logs -f
-curl http://127.0.0.1:8000/healthz
+```text
+http://127.0.0.1:8000/healthz
 ```
 
-## Configuration GLPI
+## Configuration
 
-Variables principales :
+Core settings:
 
 ```env
 GLPI_URL=https://glpi.example.local
+
+# legacy | highlevel | hybrid
+GLPI_API_MODE=legacy
+
+# High-Level API version for /api.php/{version}
+GLPI_API_VERSION=2.3
+
+# service_account | per_user
+GLPI_AUTH_MODE=service_account
+```
+
+Legacy service-account mode:
+
+```env
 GLPI_APP_TOKEN=CHANGE_ME
 GLPI_USER_TOKEN=CHANGE_ME
-GLPI_TIMEOUT_MS=15000
-GLPI_MAX_RETRIES=2
 ```
 
-Privilégiez `GLPI_APP_TOKEN + GLPI_USER_TOKEN`. L'upstream supporte aussi `GLPI_USERNAME + GLPI_PASSWORD`, mais ce n'est pas le mode recommandé ici.
+High-Level OAuth variables are present as placeholders in `.env.example`, but
+the exact flow must be confirmed from the target GLPI 11 Swagger/OpenAPI before
+being implemented.
 
-Le compte GLPI associé au token doit être un compte technique dédié, avec un profil volontairement limité. Les annotations MCP comme `readOnlyHint` et `destructiveHint` aident les clients à afficher des confirmations, mais elles ne remplacent jamais les ACL GLPI.
-
-## Connexion des clients MCP
-
-### Cursor
-
-Cursor supporte les transports `stdio`, `SSE` et `Streamable HTTP` pour les serveurs MCP distants.
-
-Exemple dans `~/.cursor/mcp.json` ou dans le fichier MCP du projet :
-
-```json
-{
-  "mcpServers": {
-    "glpi": {
-      "url": "http://IP_SERVEUR:8000/mcp"
-    }
-  }
-}
-```
-
-Selon la version de Cursor, vous pouvez aussi préciser le transport :
-
-```json
-{
-  "mcpServers": {
-    "glpi": {
-      "transport": "http",
-      "url": "http://IP_SERVEUR:8000/mcp"
-    }
-  }
-}
-```
-
-### Codex
-
-Codex utilise `~/.codex/config.toml` pour les serveurs MCP. Exemple :
-
-```toml
-[mcp_servers.glpi]
-url = "http://IP_SERVEUR:8000/mcp"
-enabled = true
-```
-
-Vous pouvez aussi l'ajouter via la CLI :
+## Development
 
 ```bash
-codex mcp add glpi --url http://IP_SERVEUR:8000/mcp
-codex mcp list
+npm ci
+npm test
+npm run build
 ```
 
-### Claude Code
-
-Claude Code sait ajouter un serveur MCP HTTP distant :
+The smoke script is read-only by default:
 
 ```bash
-claude mcp add --transport http glpi http://IP_SERVEUR:8000/mcp
+npm run smoke
 ```
 
-Pour une configuration projet partageable, `.mcp.json` :
-
-```json
-{
-  "mcpServers": {
-    "glpi": {
-      "type": "http",
-      "url": "http://IP_SERVEUR:8000/mcp"
-    }
-  }
-}
-```
-
-Claude Desktop peut varier selon les versions et plateformes. Si votre version ne consomme pas directement un MCP HTTP distant, utilisez Claude Code ou un bridge local HTTP/SSE vers stdio côté poste client.
-
-## Mise a jour upstream
-
-Pour passer de `v3.3.0` à une version suivante :
-
-1. Vérifiez le tag upstream.
-2. Modifiez `.env` :
-
-```env
-MCP_GLPI_VERSION=v3.4.0
-```
-
-3. Reconstruisez et relancez :
+Write smoke tests must be explicitly requested:
 
 ```bash
-docker compose build --no-cache
-docker compose up -d
-docker inspect glpi-mcp --format '{{ index .Config.Labels "org.opencontainers.image.upstream.version" }}'
+npm run smoke -- --write
 ```
 
-Ne construisez pas automatiquement depuis `main` en production.
+Never run write smoke tests against a production GLPI instance.
 
-## Rollback
+## Docker
 
-Remettez le tag précédent dans `.env` :
+The image builds from this repository source. It no longer clones
+`GMS64260/mcp-glpi` during the Docker build.
 
-```env
-MCP_GLPI_VERSION=v3.3.0
-```
+The runtime remains:
 
-Puis :
+- Node Alpine base image;
+- non-root `node` user;
+- Supergateway for stdio to Streamable HTTP;
+- healthcheck;
+- OCI labels for source and upstream reference.
 
-```bash
-docker compose build --no-cache
-docker compose up -d
-```
+## Upstream Reference
 
-## Upload de fichiers
-
-`mcp-glpi` expose `glpi_upload_document` avec un argument `file_path`.
-
-Dans cette architecture Docker, ce chemin désigne un fichier visible par le conteneur, pas automatiquement un fichier présent sur le PC Cursor, Codex ou Claude distant. Le conteneur ne monte volontairement aucun filesystem arbitraire du serveur pour contourner cette limite.
-
-L'upload de fichiers depuis les postes clients devra être traité séparément, avec un flux contrôlé et auditable.
-
-## Sauvegarde / PRA
-
-Le service est presque stateless. Les éléments importants à sauvegarder sont :
-
-- ce dépôt Git ;
-- le `.env` réel ou le coffre de secrets externe ;
-- le tag upstream utilisé ;
-- l'image publiée dans un registry si vous en utilisez un ;
-- la configuration du reverse proxy éventuel.
-
-## Sécurité
-
-- V1 prévue pour réseau local/interne uniquement.
-- Ne publiez pas directement ce service sur Internet.
-- Ne commitez jamais `.env`.
-- N'utilisez jamais un compte GLPI Super-Admin.
-- Utilisez un token dédié et le minimum de privilèges.
-- Commencez idéalement avec un profil GLPI principalement en lecture.
-- Placez plus tard Traefik, HTTPS, authentification et filtrage réseau devant le service si l'exposition s'élargit.
-
-## Versioning
-
-Ce projet et l'upstream ont deux versions distinctes :
+The upstream MIT project `GMS64260/mcp-glpi` is vendored only as a migration
+snapshot under:
 
 ```text
-glpi-mcp-docker      couche Docker maintenue ici
-GMS64260/mcp-glpi    serveur MCP applicatif upstream
+upstream/legacy-mcp-glpi/
 ```
 
-L'image contient des labels OCI permettant d'identifier l'upstream :
+Runtime code must not import from that directory. Adapted code belongs under
+`src/`.
 
-```bash
-docker inspect glpi-mcp --format '{{ json .Config.Labels }}' | jq
-```
+See:
 
-Labels notables :
-
-- `org.opencontainers.image.source`
-- `org.opencontainers.image.upstream.source`
-- `org.opencontainers.image.upstream.version`
-- `org.opencontainers.image.supergateway.version`
+- `docs/ARCHITECTURE.md`
+- `docs/API_COMPATIBILITY_MATRIX.md`
+- `docs/AUTHENTICATION.md`
+- `docs/UPSTREAM.md`

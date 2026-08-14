@@ -3,21 +3,26 @@ services:
     build:
       context: .
       args:
-        MCP_GLPI_VERSION: ${MCP_GLPI_VERSION:-v3.3.0}
         SUPERGATEWAY_VERSION: ${SUPERGATEWAY_VERSION:-3.4.3}
-    image: doosys/glpi-mcp-docker:${MCP_GLPI_VERSION:-v3.3.0}
+        UPSTREAM_LEGACY_VERSION: ${UPSTREAM_LEGACY_VERSION:-v3.3.0}
+    image: doosys/glpi-mcp-docker:${GLPI_MCP_DOCKER_VERSION:-v2-alpha}
     container_name: glpi-mcp
     restart: unless-stopped
     environment:
       GLPI_URL: ${GLPI_URL}
+      GLPI_API_MODE: ${GLPI_API_MODE:-legacy}
+      GLPI_API_VERSION: ${GLPI_API_VERSION:-2.3}
+      GLPI_AUTH_MODE: ${GLPI_AUTH_MODE:-service_account}
       GLPI_APP_TOKEN: ${GLPI_APP_TOKEN}
       GLPI_USER_TOKEN: ${GLPI_USER_TOKEN}
       GLPI_USERNAME: ${GLPI_USERNAME:-}
       GLPI_PASSWORD: ${GLPI_PASSWORD:-}
+      GLPI_OAUTH_CLIENT_ID: ${GLPI_OAUTH_CLIENT_ID:-}
+      GLPI_OAUTH_CLIENT_SECRET: ${GLPI_OAUTH_CLIENT_SECRET:-}
+      GLPI_OAUTH_REDIRECT_URI: ${GLPI_OAUTH_REDIRECT_URI:-}
       GLPI_TIMEOUT_MS: ${GLPI_TIMEOUT_MS:-15000}
       GLPI_MAX_RETRIES: ${GLPI_MAX_RETRIES:-2}
       GLPI_DEBUG: ${GLPI_DEBUG:-}
-      MCP_GLPI_VERSION: ${MCP_GLPI_VERSION:-v3.3.0}
       MCP_PORT: ${MCP_PORT:-8000}
       MCP_PATH: ${MCP_PATH:-/mcp}
       MCP_HEALTH_PATH: ${MCP_HEALTH_PATH:-/healthz}

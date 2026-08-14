@@ -1,68 +1,110 @@
 # Codex Working Rules
 
-This repository contains the Docker-first wrapper for `GMS64260/mcp-glpi` and a dedicated `v2` planning branch for a future GLPI High-Level API migration.
+This branch is the active V2 implementation branch for
+`DooSys/glpi-mcp-docker`.
 
 ## Branch Safety
 
-- Do not break or modify `main` during V2 work.
-- `main` is the stable branch for the current GLPI Legacy REST API deployment.
-- Use the `v2` branch for all GLPI High-Level API v2.3 planning and future migration work.
-- Do not backport V2 planning changes to `main` unless the maintainer explicitly asks for it.
+- Work only on `v2`.
+- Never modify or push to `main`; `main` is the stable V1 Legacy deployment.
+- Inspect `git status` before edits and before commits.
+- Do not discard local changes unless the maintainer explicitly asks for it.
 
-## Scope Of The V2 Branch
+## Product Direction
 
-- This branch is currently a development and planning branch.
-- Do not present it as production-ready or functionally migrated to GLPI API v2.3.
-- Do not add OAuth, GraphQL, `/api.php/v2.3` calls, or application migration code until the maintainer gives an explicit GO.
-- Keep the current Docker wrapper behavior intact until a deliberate migration step is approved.
+This repository is the complete product:
 
-## Source Of Truth
+- MCP server;
+- business-oriented tools;
+- Legacy adapter;
+- High-Level adapter;
+- API routing;
+- authentication architecture;
+- tests;
+- Docker distribution;
+- documentation.
 
-- GLPI High-Level API v2.3 Swagger/OpenAPI documentation is the primary source of truth for future V2 work.
-- Inspect the target GLPI instance documentation, typically `/api.php/v2.3/doc`, before designing endpoints, payloads, schemas, filters, relations, authentication, or response handling.
-- Do not mechanically translate Legacy REST paths from `/apirest.php` to `/api.php/v2.3`.
-- Do not assume V2 behavior from Legacy behavior without verifying it in Swagger.
+Docker is the official runtime. A final host should not need Node.js, npm, or
+Git to run the service.
 
 ## API Modes
 
-Future work must preserve these three concepts:
+Supported configuration values:
 
-- `legacy`: MCP tools call the existing Legacy REST API through `/apirest.php`.
-- `v2`: MCP tools call only GLPI High-Level API v2.3 and return clear not-implemented errors for unsupported tools.
-- `hybrid`: migrated tools use V2, while explicitly mapped non-migrated tools use Legacy fallback.
+- `GLPI_API_MODE=legacy`
+- `GLPI_API_MODE=highlevel`
+- `GLPI_API_MODE=hybrid`
 
-Hybrid fallback must be explicit and controlled by a compatibility matrix. Never implement a broad "try V2, then silently fall back to Legacy on any error" behavior.
+Legacy calls `/apirest.php`.
 
-## MCP Compatibility
+High-Level will call `/api.php/{GLPI_API_VERSION}` once implemented. Until the
+target GLPI 11 Swagger/OpenAPI confirms a domain, return a clear not-supported
+error instead of guessing.
 
-- Preserve existing MCP tool names whenever possible.
-- Cursor, Codex, and Claude should not need different tool names depending on the selected GLPI API mode.
-- Keep Zod validation, tool descriptions, structured errors, and MCP annotations such as `readOnlyHint`, `destructiveHint`, and `idempotentHint`.
-- Destructive operations must stay clearly identified and should require explicit user intent.
+Hybrid must use the explicit compatibility matrix in code and docs. Never
+implement this pattern:
+
+```text
+try High-Level
+if error:
+  retry Legacy
+```
+
+## MCP Contract
+
+Tools should be business-oriented and useful to an AI agent. Do not mirror
+every GLPI endpoint by default.
+
+MCP-facing names should be durable and friendly:
+
+- `entity_id`
+- `location_id`
+- `category_id`
+- `requester_user_id`
+- `assigned_user_id`
+
+Adapters map those fields to API-specific payloads. For Legacy tickets,
+`location_id` maps to `locations_id`.
+
+## Authentication
+
+`GLPI_AUTH_MODE=service_account` is the initial functional mode.
+
+`GLPI_AUTH_MODE=per_user` is planned, but must be implemented only after the
+real GLPI 11 OAuth/session behavior is confirmed. GLPI remains the source of
+identity and permissions. Do not add a local IAM database or store GLPI user
+passwords.
+
+## Upstream Snapshot
+
+`upstream/legacy-mcp-glpi/` is a migration reference only. Runtime code must
+not import from it.
+
+Preserve the MIT license and attribution for `GMS64260/mcp-glpi`.
 
 ## Security
 
-- Never commit `.env` files, tokens, passwords, OAuth secrets, private keys, dumps, local logs, or generated files containing secrets.
-- Use a dedicated GLPI technical account with minimal permissions.
-- Do not rely on MCP annotations or API V2 as a security boundary; GLPI ACLs remain the authoritative control.
+- Never commit `.env`, tokens, passwords, OAuth secrets, private keys, cookies,
+  Authorization headers, or GLPI dumps containing secrets.
 - Do not log secrets.
-- Do not run destructive operations against a real GLPI instance unless the maintainer explicitly requests them.
+- Keep Zod validation and MCP annotations.
+- Mark destructive operations with `destructiveHint`.
+- Do not run write smoke tests against a real GLPI instance unless explicitly
+  requested.
 
 ## Tests
 
-- Tests are required for future implementation work.
-- Cover API mode routing, auth, HTTP behavior, payload mapping, pagination, retry, and error handling.
-- Add parity tests comparing Legacy and V2 behavior before marking a tool as migrated.
-- Keep read-only smoke tests separate from write/destructive tests.
-- Never run destructive smoke tests automatically against a real GLPI instance.
+Run relevant tests before commits:
 
-## Docker First
+```bash
+npm test
+npm run build
+git diff --check
+```
 
-- Keep the project Docker-first.
-- Node.js, npm, Git, and application dependencies must not be required on the final runtime host.
-- Local development may use tooling as needed, but deployment should remain containerized.
+Read-only smoke tests are allowed when credentials target a suitable instance.
+Write smoke tests require explicit opt-in:
 
-## Attribution
-
-- Preserve license and attribution for `GMS64260/mcp-glpi`, which is MIT licensed.
-- Clearly distinguish DooSys original work from adapted upstream code during future implementation.
+```bash
+npm run smoke -- --write
+```
