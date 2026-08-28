@@ -10,6 +10,19 @@ updates:
         dependency-type: production
       npm-development:
         dependency-type: development
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Keep compiler upgrades deliberate: TypeScript majors can change type
+      # discovery and module-resolution behavior.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      # Match the declarations to the Node 22 runtime used by CI and Docker.
+      - dependency-name: "@types/node"
+        versions:
+          - ">=23"
   - package-ecosystem: github-actions
     directory: /
     schedule:

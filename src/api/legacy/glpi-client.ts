@@ -1051,7 +1051,10 @@ export class GlpiClient {
     form.append('uploadManifest', manifest);
     form.append(
       'filename[0]',
-      new Blob([data], { type: mimeType ?? 'application/octet-stream' }),
+      // Copy into an ArrayBuffer-backed view. This keeps BlobPart typing
+      // compatible with Node 22 and newer @types/node releases where a generic
+      // Uint8Array may also be backed by SharedArrayBuffer.
+      new Blob([new Uint8Array(data)], { type: mimeType ?? 'application/octet-stream' }),
       filename
     );
     const { data: res } = await this.http.request<{ id: number } | Array<{ id: number }>>(
