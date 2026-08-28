@@ -3,7 +3,8 @@ import { GlpiClient } from '../api/legacy/glpi-client.js';
 import { HighLevelClient, HighLevelNotSupportedError } from '../api/highlevel/client.js';
 import { HighLevelTicketService } from '../api/highlevel/tickets.js';
 import { LegacyTicketService } from '../api/legacy/tickets.js';
-import { GlpiServices } from '../core/tickets/service.js';
+import { LegacyIPNetworkService } from '../api/legacy/ip-networks.js';
+import { GlpiServices } from '../core/services.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
@@ -104,6 +105,10 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_list_search_options: 'legacy',
   glpi_get_session_info: 'legacy',
   glpi_search: 'legacy',
+  glpi_list_ip_networks: 'legacy',
+  glpi_get_ip_network: 'legacy',
+  glpi_create_ip_network: 'legacy',
+  glpi_update_ip_network: 'legacy',
 };
 
 export interface ApiRouter {
@@ -146,6 +151,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
     legacyClient: client,
     services: {
       tickets: new LegacyTicketService(client),
+      ipNetworks: new LegacyIPNetworkService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

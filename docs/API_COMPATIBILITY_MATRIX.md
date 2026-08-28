@@ -29,6 +29,7 @@ Status values:
 | Locations | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Legacy list/get/create inherited. |
 | Computers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Asset age business logic still TODO. |
 | Network equipment | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
+| IP networks / LANs | OK | TODO | OK VIA LEGACY | IPNetwork service tests | Dedicated list/get/create/update tools use CIDR and friendly entity fields. GLPI computes hierarchy implicitly. |
 | Printers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | Monitors | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | Phones | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |

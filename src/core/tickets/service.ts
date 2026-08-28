@@ -14,7 +14,3 @@ export interface TicketService {
   create(input: TicketCreateRequest): Promise<unknown>;
   update(id: number, input: TicketUpdateRequest): Promise<unknown>;
 }
-
-export interface GlpiServices {
-  tickets: TicketService;
-}

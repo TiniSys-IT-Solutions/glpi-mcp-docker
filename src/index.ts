@@ -27,6 +27,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
+import { isIP } from 'node:net';
 import { z } from 'zod';
 import { GlpiClient, ListOptions } from './api/legacy/glpi-client.js';
 import { GlpiError } from './api/legacy/http.js';
@@ -34,6 +35,7 @@ import { SearchCriterion, SearchType, SearchLink } from './api/legacy/search.js'
 import { loadConfig } from './config/env.js';
 import { TICKET_FIELDS, TICKET_STATUS, TICKET_URGENCY } from './core/tickets/constants.js';
 import { TicketService } from './core/tickets/service.js';
+import { IPNetworkService } from './core/ip-networks/service.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,45 @@ const ticketSearchSchema = z.object({
   start: z.number().int().min(0).optional(),
   limit: z.number().int().min(1).max(10000).optional(),
 }).passthrough();
+
+function isValidCidr(value: string): boolean {
+  const separator = value.lastIndexOf('/');
+  if (separator <= 0) return false;
+  const address = value.slice(0, separator).trim();
+  const prefix = Number(value.slice(separator + 1));
+  const version = isIP(address);
+  return Number.isInteger(prefix) && (
+    (version === 4 && prefix >= 0 && prefix <= 32) ||
+    (version === 6 && prefix >= 0 && prefix <= 128)
+  );
+}
+
+const ipNetworkFieldsSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  cidr: z.string().trim().refine(isValidCidr, {
+    message: 'Expected IPv4 or IPv6 CIDR notation, for example 10.20.30.0/24',
+  }).optional(),
+  gateway: z.string().trim().refine((value) => value === '' || isIP(value) !== 0, {
+    message: 'Expected a valid IPv4 or IPv6 address',
+  }).optional(),
+  entity_id: z.number().int().min(0).optional(),
+  is_recursive: z.boolean().optional(),
+  addressable: z.boolean().optional(),
+  comment: z.string().optional(),
+});
+
+const ipNetworkCreateSchema = ipNetworkFieldsSchema.extend({
+  name: z.string().trim().min(1),
+  cidr: z.string().trim().refine(isValidCidr, {
+    message: 'Expected IPv4 or IPv6 CIDR notation, for example 10.20.30.0/24',
+  }),
+});
+
+const ipNetworkUpdateSchema = ipNetworkFieldsSchema.extend({
+  id: z.number().int().min(1),
+}).refine(({ id: _id, ...fields }) => Object.values(fields).some((value) => value !== undefined), {
+  message: 'At least one field to update is required',
+});
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -180,6 +221,7 @@ const server = new Server(
 let apiRouter: ApiRouter;
 let client: GlpiClient;
 let ticketService: TicketService;
+let ipNetworkService: IPNetworkService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -705,6 +747,57 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           manufacturers_id: { type: 'number' }, softwarecategories_id: { type: 'number' },
         },
         required: ['name'],
+      },
+    },
+
+    // ============== IP NETWORKS ==============
+    {
+      name: 'glpi_list_ip_networks',
+      description: 'List declared IPv4 and IPv6 LANs (GLPI IPNetwork objects).',
+      inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
+    },
+    {
+      name: 'glpi_get_ip_network',
+      description: 'Get one declared LAN by its GLPI IPNetwork id.',
+      inputSchema: {
+        type: 'object',
+        properties: { id: { type: 'number', description: 'GLPI IPNetwork id' } },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'glpi_create_ip_network',
+      description: 'Declare an IPv4 or IPv6 LAN. GLPI computes its hierarchy automatically from the CIDR and entity.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Human-readable LAN name' },
+          cidr: { type: 'string', description: 'Network in CIDR notation, for example 10.20.30.0/24 or 2001:db8::/64' },
+          gateway: { type: 'string', description: 'Optional gateway address inside the network' },
+          entity_id: { type: 'number', description: 'Owning GLPI entity id' },
+          is_recursive: { type: 'boolean', description: 'Make the LAN visible in child entities' },
+          addressable: { type: 'boolean', description: 'Whether GLPI may associate addresses with this network' },
+          comment: { type: 'string' },
+        },
+        required: ['name', 'cidr'],
+      },
+    },
+    {
+      name: 'glpi_update_ip_network',
+      description: 'Update a declared LAN. Changing cidr lets GLPI recompute the implicit network hierarchy.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', description: 'GLPI IPNetwork id' },
+          name: { type: 'string' },
+          cidr: { type: 'string', description: 'Network in CIDR notation' },
+          gateway: { type: 'string', description: 'Gateway address; use an empty string to clear it' },
+          entity_id: { type: 'number' },
+          is_recursive: { type: 'boolean' },
+          addressable: { type: 'boolean' },
+          comment: { type: 'string' },
+        },
+        required: ['id'],
       },
     },
 
@@ -1496,6 +1589,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_get_phone':
         return text(await client.getPhone(args.id as number));
 
+      // ==== IP NETWORKS ====
+      case 'glpi_list_ip_networks': {
+        const validated = listArgsSchema.parse(args);
+        return text(await ipNetworkService.list(validated));
+      }
+      case 'glpi_get_ip_network': {
+        const { id } = z.object({ id: z.number().int().min(1) }).parse(args);
+        return text(await ipNetworkService.get(id));
+      }
+      case 'glpi_create_ip_network': {
+        const validated = ipNetworkCreateSchema.parse(args);
+        return text(await ipNetworkService.create(validated));
+      }
+      case 'glpi_update_ip_network': {
+        const validated = ipNetworkUpdateSchema.parse(args);
+        const { id, ...updates } = validated;
+        return text(await ipNetworkService.update(id, updates));
+      }
+
       // ==== KB / CONTRACTS / SUPPLIERS / LOCATIONS / PROJECTS ====
       case 'glpi_list_knowbase':
         return text(await client.getKnowbaseItems(parseListArgs(args)));
@@ -1865,6 +1977,7 @@ async function main() {
     apiRouter = createApiRouter(config);
     client = apiRouter.legacyClient as GlpiClient;
     ticketService = apiRouter.services.tickets;
+    ipNetworkService = apiRouter.services.ipNetworks as IPNetworkService;
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 
     // Try to open the session eagerly, but don't die if GLPI is momentarily
