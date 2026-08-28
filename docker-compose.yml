@@ -4,8 +4,14 @@ services:
     pull_policy: always
     container_name: glpi-mcp
     restart: unless-stopped
+    init: true
+    read_only: true
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
     environment:
       GLPI_URL: ${GLPI_URL}
       GLPI_API_MODE: ${GLPI_API_MODE:-legacy}
@@ -28,8 +34,12 @@ services:
       MCP_HEALTH_PATH: ${MCP_HEALTH_PATH:-/healthz}
       MCP_SESSION_TIMEOUT_MS: ${MCP_SESSION_TIMEOUT_MS:-600000}
       MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-info}
+      MCP_UPLOAD_ROOT: ${MCP_UPLOAD_ROOT:-/uploads}
+      MCP_UPLOAD_MAX_BYTES: ${MCP_UPLOAD_MAX_BYTES:-26214400}
     ports:
-      - "${MCP_BIND_ADDRESS:-0.0.0.0}:${MCP_PORT:-8000}:${MCP_PORT:-8000}"
+      - "${MCP_BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-8000}:${MCP_PORT:-8000}"
+    volumes:
+      - "${MCP_UPLOAD_SOURCE:-./uploads}:/uploads:ro"
     networks:
       - glpi-mcp
     healthcheck:

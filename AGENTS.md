@@ -1,12 +1,12 @@
 # Codex Working Rules
 
-This branch is the active V2 implementation branch for
-`DooSys/glpi-mcp-docker`.
+This repository is the active V2 implementation of
+`TiniSys-IT-Solutions/glpi-mcp-docker`.
 
 ## Branch Safety
 
-- Work only on `v2`.
-- Never modify or push to `main`; `main` is the stable V1 Legacy deployment.
+- `main` is the active V2 release branch.
+- The former V1 Docker wrapper is archived on `v1-legacy`.
 - Inspect `git status` before edits and before commits.
 - Do not discard local changes unless the maintainer explicitly asks for it.
 
@@ -87,10 +87,10 @@ real GLPI 11 OAuth/session behavior is confirmed. GLPI remains the source of
 identity and permissions. Do not add a local IAM database or store GLPI user
 passwords.
 
-## Upstream Snapshot
+## Upstream Source
 
-`upstream/legacy-mcp-glpi/` is a migration reference only. Runtime code must
-not import from it.
+The retired migration snapshot is available in Git history. Runtime code must
+not vendor or import the upstream project.
 
 Preserve the MIT license and attribution for `GMS64260/mcp-glpi`.
 

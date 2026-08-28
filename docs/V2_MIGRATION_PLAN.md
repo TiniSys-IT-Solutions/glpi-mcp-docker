@@ -35,7 +35,7 @@ Current implementation order:
 ## Hard Rules
 
 - Do not modify `main`.
-- Do not import runtime code from `upstream/legacy-mcp-glpi`.
+- Do not vendor or import runtime code from the retired upstream snapshot.
 - Do not guess High-Level endpoints from Legacy paths.
 - Do not implement implicit High-Level-to-Legacy fallback.
 - Do not commit secrets.

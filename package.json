@@ -1,6 +1,6 @@
 {
   "name": "glpi-mcp-docker",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Docker-first MCP server for GLPI with Legacy, High-Level, and Hybrid API routing.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,7 +13,7 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "prepublishOnly": "npm run build",
-    "test": "tsx --test test/*.test.ts",
+    "test": "tsx --test test-public/*.test.ts",
     "smoke": "tsx scripts/smoke.ts"
   },
   "keywords": [
@@ -44,23 +44,23 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DooSys/glpi-mcp-docker.git"
+    "url": "https://github.com/TiniSys-IT-Solutions/glpi-mcp-docker.git"
   },
   "bugs": {
-    "url": "https://github.com/DooSys/glpi-mcp-docker/issues"
+    "url": "https://github.com/TiniSys-IT-Solutions/glpi-mcp-docker/issues"
   },
-  "homepage": "https://github.com/DooSys/glpi-mcp-docker#readme",
+  "homepage": "https://github.com/TiniSys-IT-Solutions/glpi-mcp-docker#readme",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "zod": "^3.22.0"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "tsx": "^4.22.4",
-    "typescript": "^5.3.0"
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
   },
   "files": [
     "dist",

@@ -9,9 +9,9 @@ This project is a downstream fork and substantial evolution of:
   Copyright (c) 2026 OGFA
   License: MIT
 
-The upstream snapshot is retained under upstream/legacy-mcp-glpi for
-attribution, auditability, and migration reference. Runtime code does not
-import from that directory.
+The original source remains available from the upstream repository and the
+baseline commit above. Attribution and license details are preserved here and
+in LICENSE; the retired migration snapshot remains available in Git history.
 
 The downstream Docker distribution, API routing, service contracts,
 business-oriented tools, tests, and documentation are maintained by DooSys /

@@ -100,6 +100,16 @@ Use a dedicated GLPI technical account with deliberately limited ACLs. Never
 commit `.env`, tokens, passwords, OAuth secrets, private keys, or session
 tokens.
 
+The MCP endpoint has no built-in end-user authentication in service-account
+mode. Keep the default loopback bind or place it behind an authenticated
+reverse proxy with TLS. Setting `MCP_BIND_ADDRESS=0.0.0.0` without an external
+access-control layer exposes every tool granted to the GLPI technical account.
+
+For `glpi_upload_document`, place files in `MCP_UPLOAD_SOURCE` (default:
+`./uploads`). Docker mounts that directory read-only as `/uploads`; the server
+rejects traversal, symlink escapes, non-regular files, and files larger than
+`MCP_UPLOAD_MAX_BYTES` (25 MiB by default).
+
 Default endpoints:
 
 ```text
@@ -110,6 +120,11 @@ Health: http://127.0.0.1:8000/healthz
 The included [docker-compose.yml](docker-compose.yml) is a minimal standalone
 example. Reverse proxies such as Traefik can add their own external network,
 router and middleware labels without changing the image or `.env` contract.
+The example also drops Linux capabilities, prevents privilege escalation,
+uses a read-only root filesystem, and binds the published port to loopback.
+
+See [SECURITY.md](SECURITY.md) before exposing the service beyond a trusted
+private network.
 
 ## Local development
 
@@ -134,6 +149,11 @@ npm run smoke
 ```
 
 Never run write smoke tests against production without explicit authorization.
+
+Generic, environment-independent unit tests are stored in `test-public/`.
+The root-level `test/` directory is intentionally ignored and reserved for
+private maintainer or customer validation data. Never copy customer names,
+addresses, identifiers, exports, or topology into `test-public/`.
 
 ## Architecture
 

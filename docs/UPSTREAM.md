@@ -25,32 +25,11 @@ v3.2.0
 v3.3.0
 ```
 
-## Snapshot
+## Source retention
 
-The upstream code snapshot is stored at:
+The temporary source snapshot used during migration was removed in `0.2.4` to
+avoid shipping duplicate, inactive code and an obsolete dependency lockfile in
+the public repository. It remains recoverable from Git history. The exact
+upstream tag and commit above are the canonical comparison point.
 
-```text
-upstream/legacy-mcp-glpi/
-```
-
-Purpose:
-
-- temporary migration reference;
-- stable comparison point;
-- attribution and license preservation;
-- source for carefully adapted Legacy behavior.
-
-Runtime dependency:
-
-```text
-NO
-```
-
-The final application must continue to build without importing from
-`upstream/legacy-mcp-glpi`.
-
-Removal:
-
-```text
-This directory may be removed once the Legacy migration is complete.
-```
+The application has no runtime or build dependency on the upstream checkout.

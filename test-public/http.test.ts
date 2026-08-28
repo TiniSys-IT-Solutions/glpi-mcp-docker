@@ -12,7 +12,7 @@
 
 import { strict as assert } from 'node:assert';
 import { test, beforeEach, mock } from 'node:test';
-import { GlpiHttp, GlpiError } from '../src/http.js';
+import { GlpiHttp, GlpiError } from '../src/api/legacy/http.js';
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 

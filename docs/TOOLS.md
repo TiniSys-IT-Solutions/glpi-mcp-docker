@@ -1,7 +1,7 @@
 # Active MCP tools
 
 This catalogue lists the 122 tools currently registered by `src/index.ts` in
-release `0.2.3`. Unless stated otherwise, they are active through the Legacy
+release `0.2.4`. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is still in preparation.
 

@@ -5,6 +5,10 @@
 node_modules/
 dist/
 coverage/
+uploads/
+
+# Maintainer/customer-specific validation workspace. Never publish its data.
+/test/
 
 .DS_Store
 Thumbs.db

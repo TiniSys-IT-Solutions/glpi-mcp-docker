@@ -91,7 +91,7 @@ Other domains still use the Legacy client directly while parity is validated.
 
 - MCP tools must not contain raw GLPI HTTP details.
 - Legacy and High-Level mappings stay inside their adapters.
-- Runtime code must not import from `upstream/legacy-mcp-glpi`.
+- Runtime code must not vendor or import the retired upstream snapshot.
 - High-Level implementation must be based on the target Swagger/OpenAPI, not on
   Legacy endpoint guessing.
 - High-Level API versions are normalized so `2.3` and `v2.3` both build

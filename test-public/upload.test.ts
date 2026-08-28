@@ -11,8 +11,8 @@
 
 import { strict as assert } from 'node:assert';
 import { test, mock } from 'node:test';
-import { GlpiHttp } from '../src/http.js';
-import { GlpiClient } from '../src/glpi-client.js';
+import { GlpiHttp } from '../src/api/legacy/http.js';
+import { GlpiClient } from '../src/api/legacy/glpi-client.js';
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 

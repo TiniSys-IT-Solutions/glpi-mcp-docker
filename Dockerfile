@@ -2,7 +2,7 @@
 
 ARG NODE_VERSION=22-alpine
 ARG SUPERGATEWAY_VERSION=3.4.3
-ARG MCP_SDK_VERSION=1.18.2
+ARG MCP_SDK_VERSION=1.30.0
 ARG UPSTREAM_LEGACY_VERSION=v3.3.0
 
 FROM node:${NODE_VERSION} AS build
@@ -16,7 +16,7 @@ COPY package.json package-lock.json tsconfig.json LICENSE NOTICE README.md ./
 RUN npm ci
 
 COPY src ./src
-COPY test ./test
+COPY test-public ./test-public
 COPY scripts ./scripts
 
 RUN npm test \
@@ -56,6 +56,8 @@ ENV NODE_ENV=production \
     MCP_LOG_LEVEL=info
 
 WORKDIR /app
+
+RUN mkdir -p /uploads && chown node:node /uploads
 
 COPY --from=build /build/package.json /app/package.json
 COPY --from=build /build/package-lock.json /app/package-lock.json

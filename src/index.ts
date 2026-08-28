@@ -25,7 +25,6 @@ import {
   ErrorCode,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
-import { readFile } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { isIP } from 'node:net';
 import { z } from 'zod';
@@ -38,6 +37,7 @@ import { TicketService } from './core/tickets/service.js';
 import { IPNetworkService } from './core/ip-networks/service.js';
 import { InventoryPluginResource, InventoryPluginService } from './core/inventory-plugin/service.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
+import { readSafeUpload } from './security/upload.js';
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -91,7 +91,7 @@ function isValidCidr(value: string): boolean {
 const ipNetworkFieldsSchema = z.object({
   name: z.string().trim().min(1).optional(),
   cidr: z.string().trim().refine(isValidCidr, {
-    message: 'Expected IPv4 or IPv6 CIDR notation, for example 10.20.30.0/24',
+    message: 'Expected IPv4 or IPv6 CIDR notation, for example 192.0.2.0/24',
   }).optional(),
   gateway: z.string().trim().refine((value) => value === '' || isIP(value) !== 0, {
     message: 'Expected a valid IPv4 or IPv6 address',
@@ -105,7 +105,7 @@ const ipNetworkFieldsSchema = z.object({
 const ipNetworkCreateSchema = ipNetworkFieldsSchema.extend({
   name: z.string().trim().min(1),
   cidr: z.string().trim().refine(isValidCidr, {
-    message: 'Expected IPv4 or IPv6 CIDR notation, for example 10.20.30.0/24',
+    message: 'Expected IPv4 or IPv6 CIDR notation, for example 192.0.2.0/24',
   }),
 });
 
@@ -582,7 +582,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           file_path: {
             type: 'string',
-            description: 'Path of the file on the machine running this server',
+            description: 'Path relative to MCP_UPLOAD_ROOT (default: /uploads)',
           },
           name: { type: 'string', description: 'Document title (default: file name)' },
           ticket_id: {
@@ -793,7 +793,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Human-readable LAN name' },
-          cidr: { type: 'string', description: 'Network in CIDR notation, for example 10.20.30.0/24 or 2001:db8::/64' },
+          cidr: { type: 'string', description: 'Network in CIDR notation, for example 192.0.2.0/24 or 2001:db8::/64' },
           gateway: { type: 'string', description: 'Optional gateway address inside the network' },
           entity_id: { type: 'number', description: 'Owning GLPI entity id' },
           is_recursive: { type: 'boolean', description: 'Make the LAN visible in child entities' },
@@ -863,7 +863,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string' }, cidr: { type: 'string', description: 'IPv4 CIDR, for example 10.20.30.0/24' },
+          name: { type: 'string' }, cidr: { type: 'string', description: 'IPv4 CIDR, for example 192.0.2.0/24' },
           entity_id: { type: 'number' },
           usable_hosts_only: { type: 'boolean', description: 'Default true; exclude network and broadcast for /0../30' },
         },
@@ -1536,23 +1536,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_upload_document': {
         const filePath = args.file_path as string;
         if (!filePath) throw new McpError(ErrorCode.InvalidParams, 'file_path required');
-        let data: Uint8Array;
+        let upload: Awaited<ReturnType<typeof readSafeUpload>>;
         try {
-          data = await readFile(filePath);
+          upload = await readSafeUpload(filePath);
         } catch (err) {
           throw new McpError(
             ErrorCode.InvalidParams,
             `cannot read file "${filePath}": ${err instanceof Error ? err.message : err}`
           );
         }
-        const filename = basename(filePath);
+        const filename = basename(upload.path);
         const ticket_id = args.ticket_id as number | undefined;
         // Linking via the manifest (itemtype/items_id) lets GLPI create the
         // Document_Item itself, which also works for restricted profiles that
         // cannot POST Document_Item directly.
         const document = await client.uploadDocument({
           filename,
-          data,
+          data: upload.data,
           name: args.name as string | undefined,
           mimeType: UPLOAD_MIME_TYPES[extname(filename).toLowerCase()],
           ...(ticket_id ? { itemtype: 'Ticket', items_id: ticket_id } : {}),

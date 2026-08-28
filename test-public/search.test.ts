@@ -10,9 +10,9 @@
 
 import { strict as assert } from 'node:assert';
 import { test, mock } from 'node:test';
-import { GlpiHttp } from '../src/http.js';
-import { GlpiSearch } from '../src/search.js';
-import { SearchOptionsCache } from '../src/search-options.js';
+import { GlpiHttp } from '../src/api/legacy/http.js';
+import { GlpiSearch } from '../src/api/legacy/search.js';
+import { SearchOptionsCache } from '../src/api/legacy/search-options.js';
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
