@@ -4,6 +4,7 @@ import { HighLevelClient, HighLevelNotSupportedError } from '../api/highlevel/cl
 import { HighLevelTicketService } from '../api/highlevel/tickets.js';
 import { LegacyTicketService } from '../api/legacy/tickets.js';
 import { LegacyIPNetworkService } from '../api/legacy/ip-networks.js';
+import { LegacyInventoryPluginService } from '../api/legacy/inventory-plugin.js';
 import { GlpiServices } from '../core/services.js';
 
 export type BackendName = 'legacy' | 'highlevel';
@@ -109,6 +110,39 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_get_ip_network: 'legacy',
   glpi_create_ip_network: 'legacy',
   glpi_update_ip_network: 'legacy',
+  glpi_inventory_list_ip_ranges: 'legacy',
+  glpi_inventory_get_ip_range: 'legacy',
+  glpi_inventory_create_ip_range: 'legacy',
+  glpi_inventory_create_ip_range_from_cidr: 'legacy',
+  glpi_inventory_update_ip_range: 'legacy',
+  glpi_inventory_create_task: 'legacy',
+  glpi_inventory_update_task: 'legacy',
+  glpi_inventory_enable_task: 'legacy',
+  glpi_inventory_disable_task: 'legacy',
+  glpi_inventory_create_credential: 'legacy',
+  glpi_inventory_update_credential: 'legacy',
+  glpi_inventory_list_credentials: 'legacy',
+  glpi_inventory_get_credential: 'legacy',
+  glpi_inventory_list_tasks: 'legacy',
+  glpi_inventory_get_task: 'legacy',
+  glpi_inventory_list_task_jobs: 'legacy',
+  glpi_inventory_get_task_job: 'legacy',
+  glpi_inventory_list_task_job_states: 'legacy',
+  glpi_inventory_get_task_job_state: 'legacy',
+  glpi_inventory_list_timeslots: 'legacy',
+  glpi_inventory_get_timeslot: 'legacy',
+  glpi_inventory_list_collects: 'legacy',
+  glpi_inventory_get_collect: 'legacy',
+  glpi_inventory_list_collect_files: 'legacy',
+  glpi_inventory_get_collect_file: 'legacy',
+  glpi_inventory_list_collect_registries: 'legacy',
+  glpi_inventory_get_collect_registry: 'legacy',
+  glpi_inventory_list_collect_wmi_queries: 'legacy',
+  glpi_inventory_get_collect_wmi_query: 'legacy',
+  glpi_inventory_list_deploy_packages: 'legacy',
+  glpi_inventory_get_deploy_package: 'legacy',
+  glpi_inventory_list_deploy_groups: 'legacy',
+  glpi_inventory_get_deploy_group: 'legacy',
 };
 
 export interface ApiRouter {
@@ -152,6 +186,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
     services: {
       tickets: new LegacyTicketService(client),
       ipNetworks: new LegacyIPNetworkService(client),
+      inventoryPlugin: new LegacyInventoryPluginService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

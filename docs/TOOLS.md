@@ -1,7 +1,7 @@
 # Active MCP tools
 
-This catalogue lists the 89 tools currently registered by `src/index.ts` in
-release `0.2.1`. Unless stated otherwise, they are active through the Legacy
+This catalogue lists the 122 tools currently registered by `src/index.ts` in
+release `0.2.2`. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is still in preparation.
 
@@ -125,6 +125,30 @@ Safety annotations are derived from tool names:
 | `glpi_get_asset_stats` | Read | Return counts by asset type. |
 | `glpi_tickets_stats_by` | Read | Break ticket counts down by status, category, technician, entity or month. |
 | `glpi_get_session_info` | Read | Read active profile, available profiles and visible entities. |
+
+## GLPI Inventory plugin
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_inventory_list_ip_ranges` | Read | List discovery/inventory IPv4 ranges. |
+| `glpi_inventory_get_ip_range` | Read | Read one IPv4 range. |
+| `glpi_inventory_create_ip_range` | Write | Create a range from explicit first/last addresses. |
+| `glpi_inventory_create_ip_range_from_cidr` | Write | Calculate and create usable addresses from IPv4 CIDR. |
+| `glpi_inventory_update_ip_range` | Write | Update range name, entity or bounds. |
+| `glpi_inventory_list_credentials` / `glpi_inventory_get_credential` | Read | Read credential metadata with all secrets stripped recursively. |
+| `glpi_inventory_create_credential` / `glpi_inventory_update_credential` | Write | Create or rotate write-only remote-device credentials. |
+| `glpi_inventory_list_tasks` / `glpi_inventory_get_task` | Read | Read task definitions and planning metadata. |
+| `glpi_inventory_create_task` / `glpi_inventory_update_task` | Write | Create or update a task definition without executing it. |
+| `glpi_inventory_enable_task` / `glpi_inventory_disable_task` | Write | Toggle task activation. |
+| `glpi_inventory_list_task_jobs` / `glpi_inventory_get_task_job` | Read | Read jobs belonging to inventory tasks. |
+| `glpi_inventory_list_task_job_states` / `glpi_inventory_get_task_job_state` | Read | Read execution/supervision states. |
+| `glpi_inventory_list_timeslots` / `glpi_inventory_get_timeslot` | Read | Read execution time slots. |
+| `glpi_inventory_list_collects` / `glpi_inventory_get_collect` | Read | Read collection definitions. |
+| `glpi_inventory_list_collect_files` / `glpi_inventory_get_collect_file` | Read | Read file collection definitions. |
+| `glpi_inventory_list_collect_registries` / `glpi_inventory_get_collect_registry` | Read | Read registry collection definitions. |
+| `glpi_inventory_list_collect_wmi_queries` / `glpi_inventory_get_collect_wmi_query` | Read | Read WMI collection definitions. |
+| `glpi_inventory_list_deploy_packages` / `glpi_inventory_get_deploy_package` | Read | Read deployment-package metadata without executing it. |
+| `glpi_inventory_list_deploy_groups` / `glpi_inventory_get_deploy_group` | Read | Read deployment target-group metadata. |
 
 ## Planned but not active
 

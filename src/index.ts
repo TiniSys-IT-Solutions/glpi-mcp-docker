@@ -36,6 +36,7 @@ import { loadConfig } from './config/env.js';
 import { TICKET_FIELDS, TICKET_STATUS, TICKET_URGENCY } from './core/tickets/constants.js';
 import { TicketService } from './core/tickets/service.js';
 import { IPNetworkService } from './core/ip-networks/service.js';
+import { InventoryPluginResource, InventoryPluginService } from './core/inventory-plugin/service.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 
 // ---------------------------------------------------------------------------
@@ -222,6 +223,7 @@ let apiRouter: ApiRouter;
 let client: GlpiClient;
 let ticketService: TicketService;
 let ipNetworkService: IPNetworkService;
+let inventoryPluginService: InventoryPluginService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -254,6 +256,25 @@ const LIST_TOOL_COMMON_PROPS = {
   order: { type: 'string', enum: ['ASC', 'DESC'] },
   expand_dropdowns: { type: 'boolean', description: 'Resolve FK ids to labels (default true)' },
 };
+
+const INVENTORY_PLUGIN_READ_TOOLS: Array<{
+  resource: InventoryPluginResource;
+  plural: string;
+  singular: string;
+  description: string;
+}> = [
+  { resource: 'credentials', plural: 'credentials', singular: 'credential', description: 'remote-device credentials (secrets are never returned)' },
+  { resource: 'tasks', plural: 'tasks', singular: 'task', description: 'inventory tasks' },
+  { resource: 'task_jobs', plural: 'task_jobs', singular: 'task_job', description: 'inventory task jobs' },
+  { resource: 'task_job_states', plural: 'task_job_states', singular: 'task_job_state', description: 'task execution states' },
+  { resource: 'timeslots', plural: 'timeslots', singular: 'timeslot', description: 'execution time slots' },
+  { resource: 'collects', plural: 'collects', singular: 'collect', description: 'collection definitions' },
+  { resource: 'collect_files', plural: 'collect_files', singular: 'collect_file', description: 'file collection definitions' },
+  { resource: 'collect_registries', plural: 'collect_registries', singular: 'collect_registry', description: 'registry collection definitions' },
+  { resource: 'collect_wmi_queries', plural: 'collect_wmi_queries', singular: 'collect_wmi_query', description: 'WMI collection definitions' },
+  { resource: 'deploy_packages', plural: 'deploy_packages', singular: 'deploy_package', description: 'deployment packages' },
+  { resource: 'deploy_groups', plural: 'deploy_groups', singular: 'deploy_group', description: 'deployment target groups' },
+];
 
 /** MIME types for glpi_upload_document, keyed by lowercase file extension. */
 const UPLOAD_MIME_TYPES: Record<string, string> = {
@@ -288,13 +309,13 @@ interface ToolAnnotations {
 }
 
 function toolAnnotations(name: string): ToolAnnotations {
-  if (/^glpi_(list_|get_|search|count$|tickets_stats)/.test(name)) {
+  if (/^glpi_(list_|get_|search|count$|tickets_stats)/.test(name) || /^glpi_inventory_(list|get)_/.test(name)) {
     return { readOnlyHint: true, openWorldHint: false };
   }
   if (/^glpi_delete_/.test(name)) {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }
-  if (/^glpi_(update_|set_|assign_)/.test(name)) {
+  if (/^glpi_(update_|set_|assign_)/.test(name) || /^glpi_inventory_(update_|enable_|disable_)/.test(name)) {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }
   // create / add / link / attach: additive writes. Re-running duplicates data.
@@ -801,6 +822,116 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
+    // ============== GLPI INVENTORY PLUGIN ==============
+    ...INVENTORY_PLUGIN_READ_TOOLS.flatMap(({ plural, singular, description }) => [
+      {
+        name: `glpi_inventory_list_${plural}`,
+        description: `List GLPI Inventory ${description}.`,
+        inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
+      },
+      {
+        name: `glpi_inventory_get_${singular}`,
+        description: `Get one GLPI Inventory ${description.replace(/s$/, '')} by id.`,
+        inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+      },
+    ]),
+    {
+      name: 'glpi_inventory_list_ip_ranges',
+      description: 'List GLPI Inventory IPv4 discovery/inventory ranges.',
+      inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
+    },
+    {
+      name: 'glpi_inventory_get_ip_range',
+      description: 'Get one GLPI Inventory IP range.',
+      inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+    },
+    {
+      name: 'glpi_inventory_create_ip_range',
+      description: 'Create an explicit GLPI Inventory IPv4 range.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' }, entity_id: { type: 'number' },
+          ip_start: { type: 'string' }, ip_end: { type: 'string' },
+        },
+        required: ['name', 'ip_start', 'ip_end'],
+      },
+    },
+    {
+      name: 'glpi_inventory_create_ip_range_from_cidr',
+      description: 'Create a GLPI Inventory IPv4 range from CIDR; network/broadcast addresses are excluded by default.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' }, cidr: { type: 'string', description: 'IPv4 CIDR, for example 10.20.30.0/24' },
+          entity_id: { type: 'number' },
+          usable_hosts_only: { type: 'boolean', description: 'Default true; exclude network and broadcast for /0../30' },
+        },
+        required: ['name', 'cidr'],
+      },
+    },
+    {
+      name: 'glpi_inventory_update_ip_range',
+      description: 'Update an existing GLPI Inventory IP range.',
+      inputSchema: {
+        type: 'object',
+        properties: { id: { type: 'number' }, name: { type: 'string' }, entity_id: { type: 'number' }, ip_start: { type: 'string' }, ip_end: { type: 'string' } },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'glpi_inventory_create_task',
+      description: 'Create a GLPI Inventory task definition without running it.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' }, entity_id: { type: 'number' }, comment: { type: 'string' }, is_active: { type: 'boolean' },
+          datetime_start: { type: 'string' }, datetime_end: { type: 'string' }, reprepare_if_successful: { type: 'boolean' }, is_deploy_on_demand: { type: 'boolean' },
+        },
+        required: ['name'],
+      },
+    },
+    {
+      name: 'glpi_inventory_update_task',
+      description: 'Update a GLPI Inventory task definition.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'number' }, name: { type: 'string' }, entity_id: { type: 'number' }, comment: { type: 'string' }, is_active: { type: 'boolean' },
+          datetime_start: { type: 'string' }, datetime_end: { type: 'string' }, reprepare_if_successful: { type: 'boolean' }, is_deploy_on_demand: { type: 'boolean' },
+        },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'glpi_inventory_enable_task',
+      description: 'Enable a GLPI Inventory task definition.',
+      inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+    },
+    {
+      name: 'glpi_inventory_disable_task',
+      description: 'Disable a GLPI Inventory task definition.',
+      inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+    },
+    {
+      name: 'glpi_inventory_create_credential',
+      description: 'Create a GLPI Inventory remote-device credential. Password is write-only and never returned.',
+      inputSchema: {
+        type: 'object',
+        properties: { name: { type: 'string' }, entity_id: { type: 'number' }, credential_type: { type: 'string' }, username: { type: 'string' }, password: { type: 'string' } },
+        required: ['name', 'credential_type'],
+      },
+    },
+    {
+      name: 'glpi_inventory_update_credential',
+      description: 'Update or rotate a GLPI Inventory credential. Password is write-only.',
+      inputSchema: {
+        type: 'object',
+        properties: { id: { type: 'number' }, name: { type: 'string' }, entity_id: { type: 'number' }, credential_type: { type: 'string' }, username: { type: 'string' }, password: { type: 'string' } },
+        required: ['id'],
+      },
+    },
+
     // ============== KB / CONTRACTS / SUPPLIERS / LOCATIONS / PROJECTS ==============
     {
       name: 'glpi_list_knowbase',
@@ -1172,6 +1303,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     console.error(`[MCP] ${name} -> ${backend}`);
     if (backend === 'highlevel' && !isTicketServiceTool(name)) {
       throw new McpError(ErrorCode.InvalidRequest, `Not supported in GLPI_API_MODE=highlevel: ${name}`);
+    }
+
+    const inventoryReadTool = INVENTORY_PLUGIN_READ_TOOLS.find(
+      ({ plural, singular }) => name === `glpi_inventory_list_${plural}` || name === `glpi_inventory_get_${singular}`
+    );
+    if (inventoryReadTool) {
+      if (name === `glpi_inventory_list_${inventoryReadTool.plural}`) {
+        return text(await inventoryPluginService.list(inventoryReadTool.resource, listArgsSchema.parse(args)));
+      }
+      const { id } = z.object({ id: z.number().int().min(1) }).parse(args);
+      return text(await inventoryPluginService.get(inventoryReadTool.resource, id));
     }
 
     switch (name) {
@@ -1608,6 +1750,70 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text(await ipNetworkService.update(id, updates));
       }
 
+      // ==== GLPI INVENTORY PLUGIN ====
+      case 'glpi_inventory_list_ip_ranges':
+        return text(await inventoryPluginService.listIPRanges(listArgsSchema.parse(args)));
+      case 'glpi_inventory_get_ip_range': {
+        const { id } = z.object({ id: z.number().int().min(1) }).parse(args);
+        return text(await inventoryPluginService.getIPRange(id));
+      }
+      case 'glpi_inventory_create_ip_range': {
+        const validated = z.object({
+          name: z.string().trim().min(1), entity_id: z.number().int().min(0).optional(),
+          ip_start: z.string().refine((value) => isIP(value) === 4, 'Expected IPv4 address'),
+          ip_end: z.string().refine((value) => isIP(value) === 4, 'Expected IPv4 address'),
+        }).parse(args);
+        return text(await inventoryPluginService.createIPRange(validated));
+      }
+      case 'glpi_inventory_create_ip_range_from_cidr': {
+        const validated = z.object({
+          name: z.string().trim().min(1), cidr: z.string().trim().min(1),
+          entity_id: z.number().int().min(0).optional(), usable_hosts_only: z.boolean().optional(),
+        }).parse(args);
+        return text(await inventoryPluginService.createIPRangeFromCIDR(validated));
+      }
+      case 'glpi_inventory_update_ip_range': {
+        const validated = z.object({
+          id: z.number().int().min(1), name: z.string().trim().min(1).optional(), entity_id: z.number().int().min(0).optional(),
+          ip_start: z.string().refine((value) => isIP(value) === 4, 'Expected IPv4 address').optional(),
+          ip_end: z.string().refine((value) => isIP(value) === 4, 'Expected IPv4 address').optional(),
+        }).parse(args);
+        const { id, ...updates } = validated;
+        return text(await inventoryPluginService.updateIPRange(id, updates));
+      }
+      case 'glpi_inventory_create_task': {
+        const validated = z.object({
+          name: z.string().trim().min(1), entity_id: z.number().int().min(0).optional(), comment: z.string().optional(), is_active: z.boolean().optional(),
+          datetime_start: z.string().optional(), datetime_end: z.string().optional(), reprepare_if_successful: z.boolean().optional(), is_deploy_on_demand: z.boolean().optional(),
+        }).parse(args);
+        return text(await inventoryPluginService.createTask(validated));
+      }
+      case 'glpi_inventory_update_task': {
+        const validated = z.object({
+          id: z.number().int().min(1), name: z.string().trim().min(1).optional(), entity_id: z.number().int().min(0).optional(), comment: z.string().optional(), is_active: z.boolean().optional(),
+          datetime_start: z.string().optional(), datetime_end: z.string().optional(), reprepare_if_successful: z.boolean().optional(), is_deploy_on_demand: z.boolean().optional(),
+        }).parse(args);
+        const { id, ...updates } = validated;
+        return text(await inventoryPluginService.updateTask(id, updates));
+      }
+      case 'glpi_inventory_enable_task':
+        return text(await inventoryPluginService.setTaskActive(z.number().int().min(1).parse(args.id), true));
+      case 'glpi_inventory_disable_task':
+        return text(await inventoryPluginService.setTaskActive(z.number().int().min(1).parse(args.id), false));
+      case 'glpi_inventory_create_credential': {
+        const validated = z.object({
+          name: z.string().trim().min(1), entity_id: z.number().int().min(0).optional(), credential_type: z.string().trim().min(1), username: z.string().optional(), password: z.string().optional(),
+        }).parse(args);
+        return text(await inventoryPluginService.createCredential(validated));
+      }
+      case 'glpi_inventory_update_credential': {
+        const validated = z.object({
+          id: z.number().int().min(1), name: z.string().trim().min(1).optional(), entity_id: z.number().int().min(0).optional(), credential_type: z.string().trim().min(1).optional(), username: z.string().optional(), password: z.string().optional(),
+        }).parse(args);
+        const { id, ...updates } = validated;
+        return text(await inventoryPluginService.updateCredential(id, updates));
+      }
+
       // ==== KB / CONTRACTS / SUPPLIERS / LOCATIONS / PROJECTS ====
       case 'glpi_list_knowbase':
         return text(await client.getKnowbaseItems(parseListArgs(args)));
@@ -1978,6 +2184,7 @@ async function main() {
     client = apiRouter.legacyClient as GlpiClient;
     ticketService = apiRouter.services.tickets;
     ipNetworkService = apiRouter.services.ipNetworks as IPNetworkService;
+    inventoryPluginService = apiRouter.services.inventoryPlugin as InventoryPluginService;
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 
     // Try to open the session eagerly, but don't die if GLPI is momentarily

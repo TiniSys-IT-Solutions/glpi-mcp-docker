@@ -30,6 +30,7 @@ Status values:
 | Computers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Asset age business logic still TODO. |
 | Network equipment | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | IP networks / LANs | OK | TODO | OK VIA LEGACY | IPNetwork service tests | Dedicated list/get/create/update tools use CIDR and friendly entity fields. GLPI computes hierarchy implicitly. |
+| GLPI Inventory plugin | OK | TODO | OK VIA LEGACY | Plugin service tests | Ranges, protected credential metadata, tasks/jobs/states, time slots, collections and deployment metadata. Execution actions intentionally excluded. |
 | Printers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | Monitors | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | Phones | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |

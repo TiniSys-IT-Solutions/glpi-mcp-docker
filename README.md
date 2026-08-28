@@ -31,12 +31,13 @@ current application is released from `main`. See
 
 ## Active capabilities
 
-The server currently exposes 89 MCP tools for:
+The server currently exposes 122 MCP tools for:
 
 - tickets, timelines, followups, tasks, solutions, validations and documents;
 - problems and changes;
 - computers, software, network equipment, printers, monitors and phones;
 - IP networks/LANs with IPv4 and IPv6 CIDR validation;
+- GLPI Inventory ranges, credentials, tasks, jobs, execution states, time slots, collections and deployment metadata;
 - users, groups, entities, locations and categories;
 - projects, contracts, suppliers and knowledge-base articles;
 - statistics, generic multi-criteria search, counts and session information.
