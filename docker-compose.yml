@@ -1,11 +1,7 @@
 services:
   glpi-mcp:
-    build:
-      context: .
-      args:
-        SUPERGATEWAY_VERSION: ${SUPERGATEWAY_VERSION:-3.4.3}
-        UPSTREAM_LEGACY_VERSION: ${UPSTREAM_LEGACY_VERSION:-v3.3.0}
-    image: doosys/glpi-mcp-docker:${GLPI_MCP_DOCKER_VERSION:-v2-alpha}
+    image: ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
+    pull_policy: always
     container_name: glpi-mcp
     restart: unless-stopped
     environment:

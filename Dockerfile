@@ -34,7 +34,7 @@ ARG UPSTREAM_LEGACY_VERSION
 
 LABEL org.opencontainers.image.title="glpi-mcp-docker" \
       org.opencontainers.image.description="Docker-first GLPI MCP server with Legacy, High-Level, and Hybrid API routing." \
-      org.opencontainers.image.source="https://github.com/DooSys/glpi-mcp-docker" \
+      org.opencontainers.image.source="https://github.com/TiniSys-IT-Solutions/glpi-mcp-docker" \
       org.opencontainers.image.upstream.source="https://github.com/GMS64260/mcp-glpi" \
       org.opencontainers.image.upstream.version="${UPSTREAM_LEGACY_VERSION}" \
       org.opencontainers.image.supergateway.version="${SUPERGATEWAY_VERSION}" \

@@ -3,8 +3,9 @@
 Docker-first MCP server for GLPI.
 
 This repository now contains the application code, Docker build, tests, and
-documentation for the DooSys GLPI MCP server. The stable V1 remains on
-`main`. Active V2 development happens only on `v2`.
+documentation for the DooSys GLPI MCP server. The former Docker-wrapper V1 is
+preserved on `v1-legacy`. The current application is developed and released
+from `main` using semantic versions in the `0.2.x` line.
 
 ## Status
 
@@ -53,17 +54,56 @@ time_to_resolve
 compatibility aliases. New clients should prefer `assigned_user_id` and
 `assigned_group_id`.
 
-## Quick Start
+## Production deployment
+
+Every push to `main` publishes a tested Docker image to GitHub Container
+Registry:
+
+```text
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
+```
+
+Release tags such as `v0.2.0` also publish immutable and minor-line tags:
+
+```text
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.2.0
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.2
+```
+
+The production host only needs `docker-compose.yml` and `.env`. Updating it
+does not require Git, Node.js, the repository source, or a local image build:
 
 ```bash
-git clone git@github.com:DooSys/glpi-mcp-docker.git
+docker compose pull glpi-mcp
+docker compose up -d --remove-orphans glpi-mcp
+```
+
+If the GitHub package is private, authenticate the Docker host once with a
+GitHub personal access token that has `read:packages`:
+
+```bash
+echo 'GITHUB_TOKEN' | docker login ghcr.io -u GITHUB_USERNAME --password-stdin
+```
+
+For a server-specific Compose, keep its ports, networks, labels, container
+name, and environment unchanged, remove the `build:` section, and use:
+
+```yaml
+image: ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
+pull_policy: always
+```
+
+## Local source build
+
+```bash
+git clone git@github.com:TiniSys-IT-Solutions/glpi-mcp-docker.git
 cd glpi-mcp-docker
-git checkout v2
+git checkout main
 
 cp .env.example .env
 nano .env
 
-docker compose up -d --build
+docker build -t glpi-mcp-docker:local .
 ```
 
 The MCP HTTP endpoint defaults to:
