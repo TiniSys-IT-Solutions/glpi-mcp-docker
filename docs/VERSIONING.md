@@ -20,9 +20,9 @@ npm version patch --no-git-tag-version
 npm test
 npm run build
 git add package.json package-lock.json
-git commit -m "chore: release 0.2.1"
-git tag -a v0.2.1 -m "Release 0.2.1"
-git push origin main v0.2.1
+git commit -m "chore: release 0.2.2"
+git tag -a v0.2.2 -m "Release 0.2.2"
+git push origin main v0.2.2
 ```
 
 Replace `patch` with `minor` when intentionally starting a new minor line.

@@ -1,0 +1,21 @@
+glpi-mcp-docker
+================
+
+This project is a downstream fork and substantial evolution of:
+
+  mcp-glpi
+  https://github.com/GMS64260/mcp-glpi
+  Baseline: v3.3.0, commit 0f8e802c39a6b37156ad2e315c0b9a8d0e26056e
+  Copyright (c) 2026 OGFA
+  License: MIT
+
+The upstream snapshot is retained under upstream/legacy-mcp-glpi for
+attribution, auditability, and migration reference. Runtime code does not
+import from that directory.
+
+The downstream Docker distribution, API routing, service contracts,
+business-oriented tools, tests, and documentation are maintained by DooSys /
+TiniSys IT Solutions.
+
+GLPI is a trademark of its respective owners. This project is an independent
+integration and is not an official GLPI product.

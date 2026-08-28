@@ -4,6 +4,8 @@ services:
     pull_policy: always
     container_name: glpi-mcp
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     environment:
       GLPI_URL: ${GLPI_URL}
       GLPI_API_MODE: ${GLPI_API_MODE:-legacy}

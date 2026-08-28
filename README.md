@@ -1,205 +1,163 @@
-# glpi-mcp-docker
+# GLPI MCP Docker
 
-Docker-first MCP server for GLPI.
+Docker-first Model Context Protocol server for GLPI, maintained by DooSys /
+TiniSys IT Solutions.
 
-This repository now contains the application code, Docker build, tests, and
-documentation for the DooSys GLPI MCP server. The former Docker-wrapper V1 is
-preserved on `v1-legacy`. The current application is developed and released
-from `main` using semantic versions in the `0.2.x` line.
+This repository is a downstream fork and substantial evolution of
+[`GMS64260/mcp-glpi`](https://github.com/GMS64260/mcp-glpi). The Legacy
+adapter is based on upstream `v3.3.0` (commit
+`0f8e802c39a6b37156ad2e315c0b9a8d0e26056e`), distributed under the MIT
+license. See [NOTICE](NOTICE), [LICENSE](LICENSE), and
+[docs/UPSTREAM.md](docs/UPSTREAM.md).
 
-## Status
+This is an independent integration and is not an official GLPI product.
 
-V2 has started.
+## Status and versions
 
-- `GLPI_API_MODE=legacy` is the first functional mode.
-- `GLPI_API_MODE=highlevel` is scaffolded and intentionally returns clear
-  not-supported errors until the target GLPI 11 Swagger/OpenAPI is inspected.
-- `GLPI_API_MODE=hybrid` uses an explicit compatibility matrix. It never tries
-  High-Level and then silently falls back to Legacy after an error.
+Current release line: `0.2.x`.
 
-The immediate ticket-location need is implemented on the MCP contract as:
+| Component | Status | Notes |
+| --- | --- | --- |
+| Legacy REST API `/apirest.php` | Active | Functional production backend. |
+| High-Level API `/api.php/v2.3` | In preparation | Client and routing scaffold exist; unsupported domains fail explicitly. |
+| Hybrid mode | Active | Uses an explicit compatibility matrix; never silently falls back after an error. |
+| Service-account authentication | Active | App Token + User Token recommended. |
+| Per-user OAuth authentication | Planned | Waiting for validated GLPI 11 OAuth behavior. |
+| Docker image | Active | Published automatically from `main` to GHCR. |
 
-```json
-{
-  "entity_id": 12,
-  "location_id": 42,
-  "category_id": 7
-}
-```
+The original Docker-wrapper generation is preserved on `v1-legacy`. The
+current application is released from `main`. See
+[docs/VERSIONING.md](docs/VERSIONING.md).
 
-The Legacy adapter maps those fields to GLPI Legacy names such as
-`entities_id`, `locations_id`, and `itilcategories_id`.
+## Active capabilities
 
-Ticket create/update now supports these MCP-facing fields in Legacy mode:
+The server currently exposes 89 MCP tools for:
 
-```text
-name
-content
-type
-status
-urgency
-impact
-priority
-category_id
-entity_id
-location_id
-requester_user_id
-requester_group_id
-assigned_user_id
-assigned_group_id
-time_to_resolve
-```
+- tickets, timelines, followups, tasks, solutions, validations and documents;
+- problems and changes;
+- computers, software, network equipment, printers, monitors and phones;
+- IP networks/LANs with IPv4 and IPv6 CIDR validation;
+- users, groups, entities, locations and categories;
+- projects, contracts, suppliers and knowledge-base articles;
+- statistics, generic multi-criteria search, counts and session information.
 
-`user_id_assign` and `group_id_assign` are still accepted as temporary
-compatibility aliases. New clients should prefer `assigned_user_id` and
-`assigned_group_id`.
+The exhaustive tool/function table is maintained in
+[docs/TOOLS.md](docs/TOOLS.md). API-mode coverage is documented in
+[docs/API_COMPATIBILITY_MATRIX.md](docs/API_COMPATIBILITY_MATRIX.md).
 
 ## Production deployment
 
-Every push to `main` publishes a tested Docker image to GitHub Container
-Registry:
+Published image:
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
 ```
 
-Release tags such as `v0.2.0` also publish immutable and minor-line tags:
+Versioned releases also publish immutable and minor-line tags, for example:
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.2.0
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.2
 ```
 
-The production host only needs `docker-compose.yml` and `.env`. Updating it
-does not require Git, Node.js, the repository source, or a local image build:
+Create the production configuration:
+
+```bash
+cp .env.example .env
+nano .env
+docker compose up -d
+```
+
+Future updates require no source checkout or server-side build:
 
 ```bash
 docker compose pull glpi-mcp
-docker compose up -d --remove-orphans glpi-mcp
+docker compose up -d --force-recreate --no-deps glpi-mcp
 ```
 
-If the GitHub package is private, authenticate the Docker host once with a
-GitHub personal access token that has `read:packages`:
+If the GHCR package is private, authenticate the Docker host once using a
+GitHub token with `read:packages`:
 
 ```bash
-echo 'GITHUB_TOKEN' | docker login ghcr.io -u GITHUB_USERNAME --password-stdin
-```
-
-For a server-specific Compose, keep its ports, networks, labels, container
-name, and environment unchanged, remove the `build:` section, and use:
-
-```yaml
-image: ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-pull_policy: always
-```
-
-## Local source build
-
-```bash
-git clone git@github.com:TiniSys-IT-Solutions/glpi-mcp-docker.git
-cd glpi-mcp-docker
-git checkout main
-
-cp .env.example .env
-nano .env
-
-docker build -t glpi-mcp-docker:local .
-```
-
-The MCP HTTP endpoint defaults to:
-
-```text
-http://127.0.0.1:8000/mcp
-```
-
-The healthcheck endpoint defaults to:
-
-```text
-http://127.0.0.1:8000/healthz
+printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u GITHUB_USERNAME --password-stdin
 ```
 
 ## Configuration
 
-Core settings:
+The supplied [.env.example](.env.example) is the authoritative variable
+template. Minimum recommended Legacy configuration:
 
 ```env
 GLPI_URL=https://glpi.example.local
-
-# legacy | highlevel | hybrid
 GLPI_API_MODE=legacy
-
-# High-Level API version for /api.php/v{version}
-GLPI_API_VERSION=2.3
-
-# service_account | per_user
 GLPI_AUTH_MODE=service_account
-```
-
-Legacy service-account mode:
-
-```env
 GLPI_APP_TOKEN=CHANGE_ME
 GLPI_USER_TOKEN=CHANGE_ME
 ```
 
-High-Level OAuth variables are present as placeholders in `.env.example`, but
-the exact flow must be confirmed from the target GLPI 11 Swagger/OpenAPI before
-being implemented.
+Use a dedicated GLPI technical account with deliberately limited ACLs. Never
+commit `.env`, tokens, passwords, OAuth secrets, private keys, or session
+tokens.
 
-## Development
+Default endpoints:
+
+```text
+MCP:    http://127.0.0.1:8000/mcp
+Health: http://127.0.0.1:8000/healthz
+```
+
+The included [docker-compose.yml](docker-compose.yml) is a minimal standalone
+example. Reverse proxies such as Traefik can add their own external network,
+router and middleware labels without changing the image or `.env` contract.
+
+## Local development
 
 ```bash
+git clone git@github.com:TiniSys-IT-Solutions/glpi-mcp-docker.git
+cd glpi-mcp-docker
 npm ci
 npm test
 npm run build
 ```
 
-The smoke script is read-only by default:
+Local Docker build:
+
+```bash
+docker build -t glpi-mcp-docker:local .
+```
+
+The smoke test is read-only unless `--write` is explicitly supplied:
 
 ```bash
 npm run smoke
 ```
 
-Write smoke tests must be explicitly requested:
+Never run write smoke tests against production without explicit authorization.
 
-```bash
-npm run smoke -- --write
-```
-
-Never run write smoke tests against a production GLPI instance.
-
-The optional write smoke cycle can use `SMOKE_TICKET_*` variables to exercise
-ticket create/get/update with `entity_id`, `location_id`, `category_id`,
-requester, assignment, priority fields, and `time_to_resolve`.
-
-## Docker
-
-The image builds from this repository source. It no longer clones
-`GMS64260/mcp-glpi` during the Docker build.
-
-The runtime remains:
-
-- Node Alpine base image;
-- non-root `node` user;
-- Supergateway for stdio to Streamable HTTP;
-- healthcheck;
-- OCI labels for source and upstream reference.
-
-## Upstream Reference
-
-The upstream MIT project `GMS64260/mcp-glpi` is vendored only as a migration
-snapshot under:
+## Architecture
 
 ```text
-upstream/legacy-mcp-glpi/
+MCP client
+  -> Streamable HTTP / Supergateway
+  -> MCP stdio server
+  -> API router
+     -> Legacy adapter     /apirest.php
+     -> High-Level adapter /api.php/v2.3 (in preparation)
 ```
 
-Runtime code must not import from that directory. Adapted code belongs under
-`src/`.
+Business-facing MCP fields use durable names such as `entity_id`,
+`location_id`, `category_id`, and `cidr`. API-specific field names remain in
+the adapters.
 
-See:
+Further documentation:
 
-- `docs/ARCHITECTURE.md`
-- `docs/API_COMPATIBILITY_MATRIX.md`
-- `docs/AUTHENTICATION.md`
-- `docs/UPSTREAM.md`
+- [Architecture](docs/ARCHITECTURE.md)
+- [Authentication](docs/AUTHENTICATION.md)
+- [IP networks](docs/IP_NETWORKS.md)
+- [Upstream provenance](docs/UPSTREAM.md)
+- [Versioning](docs/VERSIONING.md)
+
+## License
+
+MIT. The upstream and downstream copyright notices are preserved in
+[LICENSE](LICENSE). See [NOTICE](NOTICE) for provenance and attribution.

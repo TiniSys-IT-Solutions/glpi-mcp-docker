@@ -12,7 +12,7 @@ ARG MCP_SDK_VERSION
 
 WORKDIR /build
 
-COPY package.json package-lock.json tsconfig.json ./
+COPY package.json package-lock.json tsconfig.json LICENSE NOTICE README.md ./
 RUN npm ci
 
 COPY src ./src
@@ -35,6 +35,9 @@ ARG UPSTREAM_LEGACY_VERSION
 LABEL org.opencontainers.image.title="glpi-mcp-docker" \
       org.opencontainers.image.description="Docker-first GLPI MCP server with Legacy, High-Level, and Hybrid API routing." \
       org.opencontainers.image.source="https://github.com/TiniSys-IT-Solutions/glpi-mcp-docker" \
+      org.opencontainers.image.documentation="https://github.com/TiniSys-IT-Solutions/glpi-mcp-docker/blob/main/README.md" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="DooSys / TiniSys IT Solutions" \
       org.opencontainers.image.upstream.source="https://github.com/GMS64260/mcp-glpi" \
       org.opencontainers.image.upstream.version="${UPSTREAM_LEGACY_VERSION}" \
       org.opencontainers.image.supergateway.version="${SUPERGATEWAY_VERSION}" \
@@ -56,6 +59,9 @@ WORKDIR /app
 
 COPY --from=build /build/package.json /app/package.json
 COPY --from=build /build/package-lock.json /app/package-lock.json
+COPY --from=build /build/LICENSE /app/LICENSE
+COPY --from=build /build/NOTICE /app/NOTICE
+COPY --from=build /build/README.md /app/README.md
 COPY --from=build /build/dist /app/dist
 COPY --from=build /build/node_modules /app/node_modules
 
