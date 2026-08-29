@@ -173,6 +173,8 @@ the adapters.
 Further documentation:
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Stable and Preview endpoints](docs/DUAL_ENDPOINTS.md)
+- [Migration roadmap](docs/ROADMAP.md)
 - [Authentication](docs/AUTHENTICATION.md)
 - [IP networks](docs/IP_NETWORKS.md)
 - [Upstream provenance](docs/UPSTREAM.md)

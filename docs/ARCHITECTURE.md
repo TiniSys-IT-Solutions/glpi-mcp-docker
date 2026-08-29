@@ -104,3 +104,18 @@ server is still stdio-based and the existing deployment model already works.
 This avoids spending the first migration step on transport churn.
 
 Re-evaluate native Streamable HTTP after the tool/core split is cleaner.
+
+## Dual endpoint launcher
+
+The container launcher can supervise two isolated Supergateway/stdio process
+pairs from the same image:
+
+```text
+launcher
+  +-- stable  :8000 -> Hybrid/Legacy process (critical)
+  `-- preview :8001 -> High-Level process (optional)
+```
+
+Each child receives its own `GLPI_API_MODE`. Stable retains the existing
+single-port behavior by default, while Preview must be explicitly enabled.
+See `docs/DUAL_ENDPOINTS.md`.

@@ -50,6 +50,11 @@ ENV NODE_ENV=production \
     UPSTREAM_LEGACY_VERSION="${UPSTREAM_LEGACY_VERSION}" \
     SUPERGATEWAY_VERSION="${SUPERGATEWAY_VERSION}" \
     MCP_PORT=8000 \
+    MCP_STABLE_PORT=8000 \
+    MCP_STABLE_PATH=/mcp \
+    MCP_STABLE_HEALTH_PATH=/healthz \
+    MCP_PREVIEW_ENABLED=false \
+    MCP_PREVIEW_PORT=8001 \
     MCP_PATH=/mcp \
     MCP_HEALTH_PATH=/healthz \
     MCP_SESSION_TIMEOUT_MS=600000 \
@@ -71,9 +76,9 @@ RUN chown -R node:node /app
 
 USER node
 
-EXPOSE 8000
+EXPOSE 8000 8001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -q -O - "http://127.0.0.1:${MCP_PORT}${MCP_HEALTH_PATH}" | grep -q ok || exit 1
+  CMD wget -q -O - "http://127.0.0.1:${MCP_STABLE_PORT}${MCP_STABLE_HEALTH_PATH}" | grep -q ok || exit 1
 
-CMD ["sh", "-c", "exec node node_modules/supergateway/dist/index.js --stdio \"node dist/index.js\" --outputTransport streamableHttp --stateful --sessionTimeout \"${MCP_SESSION_TIMEOUT_MS}\" --port \"${MCP_PORT}\" --streamableHttpPath \"${MCP_PATH}\" --healthEndpoint \"${MCP_HEALTH_PATH}\" --logLevel \"${MCP_LOG_LEVEL}\""]
+CMD ["node", "dist/launcher.js"]

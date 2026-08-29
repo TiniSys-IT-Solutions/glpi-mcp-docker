@@ -5,6 +5,9 @@ import { HighLevelTicketService } from '../api/highlevel/tickets.js';
 import { LegacyTicketService } from '../api/legacy/tickets.js';
 import { LegacyIPNetworkService } from '../api/legacy/ip-networks.js';
 import { LegacyInventoryPluginService } from '../api/legacy/inventory-plugin.js';
+import { LegacySessionService } from '../api/legacy/session.js';
+import { HighLevelSessionService } from '../api/highlevel/session.js';
+import { GlpiOAuthClient, PasswordGrantTokenProvider } from '../api/highlevel/oauth.js';
 import { GlpiServices } from '../core/services.js';
 
 export type BackendName = 'legacy' | 'highlevel';
@@ -164,15 +167,32 @@ function legacyClient(config: AppConfig): GlpiClient {
   });
 }
 
+function highLevelClient(config: AppConfig): HighLevelClient {
+  const { oauthClientId, oauthClientSecret, oauthUsername, oauthPassword } = config.highlevel;
+  const accessTokenProvider = oauthClientId && oauthClientSecret && oauthUsername && oauthPassword
+    ? new PasswordGrantTokenProvider(
+        new GlpiOAuthClient({
+          url: config.glpiUrl,
+          clientId: oauthClientId,
+          clientSecret: oauthClientSecret,
+        }),
+        { username: oauthUsername, password: oauthPassword, scope: 'api user' }
+      )
+    : undefined;
+  return new HighLevelClient({
+    url: config.glpiUrl,
+    apiVersion: config.apiVersion,
+    accessTokenProvider,
+  });
+}
+
 export function createApiRouter(config: AppConfig): ApiRouter {
   if (config.apiMode === 'highlevel') {
-    const highlevel = new HighLevelClient({
-      url: config.glpiUrl,
-      apiVersion: config.apiVersion,
-    });
+    const highlevel = highLevelClient(config);
     return {
       services: {
         tickets: new HighLevelTicketService(highlevel),
+        session: new HighLevelSessionService(highlevel),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -187,6 +207,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       tickets: new LegacyTicketService(client),
       ipNetworks: new LegacyIPNetworkService(client),
       inventoryPlugin: new LegacyInventoryPluginService(client),
+      session: new LegacySessionService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

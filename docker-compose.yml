@@ -32,18 +32,28 @@ services:
       MCP_PORT: ${MCP_PORT:-8000}
       MCP_PATH: ${MCP_PATH:-/mcp}
       MCP_HEALTH_PATH: ${MCP_HEALTH_PATH:-/healthz}
+      MCP_STABLE_PORT: ${MCP_STABLE_PORT:-8000}
+      MCP_STABLE_PATH: ${MCP_STABLE_PATH:-/mcp}
+      MCP_STABLE_HEALTH_PATH: ${MCP_STABLE_HEALTH_PATH:-/healthz}
+      MCP_STABLE_API_MODE: ${MCP_STABLE_API_MODE:-}
+      MCP_PREVIEW_ENABLED: ${MCP_PREVIEW_ENABLED:-false}
+      MCP_PREVIEW_PORT: ${MCP_PREVIEW_PORT:-8001}
+      MCP_PREVIEW_PATH: ${MCP_PREVIEW_PATH:-/mcp}
+      MCP_PREVIEW_HEALTH_PATH: ${MCP_PREVIEW_HEALTH_PATH:-/healthz}
+      MCP_PREVIEW_API_MODE: ${MCP_PREVIEW_API_MODE:-highlevel}
       MCP_SESSION_TIMEOUT_MS: ${MCP_SESSION_TIMEOUT_MS:-600000}
       MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-info}
       MCP_UPLOAD_ROOT: ${MCP_UPLOAD_ROOT:-/uploads}
       MCP_UPLOAD_MAX_BYTES: ${MCP_UPLOAD_MAX_BYTES:-26214400}
     ports:
-      - "${MCP_BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-8000}:${MCP_PORT:-8000}"
+      - "${MCP_BIND_ADDRESS:-127.0.0.1}:${MCP_STABLE_PORT:-8000}:${MCP_STABLE_PORT:-8000}"
+      - "${MCP_PREVIEW_BIND_ADDRESS:-127.0.0.1}:${MCP_PREVIEW_PORT:-8001}:${MCP_PREVIEW_PORT:-8001}"
     volumes:
       - "${MCP_UPLOAD_SOURCE:-./uploads}:/uploads:ro"
     networks:
       - glpi-mcp
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - \"http://127.0.0.1:$${MCP_PORT}$${MCP_HEALTH_PATH}\" | grep -q ok"]
+      test: ["CMD-SHELL", "wget -q -O - \"http://127.0.0.1:$${MCP_STABLE_PORT}$${MCP_STABLE_HEALTH_PATH}\" | grep -q ok"]
       interval: 30s
       timeout: 5s
       start_period: 20s

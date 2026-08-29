@@ -36,6 +36,7 @@ import { TICKET_FIELDS, TICKET_STATUS, TICKET_URGENCY } from './core/tickets/con
 import { TicketService } from './core/tickets/service.js';
 import { IPNetworkService } from './core/ip-networks/service.js';
 import { InventoryPluginResource, InventoryPluginService } from './core/inventory-plugin/service.js';
+import { SessionService } from './core/session/service.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 import { readSafeUpload } from './security/upload.js';
 
@@ -224,6 +225,7 @@ let client: GlpiClient;
 let ticketService: TicketService;
 let ipNetworkService: IPNetworkService;
 let inventoryPluginService: InventoryPluginService;
+let sessionService: SessionService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -235,6 +237,10 @@ const TICKET_SERVICE_TOOLS = new Set([
 
 function isTicketServiceTool(toolName: string): boolean {
   return TICKET_SERVICE_TOOLS.has(toolName);
+}
+
+function isBackendServiceTool(toolName: string): boolean {
+  return isTicketServiceTool(toolName) || toolName === 'glpi_get_session_info';
 }
 
 function requireLegacyClient(toolName: string): GlpiClient {
@@ -1301,7 +1307,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const backend = apiRouter.backendForTool(name);
     console.error(`[MCP] ${name} -> ${backend}`);
-    if (backend === 'highlevel' && !isTicketServiceTool(name)) {
+    if (backend === 'highlevel' && !isBackendServiceTool(name)) {
       throw new McpError(ErrorCode.InvalidRequest, `Not supported in GLPI_API_MODE=highlevel: ${name}`);
     }
 
@@ -2012,12 +2018,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ==== SESSION ====
       case 'glpi_get_session_info': {
-        const [profile, profiles, entities] = await Promise.all([
-          client.getActiveProfile(),
-          client.getMyProfiles(),
-          client.getMyEntities(),
-        ]);
-        return text({ active_profile: profile, available_profiles: profiles, entities });
+        return text(await sessionService.getInfo());
       }
 
       // ==== SEARCH ====
@@ -2185,6 +2186,7 @@ async function main() {
     ticketService = apiRouter.services.tickets;
     ipNetworkService = apiRouter.services.ipNetworks as IPNetworkService;
     inventoryPluginService = apiRouter.services.inventoryPlugin as InventoryPluginService;
+    sessionService = apiRouter.services.session;
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 
     // Try to open the session eagerly, but don't die if GLPI is momentarily

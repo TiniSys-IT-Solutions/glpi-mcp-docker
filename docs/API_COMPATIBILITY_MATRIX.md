@@ -39,7 +39,8 @@ Status values:
 | Contracts/suppliers | OK | TODO | OK VIA LEGACY | Inherited | Lower priority. |
 | Knowledge base | OK | TODO | OK VIA LEGACY | Inherited | Search options tested upstream. |
 | Generic search/count | OK | TODO | OK VIA LEGACY | Search tests | `glpi_search_v2`, `glpi_count`. |
-| High-Level client | N/A | PARTIAL | N/A | High-Level URL + router tests | Base URL normalizes to `/api.php/v2.3`; no domain calls yet. |
+| Session information | OK | PARTIAL | OK VIA LEGACY | Legacy adapter + High-Level OAuth/session tests | Preview calls `/api.php/v2.3/session`; Stable Hybrid remains explicitly routed to Legacy. |
+| High-Level client | N/A | PARTIAL | N/A | High-Level URL, OAuth, session + router tests | Base URL normalizes to `/api.php/v2.3`; authenticated session read is the first migrated call. |
 | High-Level ticket service | N/A | TODO | N/A | Router tests | Contract exists; methods return clear not-supported errors pending Swagger. |
 | Per-user auth | N/A | TODO | TODO | N/A | Requires OAuth/session confirmation. |
 

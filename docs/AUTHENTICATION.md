@@ -39,6 +39,27 @@ Do not store GLPI user passwords in this project. Do not create a parallel IAM
 database. GLPI remains the source of identity, ACLs, profiles, groups, and
 entity visibility.
 
+## Verified GLPI 11 High-Level flow
+
+The GLPI 11 implementation exposes:
+
+```text
+GET/POST /api.php/authorize
+POST     /api.php/token
+GET      /api.php/v2.3/session
+GET      /api.php/v2.3/User/Me
+```
+
+Its OAuth server enables Authorization Code, Password, Refresh Token, and a
+restricted Client Credentials grant. Client Credentials cannot represent a
+normal GLPI user for general API access. The Preview endpoint therefore uses
+Authorization Code with `api user` scopes as the target per-user flow.
+
+`src/api/highlevel/oauth.ts` contains the protocol client only. It deliberately
+does not persist refresh tokens. Encrypted token storage, callback state/PKCE
+validation, and per-user session binding must be implemented before enabling
+`GLPI_AUTH_MODE=per_user` in production.
+
 ## High-Level Placeholders
 
 `.env.example` includes:

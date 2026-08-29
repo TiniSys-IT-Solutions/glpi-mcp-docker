@@ -1,6 +1,6 @@
 {
   "name": "glpi-mcp-docker",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Docker-first MCP server for GLPI with Legacy, High-Level, and Hybrid API routing.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,6 +11,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "start": "node dist/index.js",
+    "start:container": "node dist/launcher.js",
     "dev": "tsx src/index.ts",
     "prepublishOnly": "npm run build",
     "test": "tsx --test test-public/*.test.ts",
