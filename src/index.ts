@@ -38,6 +38,7 @@ import { IPNetworkService } from './core/ip-networks/service.js';
 import { InventoryPluginResource, InventoryPluginService } from './core/inventory-plugin/service.js';
 import { SessionService } from './core/session/service.js';
 import { ImportEntityRuleService } from './core/rules/service.js';
+import { PRODUCT_NAME, PRODUCT_VERSION, formatBuildInfo, getBuildInfo } from './build-info.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 import { readSafeUpload } from './security/upload.js';
 
@@ -217,7 +218,7 @@ function formatTicketSummary(t: any) {
 // ---------------------------------------------------------------------------
 
 const server = new Server(
-  { name: 'mcp-glpi', version: '3.0.0' },
+  { name: PRODUCT_NAME, version: PRODUCT_VERSION },
   { capabilities: { tools: {}, resources: {} } }
 );
 
@@ -2238,6 +2239,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
   resources: [
+    { uri: 'glpi://server/info', name: 'Server Information', description: 'Product and embedded component versions', mimeType: 'application/json' },
     { uri: 'glpi://tickets/open', name: 'Open Tickets', description: 'Tickets with status < 5', mimeType: 'application/json' },
     { uri: 'glpi://tickets/recent', name: 'Recent Tickets', description: 'Most recent tickets', mimeType: 'application/json' },
     { uri: 'glpi://problems/open', name: 'Open Problems', description: 'Open problems', mimeType: 'application/json' },
@@ -2253,6 +2255,9 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => ({
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const { uri } = request.params;
   try {
+    if (uri === 'glpi://server/info') {
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(getBuildInfo(), null, 2) }] };
+    }
     requireLegacyClient(uri);
     switch (uri) {
       case 'glpi://tickets/open': {
@@ -2315,6 +2320,7 @@ async function main() {
     inventoryPluginService = apiRouter.services.inventoryPlugin as InventoryPluginService;
     sessionService = apiRouter.services.session;
     importEntityRuleService = apiRouter.services.importEntityRules;
+    console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 
     // Try to open the session eagerly, but don't die if GLPI is momentarily
@@ -2333,7 +2339,7 @@ async function main() {
 
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('MCP GLPI Server v3.0 running on stdio');
+    console.error(`[MCP] ${PRODUCT_NAME} v${PRODUCT_VERSION} running on stdio`);
 
     const shutdown = async () => {
       if (apiRouter.legacyClient) {

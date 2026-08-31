@@ -12,6 +12,14 @@ Safety annotations are derived from tool names:
 - update/set/assign operations overwrite existing state;
 - delete operations are destructive, with purge behavior where documented.
 
+## Server metadata
+
+The `glpi://server/info` resource reports the downstream product identity
+first (`glpi-mcp-docker` and its release version), followed by separately named
+versions for the Legacy upstream baseline, MCP SDK, Supergateway and Node.js.
+The Zod runtime dependency is also reported separately. This resource does not
+require a GLPI Legacy session and is available in every API mode.
+
 ## Tickets and ITIL
 
 | Tool | Access | Function |

@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1.7
 
 ARG NODE_VERSION=22-alpine
+ARG APP_VERSION=0.2.5
 ARG SUPERGATEWAY_VERSION=3.4.3
 ARG MCP_SDK_VERSION=1.30.0
+ARG ZOD_VERSION=3.25.76
 ARG UPSTREAM_LEGACY_VERSION=v3.3.0
 
 FROM node:${NODE_VERSION} AS build
@@ -30,7 +32,9 @@ FROM node:${NODE_VERSION} AS runtime
 
 ARG SUPERGATEWAY_VERSION
 ARG MCP_SDK_VERSION
+ARG ZOD_VERSION
 ARG UPSTREAM_LEGACY_VERSION
+ARG APP_VERSION
 
 LABEL org.opencontainers.image.title="glpi-mcp-docker" \
       org.opencontainers.image.description="Docker-first GLPI MCP server with Legacy, High-Level, and Hybrid API routing." \
@@ -38,17 +42,22 @@ LABEL org.opencontainers.image.title="glpi-mcp-docker" \
       org.opencontainers.image.documentation="https://github.com/TiniSys-IT-Solutions/glpi-mcp-docker/blob/main/README.md" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.vendor="DooSys / TiniSys IT Solutions" \
+      org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.upstream.source="https://github.com/GMS64260/mcp-glpi" \
       org.opencontainers.image.upstream.version="${UPSTREAM_LEGACY_VERSION}" \
       org.opencontainers.image.supergateway.version="${SUPERGATEWAY_VERSION}" \
-      org.opencontainers.image.mcp-sdk.version="${MCP_SDK_VERSION}"
+      org.opencontainers.image.mcp-sdk.version="${MCP_SDK_VERSION}" \
+      org.opencontainers.image.zod.version="${ZOD_VERSION}"
 
 ENV NODE_ENV=production \
+    APP_VERSION="${APP_VERSION}" \
     GLPI_API_MODE=legacy \
     GLPI_API_VERSION=2.3 \
     GLPI_AUTH_MODE=service_account \
     UPSTREAM_LEGACY_VERSION="${UPSTREAM_LEGACY_VERSION}" \
     SUPERGATEWAY_VERSION="${SUPERGATEWAY_VERSION}" \
+    MCP_SDK_VERSION="${MCP_SDK_VERSION}" \
+    ZOD_VERSION="${ZOD_VERSION}" \
     MCP_PORT=8000 \
     MCP_STABLE_PORT=8000 \
     MCP_STABLE_PATH=/mcp \
