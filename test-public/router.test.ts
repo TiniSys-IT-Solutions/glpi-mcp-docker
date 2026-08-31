@@ -44,11 +44,18 @@ test('highlevel ticket service reports unsupported calls clearly', async () => {
   );
 });
 
+test('highlevel mode exposes the implemented ImportEntity rule service', () => {
+  const router = createApiRouter(config('highlevel'));
+  assert.ok(router.services.importEntityRules);
+  assert.equal(router.backendForTool('glpi_get_import_entity_rule'), 'highlevel');
+});
+
 test('hybrid mode uses explicit compatibility matrix', () => {
   const router = createApiRouter(config('hybrid'));
   assert.equal(router.backendForTool('glpi_create_ticket'), 'legacy');
   assert.equal(router.backendForTool('glpi_create_ip_network'), 'legacy');
   assert.equal(router.backendForTool('glpi_inventory_create_ip_range_from_cidr'), 'legacy');
+  assert.equal(router.backendForTool('glpi_get_import_entity_rule'), 'legacy');
   assert.ok(router.services.ipNetworks);
   assert.ok(router.services.inventoryPlugin);
   assert.throws(

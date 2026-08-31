@@ -19,7 +19,7 @@ Current release line: `0.2.x`.
 | Component | Status | Notes |
 | --- | --- | --- |
 | Legacy REST API `/apirest.php` | Active | Functional production backend. |
-| High-Level API `/api.php/v2.3` | In preparation | Client and routing scaffold exist; unsupported domains fail explicitly. |
+| High-Level API `/api.php/v2.3` | Preview | Session and read-only entity-assignment rule tools are implemented; unsupported domains fail explicitly. |
 | Hybrid mode | Active | Uses an explicit compatibility matrix; never silently falls back after an error. |
 | Service-account authentication | Active | App Token + User Token recommended. |
 | Per-user OAuth authentication | Planned | Waiting for validated GLPI 11 OAuth behavior. |
@@ -31,10 +31,11 @@ current application is released from `main`. See
 
 ## Active capabilities
 
-The server currently exposes 122 MCP tools for:
+The server currently exposes 128 MCP tools for:
 
 - tickets, timelines, followups, tasks, solutions, validations and documents;
 - problems and changes;
+- entity-assignment rules, criteria and actions;
 - computers, software, network equipment, printers, monitors and phones;
 - IP networks/LANs with IPv4 and IPv6 CIDR validation;
 - GLPI Inventory ranges, credentials, tasks, jobs, execution states, time slots, collections and deployment metadata;

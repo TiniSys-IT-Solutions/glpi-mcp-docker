@@ -9,10 +9,18 @@ import { LegacySessionService } from '../api/legacy/session.js';
 import { HighLevelSessionService } from '../api/highlevel/session.js';
 import { GlpiOAuthClient, PasswordGrantTokenProvider } from '../api/highlevel/oauth.js';
 import { GlpiServices } from '../core/services.js';
+import { LegacyImportEntityRuleService } from '../api/legacy/rules.js';
+import { HighLevelImportEntityRuleService } from '../api/highlevel/rules.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
 export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
+  glpi_list_import_entity_rules: 'legacy',
+  glpi_get_import_entity_rule: 'legacy',
+  glpi_list_import_entity_rule_criteria: 'legacy',
+  glpi_get_import_entity_rule_criterion: 'legacy',
+  glpi_list_import_entity_rule_actions: 'legacy',
+  glpi_get_import_entity_rule_action: 'legacy',
   glpi_list_tickets: 'legacy',
   glpi_get_ticket: 'legacy',
   glpi_get_ticket_timeline: 'legacy',
@@ -193,6 +201,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       services: {
         tickets: new HighLevelTicketService(highlevel),
         session: new HighLevelSessionService(highlevel),
+        importEntityRules: new HighLevelImportEntityRuleService(highlevel),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -208,6 +217,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       ipNetworks: new LegacyIPNetworkService(client),
       inventoryPlugin: new LegacyInventoryPluginService(client),
       session: new LegacySessionService(client),
+      importEntityRules: new LegacyImportEntityRuleService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

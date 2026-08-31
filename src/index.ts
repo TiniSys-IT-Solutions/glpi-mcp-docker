@@ -37,6 +37,7 @@ import { TicketService } from './core/tickets/service.js';
 import { IPNetworkService } from './core/ip-networks/service.js';
 import { InventoryPluginResource, InventoryPluginService } from './core/inventory-plugin/service.js';
 import { SessionService } from './core/session/service.js';
+import { ImportEntityRuleService } from './core/rules/service.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 import { readSafeUpload } from './security/upload.js';
 
@@ -226,6 +227,7 @@ let ticketService: TicketService;
 let ipNetworkService: IPNetworkService;
 let inventoryPluginService: InventoryPluginService;
 let sessionService: SessionService;
+let importEntityRuleService: ImportEntityRuleService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -235,12 +237,23 @@ const TICKET_SERVICE_TOOLS = new Set([
   'glpi_update_ticket',
 ]);
 
+const IMPORT_ENTITY_RULE_SERVICE_TOOLS = new Set([
+  'glpi_list_import_entity_rules',
+  'glpi_get_import_entity_rule',
+  'glpi_list_import_entity_rule_criteria',
+  'glpi_get_import_entity_rule_criterion',
+  'glpi_list_import_entity_rule_actions',
+  'glpi_get_import_entity_rule_action',
+]);
+
 function isTicketServiceTool(toolName: string): boolean {
   return TICKET_SERVICE_TOOLS.has(toolName);
 }
 
 function isBackendServiceTool(toolName: string): boolean {
-  return isTicketServiceTool(toolName) || toolName === 'glpi_get_session_info';
+  return isTicketServiceTool(toolName) ||
+    IMPORT_ENTITY_RULE_SERVICE_TOOLS.has(toolName) ||
+    toolName === 'glpi_get_session_info';
 }
 
 function requireLegacyClient(toolName: string): GlpiClient {
@@ -774,6 +787,58 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           manufacturers_id: { type: 'number' }, softwarecategories_id: { type: 'number' },
         },
         required: ['name'],
+      },
+    },
+
+    // ============== IMPORT ENTITY RULES ==============
+    {
+      name: 'glpi_list_import_entity_rules',
+      description: 'List rules that assign inventoried items to GLPI entities, in evaluation order.',
+      inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
+    },
+    {
+      name: 'glpi_get_import_entity_rule',
+      description: 'Get one entity-assignment rule, including its criteria and actions when available.',
+      inputSchema: {
+        type: 'object',
+        properties: { id: { type: 'number', description: 'GLPI rule id' } },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'glpi_list_import_entity_rule_criteria',
+      description: 'List the matching criteria attached to one entity-assignment rule.',
+      inputSchema: {
+        type: 'object',
+        properties: { rule_id: { type: 'number' }, ...LIST_TOOL_COMMON_PROPS },
+        required: ['rule_id'],
+      },
+    },
+    {
+      name: 'glpi_get_import_entity_rule_criterion',
+      description: 'Get one matching criterion attached to an entity-assignment rule.',
+      inputSchema: {
+        type: 'object',
+        properties: { rule_id: { type: 'number' }, criterion_id: { type: 'number' } },
+        required: ['rule_id', 'criterion_id'],
+      },
+    },
+    {
+      name: 'glpi_list_import_entity_rule_actions',
+      description: 'List the assignment actions attached to one entity-assignment rule.',
+      inputSchema: {
+        type: 'object',
+        properties: { rule_id: { type: 'number' }, ...LIST_TOOL_COMMON_PROPS },
+        required: ['rule_id'],
+      },
+    },
+    {
+      name: 'glpi_get_import_entity_rule_action',
+      description: 'Get one assignment action attached to an entity-assignment rule.',
+      inputSchema: {
+        type: 'object',
+        properties: { rule_id: { type: 'number' }, action_id: { type: 'number' } },
+        required: ['rule_id', 'action_id'],
       },
     },
 
@@ -1323,6 +1388,68 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     switch (name) {
+      // ==== IMPORT ENTITY RULES — read ====
+      case 'glpi_list_import_entity_rules': {
+        const validated = listArgsSchema.parse(args);
+        return text(await importEntityRuleService.list({
+          start: validated.start,
+          limit: validated.limit,
+          sort: validated.sort,
+          order: validated.order,
+        }));
+      }
+
+      case 'glpi_get_import_entity_rule': {
+        const { id } = z.object({ id: z.number().int().min(1) }).parse(args);
+        return text(await importEntityRuleService.get(id));
+      }
+
+      case 'glpi_list_import_entity_rule_criteria': {
+        const validated = listArgsSchema.extend({
+          rule_id: z.number().int().min(1),
+        }).parse(args);
+        return text(await importEntityRuleService.listCriteria(validated.rule_id, {
+          start: validated.start,
+          limit: validated.limit,
+          sort: validated.sort,
+          order: validated.order,
+        }));
+      }
+
+      case 'glpi_get_import_entity_rule_criterion': {
+        const validated = z.object({
+          rule_id: z.number().int().min(1),
+          criterion_id: z.number().int().min(1),
+        }).parse(args);
+        return text(await importEntityRuleService.getCriterion(
+          validated.rule_id,
+          validated.criterion_id
+        ));
+      }
+
+      case 'glpi_list_import_entity_rule_actions': {
+        const validated = listArgsSchema.extend({
+          rule_id: z.number().int().min(1),
+        }).parse(args);
+        return text(await importEntityRuleService.listActions(validated.rule_id, {
+          start: validated.start,
+          limit: validated.limit,
+          sort: validated.sort,
+          order: validated.order,
+        }));
+      }
+
+      case 'glpi_get_import_entity_rule_action': {
+        const validated = z.object({
+          rule_id: z.number().int().min(1),
+          action_id: z.number().int().min(1),
+        }).parse(args);
+        return text(await importEntityRuleService.getAction(
+          validated.rule_id,
+          validated.action_id
+        ));
+      }
+
       // ==== TICKETS — read ====
       case 'glpi_list_tickets': {
         const validated = listArgsSchema.parse(args);
@@ -2187,6 +2314,7 @@ async function main() {
     ipNetworkService = apiRouter.services.ipNetworks as IPNetworkService;
     inventoryPluginService = apiRouter.services.inventoryPlugin as InventoryPluginService;
     sessionService = apiRouter.services.session;
+    importEntityRuleService = apiRouter.services.importEntityRules;
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 
     // Try to open the session eagerly, but don't die if GLPI is momentarily

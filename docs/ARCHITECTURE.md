@@ -48,15 +48,18 @@ src/
 |   |   |-- glpi-client.ts
 |   |   |-- http.ts
 |   |   |-- mapper.ts
+|   |   |-- rules.ts
 |   |   |-- search.ts
 |   |   `-- search-options.ts
 |   `-- highlevel/
 |       |-- client.ts
+|       |-- rules.ts
 |       `-- tickets.ts
 |-- auth/
 |-- config/
 |   `-- env.ts
 |-- core/
+|   |-- rules/
 |   `-- tickets/
 |-- routing/
 |   `-- api-router.ts
@@ -84,6 +87,22 @@ The refactored ticket tools are:
 - `glpi_search_tickets`
 - `glpi_create_ticket`
 - `glpi_update_ticket`
+
+The entity-assignment rule vertical slice also uses a shared service contract:
+
+```text
+MCP RuleImportEntity tools
+  |
+  v
+ImportEntityRuleService
+  |
+  +-- LegacyImportEntityRuleService
+  `-- HighLevelImportEntityRuleService
+```
+
+It exposes read-only rule, criterion and action inspection. Stable Hybrid is
+explicitly routed to Legacy, while Preview uses the official High-Level rule
+routes available since API 2.0.
 
 Other domains still use the Legacy client directly while parity is validated.
 

@@ -1,9 +1,9 @@
 # Active MCP tools
 
-This catalogue lists the 122 tools currently registered by `src/index.ts` in
-release `0.3.0`. Unless stated otherwise, they are active through the Legacy
+This catalogue lists the 128 tools currently registered by `src/index.ts` in
+release `0.2.5`. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
-is still in preparation.
+is available for the explicitly documented domains below.
 
 Safety annotations are derived from tool names:
 
@@ -72,6 +72,21 @@ Safety annotations are derived from tool names:
 | `glpi_get_ip_network` | Read | Read one GLPI `IPNetwork`. |
 | `glpi_create_ip_network` | Write | Declare a LAN from a name, CIDR, entity and optional gateway. |
 | `glpi_update_ip_network` | Write | Update a LAN and let GLPI recompute its implicit hierarchy. |
+
+## Entity-assignment rules
+
+These tools target the `RuleImportEntity` collection used to assign inventoried
+items to entities. They are read-only and work through both the Legacy API and
+the High-Level API. Stable Hybrid routes them explicitly to Legacy.
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_list_import_entity_rules` | Read | List entity-assignment rules in evaluation order. |
+| `glpi_get_import_entity_rule` | Read | Read one rule, including its criteria and actions. |
+| `glpi_list_import_entity_rule_criteria` | Read | List criteria attached to one rule. |
+| `glpi_get_import_entity_rule_criterion` | Read | Read one criterion and validate its parent rule. |
+| `glpi_list_import_entity_rule_actions` | Read | List assignment actions attached to one rule. |
+| `glpi_get_import_entity_rule_action` | Read | Read one action and validate its parent rule. |
 
 ## Organization and reference data
 
@@ -155,6 +170,6 @@ Safety annotations are derived from tool names:
 The following are deliberately not presented as active tools:
 
 - VLAN management and `IPNetwork`/VLAN relationships;
-- High-Level API domain operations;
+- High-Level API domains other than session and entity-assignment rule reads;
 - per-user OAuth authentication;
 - generic destructive operations outside explicitly registered tools.
