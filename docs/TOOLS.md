@@ -1,7 +1,7 @@
 # Active MCP tools
 
-This catalogue lists the 130 tools currently registered by `src/index.ts` in
-release `0.2.6`. Unless stated otherwise, they are active through the Legacy
+This catalogue lists the 131 tools currently registered by `src/index.ts` on
+the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
 
@@ -119,9 +119,16 @@ Legacy; there is no implicit fallback between APIs.
 | `glpi_list_categories` | Read | List ITIL categories. |
 | `glpi_list_entities` | Read | List entities. |
 | `glpi_get_entity` | Read | Read an entity. |
+| `glpi_create_entity` | Write | Create an entity with parent hierarchy, address, GPS coordinates and contact information. |
 | `glpi_list_locations` | Read | List locations. |
 | `glpi_get_location` | Read | Read a location. |
-| `glpi_create_location` | Write | Create a location. |
+| `glpi_create_location` | Write | Create a location with code, alias, parent, entity scope, recursive flag, address and GPS coordinates. |
+
+Entity and location tools use a shared business contract across Legacy and
+High-Level APIs. Friendly fields such as `parent_entity_id`, `entity_id` and
+`parent_location_id` are mapped inside their respective adapters.
+The former `locations_id` location-parent input remains accepted as a
+deprecated compatibility alias.
 
 ## Projects, commercial data and knowledge base
 

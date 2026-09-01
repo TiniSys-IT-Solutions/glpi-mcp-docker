@@ -21,8 +21,8 @@ the GLPI 11 High-Level API without disrupting the production endpoint.
 | Process supervision | Implemented, pending container validation | Stable is critical; Preview restarts independently |
 | High-Level OAuth client | Implemented and unit-tested | Authorization Code, Password and Refresh requests are supported without secret leakage |
 | High-Level session read | Implemented and unit-tested | `glpi_get_session_info` calls `/api.php/v2.3/session` with a Bearer token |
-| High-Level read-only domains | Planned | Migrate and validate users, entities, tickets, assets and network reads incrementally |
-| High-Level writes | ImportEntity slice implemented and unit-tested | Validate OAuth writes against a non-production GLPI before promoting additional domains |
+| High-Level read-only domains | Entity and Location slices implemented and unit-tested | Migrate users, tickets, assets and network reads incrementally |
+| High-Level writes | ImportEntity, Entity and Location slices implemented and unit-tested | Validate OAuth writes against a non-production GLPI before promoting additional domains |
 | Per-user authentication | Planned | Bind an MCP session to one GLPI identity with auditable authorization context |
 | Production release | Planned | Container smoke tests, compatibility matrix, upgrade/rollback guide and versioned release |
 
@@ -33,7 +33,9 @@ the GLPI 11 High-Level API without disrupting the production endpoint.
 3. Validate Preview OAuth and `glpi_get_session_info` against a non-production GLPI account.
 4. Keep `glpi_get_session_info` routed to Legacy on Stable until the High-Level
    result contract and permissions are confirmed.
-5. Select the next read-only domain from the compatibility matrix.
+5. Smoke-test Entity and Location reads against Preview without creating data.
+6. Validate writes only against a dedicated non-production entity tree.
+7. Select the next read-only domain from the compatibility matrix.
 
 Do not route a Stable Hybrid tool to High-Level merely because its Preview
 implementation exists. Promotion is a separate, explicit compatibility decision.

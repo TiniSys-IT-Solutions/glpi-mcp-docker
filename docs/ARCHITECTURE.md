@@ -98,6 +98,12 @@ ImportEntityRuleService
   |
   +-- LegacyImportEntityRuleService
   `-- HighLevelImportEntityRuleService
+
+MCP entity/location tools
+  |
+OrganizationService
+  +-- LegacyOrganizationService    -> Entity / Location via `/apirest.php`
+  `-- HighLevelOrganizationService -> `/Administration/Entity` and `/Dropdown/Location`
 ```
 
 It exposes read-only rule, criterion and action inspection. Stable Hybrid is

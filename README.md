@@ -19,7 +19,7 @@ Current release line: `0.2.x`.
 | Component | Status | Notes |
 | --- | --- | --- |
 | Legacy REST API `/apirest.php` | Active | Functional production backend. |
-| High-Level API `/api.php/v2.3` | Preview | Session and read-only entity-assignment rule tools are implemented; unsupported domains fail explicitly. |
+| High-Level API `/api.php/v2.3` | Preview | Session, entity-assignment rules, entities and locations are implemented; unsupported domains fail explicitly. |
 | Hybrid mode | Active | Uses an explicit compatibility matrix; never silently falls back after an error. |
 | Service-account authentication | Active | App Token + User Token recommended. |
 | Per-user OAuth authentication | Planned | Waiting for validated GLPI 11 OAuth behavior. |
@@ -31,7 +31,7 @@ current application is released from `main`. See
 
 ## Active capabilities
 
-The server currently exposes 128 MCP tools for:
+The server currently exposes 131 MCP tools for:
 
 - tickets, timelines, followups, tasks, solutions, validations and documents;
 - problems and changes;
@@ -39,7 +39,7 @@ The server currently exposes 128 MCP tools for:
 - computers, software, network equipment, printers, monitors and phones;
 - IP networks/LANs with IPv4 and IPv6 CIDR validation;
 - GLPI Inventory ranges, credentials, tasks, jobs, execution states, time slots, collections and deployment metadata;
-- users, groups, entities, locations and categories;
+- users, groups, categories, entity creation and enriched location creation with hierarchy, scope and GPS coordinates;
 - projects, contracts, suppliers and knowledge-base articles;
 - statistics, generic multi-criteria search, counts and session information.
 
@@ -172,7 +172,7 @@ Business-facing MCP fields use durable names such as `entity_id`,
 the adapters.
 
 The MCP handshake identifies this product first as `glpi-mcp-docker` version
-`0.2.6`. The `glpi://server/info` MCP resource, runtime logs and OCI image
+`0.2.7`. The `glpi://server/info` MCP resource, runtime logs and OCI image
 labels report embedded component versions separately, including the Legacy
 upstream baseline, MCP SDK and Supergateway versions.
 
