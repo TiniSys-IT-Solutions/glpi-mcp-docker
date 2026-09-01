@@ -1,5 +1,5 @@
 export const PRODUCT_NAME = 'glpi-mcp-docker';
-export const PRODUCT_VERSION = process.env.APP_VERSION ?? '0.2.5';
+export const PRODUCT_VERSION = process.env.APP_VERSION ?? '0.2.6';
 
 export interface BuildInfo {
   product: { name: string; version: string };

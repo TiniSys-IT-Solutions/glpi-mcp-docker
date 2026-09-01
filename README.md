@@ -172,7 +172,7 @@ Business-facing MCP fields use durable names such as `entity_id`,
 the adapters.
 
 The MCP handshake identifies this product first as `glpi-mcp-docker` version
-`0.2.5`. The `glpi://server/info` MCP resource, runtime logs and OCI image
+`0.2.6`. The `glpi://server/info` MCP resource, runtime logs and OCI image
 labels report embedded component versions separately, including the Legacy
 upstream baseline, MCP SDK and Supergateway versions.
 
