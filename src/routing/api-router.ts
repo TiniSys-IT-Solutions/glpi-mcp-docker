@@ -11,6 +11,8 @@ import { GlpiOAuthClient, PasswordGrantTokenProvider } from '../api/highlevel/oa
 import { GlpiServices } from '../core/services.js';
 import { LegacyImportEntityRuleService } from '../api/legacy/rules.js';
 import { HighLevelImportEntityRuleService } from '../api/highlevel/rules.js';
+import { LegacyOrganizationService } from '../api/legacy/organization.js';
+import { HighLevelOrganizationService } from '../api/highlevel/organization.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
@@ -96,6 +98,7 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_list_locations: 'legacy',
   glpi_get_location: 'legacy',
   glpi_create_location: 'legacy',
+  glpi_create_entity: 'legacy',
   glpi_list_projects: 'legacy',
   glpi_get_project: 'legacy',
   glpi_create_project: 'legacy',
@@ -204,6 +207,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         tickets: new HighLevelTicketService(highlevel),
         session: new HighLevelSessionService(highlevel),
         importEntityRules: new HighLevelImportEntityRuleService(highlevel),
+        organization: new HighLevelOrganizationService(highlevel),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -220,6 +224,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       inventoryPlugin: new LegacyInventoryPluginService(client),
       session: new LegacySessionService(client),
       importEntityRules: new LegacyImportEntityRuleService(client),
+      organization: new LegacyOrganizationService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

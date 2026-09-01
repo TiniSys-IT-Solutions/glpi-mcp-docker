@@ -39,6 +39,7 @@ import { IPNetworkService } from './core/ip-networks/service.js';
 import { InventoryPluginResource, InventoryPluginService } from './core/inventory-plugin/service.js';
 import { SessionService } from './core/session/service.js';
 import { ImportEntityRuleService } from './core/rules/service.js';
+import { OrganizationService } from './core/organization/service.js';
 import { PRODUCT_NAME, PRODUCT_VERSION, formatBuildInfo, getBuildInfo } from './build-info.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 import { readSafeUpload } from './security/upload.js';
@@ -142,6 +143,48 @@ const importEntityRuleEnabledSchema = z.object({
   rule_id: z.number().int().min(1),
   enabled: z.boolean(),
   confirmation: z.literal('I_HAVE_VERIFIED_THE_RULE'),
+});
+
+const gpsFieldsSchema = {
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  altitude: z.number().optional(),
+};
+
+const locationCreateSchema = z.object({
+  name: z.string().trim().min(1),
+  code: z.string().trim().min(1).optional(),
+  alias: z.string().trim().min(1).optional(),
+  comment: z.string().optional(),
+  entity_id: z.number().int().min(0).optional(),
+  is_recursive: z.boolean().optional(),
+  parent_location_id: z.number().int().min(1).optional(),
+  locations_id: z.number().int().min(1).optional(),
+  room: z.string().optional(),
+  building: z.string().optional(),
+  address: z.string().optional(),
+  town: z.string().optional(),
+  postcode: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional(),
+  ...gpsFieldsSchema,
+});
+
+const entityCreateSchema = z.object({
+  name: z.string().trim().min(1),
+  parent_entity_id: z.number().int().min(0).optional(),
+  comment: z.string().optional(),
+  registration_number: z.string().optional(),
+  address: z.string().optional(),
+  postcode: z.string().optional(),
+  town: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional(),
+  ...gpsFieldsSchema,
+  website: z.string().url().optional(),
+  phone: z.string().optional(),
+  fax: z.string().optional(),
+  email: z.string().email().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -255,6 +298,7 @@ let ipNetworkService: IPNetworkService;
 let inventoryPluginService: InventoryPluginService;
 let sessionService: SessionService;
 let importEntityRuleService: ImportEntityRuleService;
+let organizationService: OrganizationService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -271,6 +315,17 @@ const IMPORT_ENTITY_RULE_SERVICE_TOOLS = new Set([
   'glpi_get_import_entity_rule_criterion',
   'glpi_list_import_entity_rule_actions',
   'glpi_get_import_entity_rule_action',
+  'glpi_create_import_entity_subnet_rule',
+  'glpi_set_import_entity_rule_enabled',
+]);
+
+const ORGANIZATION_SERVICE_TOOLS = new Set([
+  'glpi_list_locations',
+  'glpi_get_location',
+  'glpi_create_location',
+  'glpi_list_entities',
+  'glpi_get_entity',
+  'glpi_create_entity',
 ]);
 
 function isTicketServiceTool(toolName: string): boolean {
@@ -280,6 +335,7 @@ function isTicketServiceTool(toolName: string): boolean {
 function isBackendServiceTool(toolName: string): boolean {
   return isTicketServiceTool(toolName) ||
     IMPORT_ENTITY_RULE_SERVICE_TOOLS.has(toolName) ||
+    ORGANIZATION_SERVICE_TOOLS.has(toolName) ||
     toolName === 'glpi_get_session_info';
 }
 
@@ -1152,13 +1208,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_create_location',
-      description: 'Create a location.',
+      description: 'Create a GLPI location with hierarchy, entity scope, code, alias, address and GPS coordinates.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string' }, address: { type: 'string' }, postcode: { type: 'string' },
-          town: { type: 'string' }, building: { type: 'string' }, room: { type: 'string' },
-          locations_id: { type: 'number' },
+          name: { type: 'string' }, code: { type: 'string' }, alias: { type: 'string' },
+          comment: { type: 'string' }, entity_id: { type: 'number' },
+          is_recursive: { type: 'boolean' },
+          parent_location_id: { type: 'number' },
+          locations_id: { type: 'number', description: 'Deprecated alias for parent_location_id' },
+          address: { type: 'string' }, postcode: { type: 'string' }, town: { type: 'string' },
+          state: { type: 'string' }, country: { type: 'string' },
+          building: { type: 'string' }, room: { type: 'string' },
+          latitude: { type: 'number', minimum: -90, maximum: 90 },
+          longitude: { type: 'number', minimum: -180, maximum: 180 },
+          altitude: { type: 'number' },
         },
         required: ['name'],
       },
@@ -1277,6 +1341,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'glpi_get_entity',
       description: 'Get an entity.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+    },
+    {
+      name: 'glpi_create_entity',
+      description: 'Create a GLPI entity with parent hierarchy, address, GPS coordinates and contact information.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' }, parent_entity_id: { type: 'number' },
+          comment: { type: 'string' }, registration_number: { type: 'string' },
+          address: { type: 'string' }, postcode: { type: 'string' }, town: { type: 'string' },
+          state: { type: 'string' }, country: { type: 'string' },
+          latitude: { type: 'number', minimum: -90, maximum: 90 },
+          longitude: { type: 'number', minimum: -180, maximum: 180 },
+          altitude: { type: 'number' }, website: { type: 'string' },
+          phone: { type: 'string' }, fax: { type: 'string' }, email: { type: 'string' },
+        },
+        required: ['name'],
+      },
     },
     {
       name: 'glpi_list_documents',
@@ -2058,11 +2140,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text({ success: true, ...(await client.createSupplier(args)) });
 
       case 'glpi_list_locations':
-        return text(await client.getLocations(parseListArgs(args)));
-      case 'glpi_get_location':
-        return text(await client.getLocation(args.id as number));
-      case 'glpi_create_location':
-        return text({ success: true, ...(await client.createLocation(args)) });
+        return text(await organizationService.listLocations(listArgsSchema.parse(args)));
+      case 'glpi_get_location': {
+        const { id } = z.object({ id: z.number().int().min(1) }).parse(args);
+        return text(await organizationService.getLocation(id));
+      }
+      case 'glpi_create_location': {
+        const input = locationCreateSchema.parse(args);
+        return text(await organizationService.createLocation({
+          name: input.name,
+          code: input.code,
+          alias: input.alias,
+          comment: input.comment,
+          entityId: input.entity_id,
+          recursive: input.is_recursive,
+          parentLocationId: input.parent_location_id ?? input.locations_id,
+          room: input.room,
+          building: input.building,
+          address: input.address,
+          town: input.town,
+          postcode: input.postcode,
+          state: input.state,
+          country: input.country,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          altitude: input.altitude,
+        }));
+      }
 
       case 'glpi_list_projects':
         return text(await client.getProjects(parseListArgs(args)));
@@ -2122,9 +2226,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_list_categories':
         return text(await client.getCategories(parseListArgs(args)));
       case 'glpi_list_entities':
-        return text(await client.getEntities(parseListArgs(args)));
-      case 'glpi_get_entity':
-        return text(await client.getEntity(args.id as number));
+        return text(await organizationService.listEntities(listArgsSchema.parse(args)));
+      case 'glpi_get_entity': {
+        const { id } = z.object({ id: z.number().int().min(1) }).parse(args);
+        return text(await organizationService.getEntity(id));
+      }
+      case 'glpi_create_entity': {
+        const input = entityCreateSchema.parse(args);
+        return text(await organizationService.createEntity({
+          name: input.name,
+          parentEntityId: input.parent_entity_id,
+          comment: input.comment,
+          registrationNumber: input.registration_number,
+          address: input.address,
+          postcode: input.postcode,
+          town: input.town,
+          state: input.state,
+          country: input.country,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          altitude: input.altitude,
+          website: input.website,
+          phone: input.phone,
+          fax: input.fax,
+          email: input.email,
+        }));
+      }
       case 'glpi_list_documents':
         return text(await client.getDocuments(parseListArgs(args)));
       case 'glpi_get_document':
@@ -2398,6 +2525,7 @@ async function main() {
     inventoryPluginService = apiRouter.services.inventoryPlugin as InventoryPluginService;
     sessionService = apiRouter.services.session;
     importEntityRuleService = apiRouter.services.importEntityRules;
+    organizationService = apiRouter.services.organization;
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 

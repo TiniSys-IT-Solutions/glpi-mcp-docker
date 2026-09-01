@@ -194,7 +194,10 @@ export interface GlpiLocation {
   id: number;
   name: string;
   completename: string;
+  code: string;
+  alias: string;
   locations_id: number;
+  is_recursive: number;
   address: string;
   postcode: string;
   town: string;
@@ -202,6 +205,9 @@ export interface GlpiLocation {
   building: string;
   room: string;
   entities_id: number;
+  latitude: string;
+  longitude: string;
+  altitude: string;
 }
 
 export interface GlpiNetworkEquipment {
@@ -307,6 +313,7 @@ export interface GlpiEntity {
   entities_id: number;
   level: number;
   comment: string;
+  registration_number: string;
   address: string;
   postcode: string;
   town: string;
@@ -315,6 +322,9 @@ export interface GlpiEntity {
   phonenumber: string;
   fax: string;
   email: string;
+  latitude: string;
+  longitude: string;
+  altitude: string;
 }
 
 export interface GlpiProject {

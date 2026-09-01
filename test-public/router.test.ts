@@ -50,6 +50,13 @@ test('highlevel mode exposes the implemented ImportEntity rule service', () => {
   assert.equal(router.backendForTool('glpi_get_import_entity_rule'), 'highlevel');
 });
 
+test('highlevel mode exposes organization reads and writes', () => {
+  const router = createApiRouter(config('highlevel'));
+  assert.ok(router.services.organization);
+  assert.equal(router.backendForTool('glpi_create_entity'), 'highlevel');
+  assert.equal(router.backendForTool('glpi_create_location'), 'highlevel');
+});
+
 test('hybrid mode uses explicit compatibility matrix', () => {
   const router = createApiRouter(config('hybrid'));
   assert.equal(router.backendForTool('glpi_create_ticket'), 'legacy');
@@ -58,6 +65,8 @@ test('hybrid mode uses explicit compatibility matrix', () => {
   assert.equal(router.backendForTool('glpi_get_import_entity_rule'), 'legacy');
   assert.equal(router.backendForTool('glpi_create_import_entity_subnet_rule'), 'legacy');
   assert.equal(router.backendForTool('glpi_set_import_entity_rule_enabled'), 'legacy');
+  assert.equal(router.backendForTool('glpi_create_entity'), 'legacy');
+  assert.equal(router.backendForTool('glpi_create_location'), 'legacy');
   assert.ok(router.services.ipNetworks);
   assert.ok(router.services.inventoryPlugin);
   assert.throws(
