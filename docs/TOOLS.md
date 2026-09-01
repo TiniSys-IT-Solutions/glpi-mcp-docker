@@ -1,7 +1,7 @@
 # Active MCP tools
 
-This catalogue lists the 128 tools currently registered by `src/index.ts` in
-release `0.2.5`. Unless stated otherwise, they are active through the Legacy
+This catalogue lists the 130 tools currently registered by `src/index.ts` in
+release `0.2.6`. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
 
@@ -95,6 +95,14 @@ the High-Level API. Stable Hybrid routes them explicitly to Legacy.
 | `glpi_get_import_entity_rule_criterion` | Read | Read one criterion and validate its parent rule. |
 | `glpi_list_import_entity_rule_actions` | Read | List assignment actions attached to one rule. |
 | `glpi_get_import_entity_rule_action` | Read | Read one action and validate its parent rule. |
+| `glpi_create_import_entity_subnet_rule` | Write | Atomically create a disabled IPv4 CIDR rule with entity and location assignments; rollback on partial failure. |
+| `glpi_set_import_entity_rule_enabled` | Destructive | Enable or disable a verified rule; requires an explicit confirmation value. |
+
+Subnet rules are always created inactive. Read the new rule back and verify its
+CIDR, target entity, target location and ranking before calling the enable tool.
+High-Level writes use the official `RuleController` routes and schemas
+introduced in API 2.0. Hybrid continues to route both write tools explicitly to
+Legacy; there is no implicit fallback between APIs.
 
 ## Organization and reference data
 

@@ -30,7 +30,7 @@ Status values:
 | Computers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Asset age business logic still TODO. |
 | Network equipment | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | IP networks / LANs | OK | TODO | OK VIA LEGACY | IPNetwork service tests | Dedicated list/get/create/update tools use CIDR and friendly entity fields. GLPI computes hierarchy implicitly. |
-| Entity-assignment rules | OK | OK | OK VIA LEGACY | Legacy + High-Level rule service tests | Read-only list/get tools cover rules, criteria and actions. High-Level uses the official `/Rule/Collection/ImportEntity` routes introduced in API 2.0. |
+| Entity-assignment rules | OK | OK | OK VIA LEGACY | Legacy + High-Level create/rollback/read tests | Both APIs can atomically create disabled IPv4 CIDR rules and explicitly enable them after verification. High-Level uses the official RuleController routes and schemas introduced in API 2.0. Hybrid remains explicitly routed to Legacy. |
 | GLPI Inventory plugin | OK | TODO | OK VIA LEGACY | Plugin service tests | Ranges, protected credential metadata, tasks/jobs/states, time slots, collections and deployment metadata. Execution actions intentionally excluded. |
 | Printers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | Monitors | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
