@@ -1,6 +1,8 @@
 import { ImportEntityRuleService } from '../../core/rules/service.js';
-import { RuleListRequest } from '../../core/rules/types.js';
+import { assertCanonicalIPv4CIDR, CreateImportEntitySubnetRuleRequest, RuleListRequest } from '../../core/rules/types.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
+
+const PATTERN_CIDR = 333;
 
 function toListOptions(input: RuleListRequest): ListOptions {
   const start = input.start ?? 0;
@@ -55,6 +57,65 @@ export class LegacyImportEntityRuleService implements ImportEntityRuleService {
     const action = await this.client.getItem<Record<string, unknown>>('RuleAction', actionId);
     this.assertChildOfRule(action, ruleId, 'action', actionId);
     return action;
+  }
+
+  async createSubnetRule(input: CreateImportEntitySubnetRuleRequest): Promise<unknown> {
+    assertCanonicalIPv4CIDR(input.cidr);
+    const rulePayload: Record<string, unknown> = {
+      name: input.name,
+      sub_type: 'RuleImportEntity',
+      entities_id: input.scopeEntityId ?? 0,
+      match: 'AND',
+      is_active: 0,
+      is_recursive: input.recursive ? 1 : 0,
+      ...(input.ranking === undefined ? {} : { ranking: input.ranking }),
+      ...(input.description === undefined ? {} : { description: input.description }),
+      ...(input.comment === undefined ? {} : { comment: input.comment }),
+    };
+
+    const createdRule = await this.client.createItem('RuleImportEntity', rulePayload);
+    const ruleId = createdRule.id;
+    try {
+      await this.client.createItem('RuleCriteria', {
+        rules_id: ruleId,
+        criteria: 'subnet',
+        condition: PATTERN_CIDR,
+        pattern: input.cidr,
+      });
+      await this.client.createItem('RuleAction', {
+        rules_id: ruleId,
+        action_type: 'assign',
+        field: 'entities_id',
+        value: String(input.targetEntityId),
+      });
+      await this.client.createItem('RuleAction', {
+        rules_id: ruleId,
+        action_type: 'assign',
+        field: 'locations_id',
+        value: String(input.targetLocationId),
+      });
+      return {
+        rule: await this.get(ruleId),
+        enabled: false,
+        verification_required: true,
+      };
+    } catch (error) {
+      try {
+        await this.client.deleteItem('RuleImportEntity', ruleId, true, false);
+      } catch (rollbackError) {
+        throw new Error(
+          `Rule creation failed and rollback of RuleImportEntity ${ruleId} also failed: ` +
+          `${error instanceof Error ? error.message : error}; rollback: ` +
+          `${rollbackError instanceof Error ? rollbackError.message : rollbackError}`
+        );
+      }
+      throw error;
+    }
+  }
+
+  async setEnabled(ruleId: number, enabled: boolean): Promise<unknown> {
+    await this.client.updateItem('RuleImportEntity', ruleId, { is_active: enabled ? 1 : 0 });
+    return { rule: await this.get(ruleId), enabled };
   }
 
   private toQuery(input: RuleListRequest): Record<string, string> {

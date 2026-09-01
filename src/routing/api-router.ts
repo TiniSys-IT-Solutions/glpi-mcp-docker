@@ -21,6 +21,8 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_get_import_entity_rule_criterion: 'legacy',
   glpi_list_import_entity_rule_actions: 'legacy',
   glpi_get_import_entity_rule_action: 'legacy',
+  glpi_create_import_entity_subnet_rule: 'legacy',
+  glpi_set_import_entity_rule_enabled: 'legacy',
   glpi_list_tickets: 'legacy',
   glpi_get_ticket: 'legacy',
   glpi_get_ticket_timeline: 'legacy',

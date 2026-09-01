@@ -56,6 +56,8 @@ test('hybrid mode uses explicit compatibility matrix', () => {
   assert.equal(router.backendForTool('glpi_create_ip_network'), 'legacy');
   assert.equal(router.backendForTool('glpi_inventory_create_ip_range_from_cidr'), 'legacy');
   assert.equal(router.backendForTool('glpi_get_import_entity_rule'), 'legacy');
+  assert.equal(router.backendForTool('glpi_create_import_entity_subnet_rule'), 'legacy');
+  assert.equal(router.backendForTool('glpi_set_import_entity_rule_enabled'), 'legacy');
   assert.ok(router.services.ipNetworks);
   assert.ok(router.services.inventoryPlugin);
   assert.throws(

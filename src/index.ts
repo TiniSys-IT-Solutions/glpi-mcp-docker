@@ -30,6 +30,7 @@ import { isIP } from 'node:net';
 import { z } from 'zod';
 import { GlpiClient, ListOptions } from './api/legacy/glpi-client.js';
 import { GlpiError } from './api/legacy/http.js';
+import { cidrToIPRange } from './api/legacy/inventory-plugin.js';
 import { SearchCriterion, SearchType, SearchLink } from './api/legacy/search.js';
 import { loadConfig } from './config/env.js';
 import { TICKET_FIELDS, TICKET_STATUS, TICKET_URGENCY } from './core/tickets/constants.js';
@@ -116,6 +117,31 @@ const ipNetworkUpdateSchema = ipNetworkFieldsSchema.extend({
   id: z.number().int().min(1),
 }).refine(({ id: _id, ...fields }) => Object.values(fields).some((value) => value !== undefined), {
   message: 'At least one field to update is required',
+});
+
+const importEntitySubnetRuleCreateSchema = z.object({
+  name: z.string().trim().min(1),
+  cidr: z.string().trim().refine((value) => {
+    try {
+      const { ip_start } = cidrToIPRange(value, false);
+      return value.split('/')[0] === ip_start;
+    } catch {
+      return false;
+    }
+  }, { message: 'Expected a canonical IPv4 CIDR, for example 10.63.170.0/24' }),
+  target_entity_id: z.number().int().min(1),
+  target_location_id: z.number().int().min(1),
+  scope_entity_id: z.number().int().min(0).optional(),
+  ranking: z.number().int().min(0).optional(),
+  description: z.string().optional(),
+  comment: z.string().optional(),
+  recursive: z.boolean().optional(),
+});
+
+const importEntityRuleEnabledSchema = z.object({
+  rule_id: z.number().int().min(1),
+  enabled: z.boolean(),
+  confirmation: z.literal('I_HAVE_VERIFIED_THE_RULE'),
 });
 
 // ---------------------------------------------------------------------------
@@ -842,6 +868,38 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['rule_id', 'action_id'],
       },
     },
+    {
+      name: 'glpi_create_import_entity_subnet_rule',
+      description: 'Create a complete IPv4 CIDR entity-assignment rule with entity and location actions. The rule is always created disabled and must be verified before explicit activation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          cidr: { type: 'string', description: 'Canonical IPv4 network in CIDR notation, for example 10.63.170.0/24' },
+          target_entity_id: { type: 'number' },
+          target_location_id: { type: 'number' },
+          scope_entity_id: { type: 'number', description: 'Rule scope entity; defaults to root entity 0' },
+          ranking: { type: 'number', description: 'Evaluation order; omit to let GLPI choose' },
+          description: { type: 'string' },
+          comment: { type: 'string' },
+          recursive: { type: 'boolean', description: 'Apply rule scope to sub-entities; defaults to false' },
+        },
+        required: ['name', 'cidr', 'target_entity_id', 'target_location_id'],
+      },
+    },
+    {
+      name: 'glpi_set_import_entity_rule_enabled',
+      description: 'Enable or disable an existing entity-assignment rule after its criteria, actions and ranking have been verified.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          rule_id: { type: 'number' },
+          enabled: { type: 'boolean' },
+          confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_RULE'] },
+        },
+        required: ['rule_id', 'enabled', 'confirmation'],
+      },
+    },
 
     // ============== IP NETWORKS ==============
     {
@@ -1449,6 +1507,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           validated.rule_id,
           validated.action_id
         ));
+      }
+
+      case 'glpi_create_import_entity_subnet_rule': {
+        const validated = importEntitySubnetRuleCreateSchema.parse(args);
+        return text(await importEntityRuleService.createSubnetRule({
+          name: validated.name,
+          cidr: validated.cidr,
+          targetEntityId: validated.target_entity_id,
+          targetLocationId: validated.target_location_id,
+          scopeEntityId: validated.scope_entity_id,
+          ranking: validated.ranking,
+          description: validated.description,
+          comment: validated.comment,
+          recursive: validated.recursive,
+        }));
+      }
+
+      case 'glpi_set_import_entity_rule_enabled': {
+        const validated = importEntityRuleEnabledSchema.parse(args);
+        return text(await importEntityRuleService.setEnabled(validated.rule_id, validated.enabled));
       }
 
       // ==== TICKETS — read ====
