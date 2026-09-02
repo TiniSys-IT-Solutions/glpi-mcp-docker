@@ -25,13 +25,13 @@ Status values:
 | Documents/upload | OK | TODO | OK VIA LEGACY | Upload tests | Snapshot v3.3.0 includes upload support. |
 | Users | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Search/list/get/create inherited from upstream. |
 | Groups | OK | TODO | OK VIA LEGACY | Smoke read-only planned | User-group linking inherited. |
-| Entities | OK | OK | OK VIA LEGACY | Organization mapper/service tests | List/get/create use a shared contract. Creation supports parent hierarchy, address, GPS coordinates and contacts. High-Level uses `/Administration/Entity`. |
+| Entities | OK | OK (API >= 2.3) | OK VIA LEGACY | Organization mapper/service tests | List/get/create/update use a shared contract for LDAP DN, LDAP filter, LDAP directory and inventory TAG. Updates are partial with read-before-write and post-write verification. High-Level uses `/Administration/Entity`; advanced fields were introduced in API 2.3. |
 | Locations | OK | OK | OK VIA LEGACY | Organization mapper/service tests | List/get/create support code, alias, parent, entity scope, recursion, address and GPS coordinates. High-Level uses `/Dropdown/Location`. |
 | Computers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Asset age business logic still TODO. |
 | Network equipment | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | IP networks / LANs | OK | TODO | OK VIA LEGACY | IPNetwork service tests | Dedicated list/get/create/update tools use CIDR and friendly entity fields. GLPI computes hierarchy implicitly. |
 | Entity-assignment rules | OK | OK | OK VIA LEGACY | Legacy + High-Level create/rollback/read tests | Both APIs can atomically create disabled IPv4 CIDR rules and explicitly enable them after verification. High-Level uses the official RuleController routes and schemas introduced in API 2.0. Hybrid remains explicitly routed to Legacy. |
-| GLPI Inventory plugin | OK | TODO | OK VIA LEGACY | Plugin service tests | Ranges, protected credential metadata, tasks/jobs/states, time slots, collections and deployment metadata. Execution actions intentionally excluded. |
+| GLPI Inventory plugin | OK | TODO | OK VIA LEGACY | Plugin service tests | Ranges, protected credential metadata, tasks/jobs/states, time slots, collections and deployment metadata. Verified tasks can be safely requeued for the official scheduler; direct web-only force execution remains excluded. |
 | Printers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | Monitors | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | Phones | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |

@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 131 tools currently registered by `src/index.ts` on
+This catalogue lists the 133 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -117,15 +117,36 @@ Legacy; there is no implicit fallback between APIs.
 | `glpi_create_group` | Write | Create a group. |
 | `glpi_add_user_to_group` | Write | Add a user to a group. |
 | `glpi_list_categories` | Read | List ITIL categories. |
-| `glpi_list_entities` | Read | List entities. |
-| `glpi_get_entity` | Read | Read an entity. |
-| `glpi_create_entity` | Write | Create an entity with parent hierarchy, address, GPS coordinates and contact information. |
+| `glpi_list_entities` | Read | List entities with native fields and stable LDAP/TAG aliases. |
+| `glpi_get_entity` | Read | Read an entity with native fields and stable LDAP/TAG aliases. |
+| `glpi_create_entity` | Write | Create an entity with hierarchy, LDAP parameters, inventory TAG, address, GPS coordinates and contacts. |
+| `glpi_update_entity` | Write | Partially update an entity after a pre-read, then verify the result. |
 | `glpi_list_locations` | Read | List locations. |
 | `glpi_get_location` | Read | Read a location. |
 | `glpi_create_location` | Write | Create a location with code, alias, parent, entity scope, recursive flag, address and GPS coordinates. |
 
 Entity and location tools use a shared business contract across Legacy and
-High-Level APIs. Friendly fields such as `parent_entity_id`, `entity_id` and
+High-Level APIs. Entity LDAP and inventory fields map as follows:
+
+| MCP field | GLPI Legacy field | GLPI High-Level v2.3 field | Meaning |
+| --- | --- | --- | --- |
+| `ldap_dn` | `ldap_dn` | `ldap_dn` | DN/base DN representing the entity, for example `OU=LA-SOUTERRAINE,OU=Sites,OU=BIOLYSS,DC=inovie,DC=infra`. It is not a search filter. |
+| `ldap_filter` | `entity_ldapfilter` | `entity_ldapfilter` | Optional LDAP user-search filter. |
+| `ldap_directory_id` | `authldaps_id` | `authldap: { id }` | Associated GLPI LDAP directory. `0` removes the entity-specific association; GLPI may then use its global default directory. |
+| `inventory_tag` | `tag` | `tag` | TAG sent by an inventory tool for entity assignment. |
+
+For `glpi_update_entity`, omitted properties are not sent and remain unchanged.
+Send JSON `null` to explicitly clear an optional string, including `ldap_dn`,
+`ldap_filter` or `inventory_tag`. The adapters translate that request to the empty
+string expected by GLPI. DN strings are validated as non-blank and otherwise sent
+unchanged; commas, hyphens, case and special characters are preserved.
+
+Updates always read the entity before writing and read it again after writing. If
+the write succeeds but verification is forbidden, the result remains
+`success: true` with `update_status: "succeeded"` and separate
+`verification_status` / `verification_error` fields.
+
+Friendly fields such as `parent_entity_id`, `ldap_dn`, `entity_id` and
 `parent_location_id` are mapped inside their respective adapters.
 The former `locations_id` location-parent input remains accepted as a
 deprecated compatibility alias.
@@ -173,20 +194,35 @@ deprecated compatibility alias.
 | `glpi_inventory_create_ip_range` | Write | Create a range from explicit first/last addresses. |
 | `glpi_inventory_create_ip_range_from_cidr` | Write | Calculate and create usable addresses from IPv4 CIDR. |
 | `glpi_inventory_update_ip_range` | Write | Update range name, entity or bounds. |
-| `glpi_inventory_list_credentials` / `glpi_inventory_get_credential` | Read | Read credential metadata with all secrets stripped recursively. |
-| `glpi_inventory_create_credential` / `glpi_inventory_update_credential` | Write | Create or rotate write-only remote-device credentials. |
-| `glpi_inventory_list_tasks` / `glpi_inventory_get_task` | Read | Read task definitions and planning metadata. |
-| `glpi_inventory_create_task` / `glpi_inventory_update_task` | Write | Create or update a task definition without executing it. |
-| `glpi_inventory_enable_task` / `glpi_inventory_disable_task` | Write | Toggle task activation. |
-| `glpi_inventory_list_task_jobs` / `glpi_inventory_get_task_job` | Read | Read jobs belonging to inventory tasks. |
-| `glpi_inventory_list_task_job_states` / `glpi_inventory_get_task_job_state` | Read | Read execution/supervision states. |
-| `glpi_inventory_list_timeslots` / `glpi_inventory_get_timeslot` | Read | Read execution time slots. |
-| `glpi_inventory_list_collects` / `glpi_inventory_get_collect` | Read | Read collection definitions. |
-| `glpi_inventory_list_collect_files` / `glpi_inventory_get_collect_file` | Read | Read file collection definitions. |
-| `glpi_inventory_list_collect_registries` / `glpi_inventory_get_collect_registry` | Read | Read registry collection definitions. |
-| `glpi_inventory_list_collect_wmi_queries` / `glpi_inventory_get_collect_wmi_query` | Read | Read WMI collection definitions. |
-| `glpi_inventory_list_deploy_packages` / `glpi_inventory_get_deploy_package` | Read | Read deployment-package metadata without executing it. |
-| `glpi_inventory_list_deploy_groups` / `glpi_inventory_get_deploy_group` | Read | Read deployment target-group metadata. |
+| `glpi_inventory_list_credentials` | Read | List credential metadata with all secrets stripped recursively. |
+| `glpi_inventory_get_credential` | Read | Read one credential with all secrets stripped recursively. |
+| `glpi_inventory_create_credential` | Write | Create write-only remote-device credentials. |
+| `glpi_inventory_update_credential` | Write | Rotate or update write-only remote-device credentials. |
+| `glpi_inventory_list_tasks` | Read | List task definitions and planning metadata. |
+| `glpi_inventory_get_task` | Read | Read one task definition and its planning metadata. |
+| `glpi_inventory_create_task` | Write | Create a task definition without executing it. |
+| `glpi_inventory_update_task` | Write | Update a task definition without executing it. |
+| `glpi_inventory_enable_task` | Write | Activate a task. |
+| `glpi_inventory_disable_task` | Write | Deactivate a task. |
+| `glpi_inventory_requeue_task` | Destructive | After a network change, cycle a verified task, enable successful re-preparation and queue it for the GLPI scheduler. Requires explicit confirmation. |
+| `glpi_inventory_list_task_jobs` | Read | List jobs belonging to inventory tasks. |
+| `glpi_inventory_get_task_job` | Read | Read one inventory task job. |
+| `glpi_inventory_list_task_job_states` | Read | List execution and supervision states. |
+| `glpi_inventory_get_task_job_state` | Read | Read one execution or supervision state. |
+| `glpi_inventory_list_timeslots` | Read | List execution time slots. |
+| `glpi_inventory_get_timeslot` | Read | Read one execution time slot. |
+| `glpi_inventory_list_collects` | Read | List collection definitions. |
+| `glpi_inventory_get_collect` | Read | Read one collection definition. |
+| `glpi_inventory_list_collect_files` | Read | List file collection definitions. |
+| `glpi_inventory_get_collect_file` | Read | Read one file collection definition. |
+| `glpi_inventory_list_collect_registries` | Read | List registry collection definitions. |
+| `glpi_inventory_get_collect_registry` | Read | Read one registry collection definition. |
+| `glpi_inventory_list_collect_wmi_queries` | Read | List WMI collection definitions. |
+| `glpi_inventory_get_collect_wmi_query` | Read | Read one WMI collection definition. |
+| `glpi_inventory_list_deploy_packages` | Read | List deployment-package metadata without executing it. |
+| `glpi_inventory_get_deploy_package` | Read | Read one deployment package without executing it. |
+| `glpi_inventory_list_deploy_groups` | Read | List deployment target-group metadata. |
+| `glpi_inventory_get_deploy_group` | Read | Read one deployment target group. |
 
 ## Planned but not active
 

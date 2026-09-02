@@ -39,6 +39,13 @@ The create and update tools validate IPv4 and IPv6 CIDR syntax before calling
 GLPI. GLPI remains responsible for duplicate detection, gateway-in-network
 validation, canonical network-address calculation, hierarchy, and ACLs.
 
+Updating an `IPNetwork` does not itself execute a discovery scan. After
+`glpi_update_ip_network`, call `glpi_inventory_requeue_task` with the related
+Inventory task id and confirmation `I_HAVE_VERIFIED_THE_TASK`. The MCP cycles
+the task, enables `reprepare_if_successful`, and leaves the official GLPI
+scheduler to prepare the next execution. It does not emulate the web-only
+`Force start` action or claim that an agent has already begun scanning.
+
 ## VLAN follow-up
 
 VLAN linkage is intentionally outside this first slice. The next slice should
