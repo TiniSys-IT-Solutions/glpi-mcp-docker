@@ -54,6 +54,7 @@ test('highlevel mode exposes organization reads and writes', () => {
   const router = createApiRouter(config('highlevel'));
   assert.ok(router.services.organization);
   assert.equal(router.backendForTool('glpi_create_entity'), 'highlevel');
+  assert.equal(router.backendForTool('glpi_update_entity'), 'highlevel');
   assert.equal(router.backendForTool('glpi_create_location'), 'highlevel');
 });
 
@@ -62,10 +63,12 @@ test('hybrid mode uses explicit compatibility matrix', () => {
   assert.equal(router.backendForTool('glpi_create_ticket'), 'legacy');
   assert.equal(router.backendForTool('glpi_create_ip_network'), 'legacy');
   assert.equal(router.backendForTool('glpi_inventory_create_ip_range_from_cidr'), 'legacy');
+  assert.equal(router.backendForTool('glpi_inventory_requeue_task'), 'legacy');
   assert.equal(router.backendForTool('glpi_get_import_entity_rule'), 'legacy');
   assert.equal(router.backendForTool('glpi_create_import_entity_subnet_rule'), 'legacy');
   assert.equal(router.backendForTool('glpi_set_import_entity_rule_enabled'), 'legacy');
   assert.equal(router.backendForTool('glpi_create_entity'), 'legacy');
+  assert.equal(router.backendForTool('glpi_update_entity'), 'legacy');
   assert.equal(router.backendForTool('glpi_create_location'), 'legacy');
   assert.ok(router.services.ipNetworks);
   assert.ok(router.services.inventoryPlugin);

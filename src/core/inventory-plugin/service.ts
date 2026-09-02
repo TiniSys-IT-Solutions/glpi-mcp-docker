@@ -21,6 +21,7 @@ export interface InventoryPluginService {
   createTask(input: InventoryTaskWriteRequest & { name: string }): Promise<unknown>;
   updateTask(id: number, input: InventoryTaskWriteRequest): Promise<unknown>;
   setTaskActive(id: number, active: boolean): Promise<unknown>;
+  requeueTask(id: number): Promise<unknown>;
   createCredential(input: InventoryCredentialWriteRequest & { name: string; credential_type: string }): Promise<unknown>;
   updateCredential(id: number, input: InventoryCredentialWriteRequest): Promise<unknown>;
 }

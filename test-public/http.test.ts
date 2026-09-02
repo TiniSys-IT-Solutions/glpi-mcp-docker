@@ -13,6 +13,7 @@
 import { strict as assert } from 'node:assert';
 import { test, beforeEach, mock } from 'node:test';
 import { GlpiHttp, GlpiError } from '../src/api/legacy/http.js';
+import { GlpiClient } from '../src/api/legacy/glpi-client.js';
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -137,6 +138,58 @@ test('network error is retried with backoff', async () => {
   assert.equal(attempts, 2);
 });
 
+test('POST is not retried after an ambiguous transient server error', async () => {
+  let attempts = 0;
+
+  installFetch(async (url) => {
+    if (url.endsWith('/initSession')) {
+      return new Response(JSON.stringify({ session_token: 's' }), { status: 200 });
+    }
+    attempts++;
+    return new Response('upstream error after possible commit', { status: 503 });
+  });
+
+  const http = new GlpiHttp({
+    url: 'https://glpi.test',
+    userToken: 'u',
+    maxRetries: 3,
+    retryBaseDelayMs: 1,
+  });
+  await http.initSession();
+
+  await assert.rejects(() => http.request('Entity', {
+    method: 'POST',
+    json: { input: { name: 'BL-1 - Gueret', entities_id: 2 } },
+  }), (error: unknown) => error instanceof GlpiError && error.status === 503);
+  assert.equal(attempts, 1, 'unsafe POST must not be replayed');
+});
+
+test('POST is not retried after an ambiguous network error', async () => {
+  let attempts = 0;
+
+  installFetch(async (url) => {
+    if (url.endsWith('/initSession')) {
+      return new Response(JSON.stringify({ session_token: 's' }), { status: 200 });
+    }
+    attempts++;
+    throw new TypeError('fetch failed after possible commit');
+  });
+
+  const http = new GlpiHttp({
+    url: 'https://glpi.test',
+    userToken: 'u',
+    maxRetries: 3,
+    retryBaseDelayMs: 1,
+  });
+  await http.initSession();
+
+  await assert.rejects(() => http.request('Entity', {
+    method: 'POST',
+    json: { input: { name: 'BL-1 - Gueret', entities_id: 2 } },
+  }), /fetch failed after possible commit/);
+  assert.equal(attempts, 1, 'unsafe POST must not be replayed');
+});
+
 test('request aborts after timeoutMs', async () => {
   installFetch(async (url, init) => {
     if (url.endsWith('/initSession')) {
@@ -191,4 +244,37 @@ test('error body ["CODE","message"] is parsed into GlpiError', async () => {
       return true;
     }
   );
+});
+
+test('createItem and verification GET reuse the same Legacy session and app token', async () => {
+  const authenticatedRequests: Array<{ method: string; session: string | null; appToken: string | null }> = [];
+
+  installFetch(async (url, init) => {
+    if (url.endsWith('/initSession')) {
+      return new Response(JSON.stringify({ session_token: 'sess-shared' }), { status: 200 });
+    }
+    const headers = new Headers(init?.headers);
+    authenticatedRequests.push({
+      method: init?.method ?? 'GET',
+      session: headers.get('Session-Token'),
+      appToken: headers.get('App-Token'),
+    });
+    if (init?.method === 'POST') {
+      return new Response(JSON.stringify({ id: 80 }), { status: 201 });
+    }
+    return new Response('["ERROR_RIGHT_MISSING","Forbidden"]', { status: 403 });
+  });
+
+  const client = new GlpiClient({
+    url: 'https://glpi.test',
+    userToken: 'u',
+    appToken: 'app-token',
+  });
+  const created = await client.createItem('Entity', { name: 'BL-1 - Gueret', entities_id: 2 });
+  await assert.rejects(() => client.getEntity(created.id), GlpiError);
+
+  assert.deepEqual(authenticatedRequests, [
+    { method: 'POST', session: 'sess-shared', appToken: 'app-token' },
+    { method: 'GET', session: 'sess-shared', appToken: 'app-token' },
+  ]);
 });

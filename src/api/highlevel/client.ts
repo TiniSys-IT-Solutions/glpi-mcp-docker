@@ -23,6 +23,17 @@ export class HighLevelNotSupportedError extends Error {
   }
 }
 
+export class HighLevelApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+    readonly body: unknown
+  ) {
+    super(`GLPI High-Level API ${status}: ${detail}`);
+    this.name = 'HighLevelApiError';
+  }
+}
+
 export class HighLevelClient {
   readonly baseUrl: string;
   readonly apiVersion: string;
@@ -60,7 +71,7 @@ export class HighLevelClient {
       const detail = data && typeof data === 'object' && 'detail' in data
         ? String((data as { detail: unknown }).detail)
         : response.statusText;
-      throw new Error(`GLPI High-Level API ${response.status}: ${detail}`);
+      throw new HighLevelApiError(response.status, detail, data);
     }
     return data as T;
   }

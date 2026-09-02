@@ -1,4 +1,4 @@
-import { EntityCreateRequest, LocationCreateRequest, OrganizationListRequest } from './types.js';
+import { EntityCreateRequest, EntityUpdateRequest, LocationCreateRequest, OrganizationListRequest } from './types.js';
 
 export interface OrganizationService {
   listLocations(input: OrganizationListRequest): Promise<unknown>;
@@ -7,4 +7,5 @@ export interface OrganizationService {
   listEntities(input: OrganizationListRequest): Promise<unknown>;
   getEntity(id: number): Promise<unknown>;
   createEntity(input: EntityCreateRequest): Promise<unknown>;
+  updateEntity(id: number, input: EntityUpdateRequest): Promise<unknown>;
 }

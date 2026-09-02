@@ -124,6 +124,37 @@ export class LegacyInventoryPluginService implements InventoryPluginService {
   async createTask(input: InventoryTaskWriteRequest & { name: string }) { return this.client.createItem('PluginGlpiinventoryTask', mapTask(input)); }
   async updateTask(id: number, input: InventoryTaskWriteRequest) { await this.client.updateItem('PluginGlpiinventoryTask', id, mapTask(input)); return { success: true, id }; }
   async setTaskActive(id: number, active: boolean) { await this.client.updateItem('PluginGlpiinventoryTask', id, { is_active: active ? 1 : 0 }); return { success: true, id, active }; }
+  async requeueTask(id: number) {
+    const task = await this.client.getItem('PluginGlpiinventoryTask', id) as Record<string, unknown>;
+    const wasActive = task.is_active === true || task.is_active === 1 || task.is_active === '1';
+    const wasRepreparable = task.reprepare_if_successful === true
+      || task.reprepare_if_successful === 1
+      || task.reprepare_if_successful === '1';
+
+    try {
+      if (wasActive) await this.client.updateItem('PluginGlpiinventoryTask', id, { is_active: 0 });
+      await this.client.updateItem('PluginGlpiinventoryTask', id, { reprepare_if_successful: 1 });
+      await this.client.updateItem('PluginGlpiinventoryTask', id, { is_active: 1 });
+    } catch (error) {
+      try {
+        await this.client.updateItem('PluginGlpiinventoryTask', id, {
+          reprepare_if_successful: wasRepreparable ? 1 : 0,
+          is_active: wasActive ? 1 : 0,
+        });
+      } catch {
+        // Preserve the original GLPI error; rollback is best-effort.
+      }
+      throw error;
+    }
+
+    return {
+      success: true,
+      id,
+      active: true,
+      reprepare_if_successful: true,
+      status: 'queued_for_scheduler',
+    };
+  }
   async createCredential(input: InventoryCredentialWriteRequest & { name: string; credential_type: string }) { return this.client.createItem('PluginGlpiinventoryCredential', mapCredential(input)); }
   async updateCredential(id: number, input: InventoryCredentialWriteRequest) { await this.client.updateItem('PluginGlpiinventoryCredential', id, mapCredential(input)); return { success: true, id }; }
 }

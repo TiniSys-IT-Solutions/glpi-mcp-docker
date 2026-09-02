@@ -4,7 +4,7 @@
  * - Single `request()` entry point used by every domain call.
  * - Auto re-authentication on 401 (expired session_token).
  * - Structured errors with HTTP status, GLPI error code/message, and full body.
- * - Optional retry with exponential backoff on 5xx.
+ * - Optional retry with exponential backoff for safe (GET) requests only.
  */
 
 export interface GlpiHttpConfig {
@@ -13,7 +13,7 @@ export interface GlpiHttpConfig {
   userToken?: string;
   username?: string;
   password?: string;
-  /** Max retry attempts on 5xx (default 2). */
+  /** Max retry attempts for safe GET requests on transient errors (default 2). */
   maxRetries?: number;
   /** Initial backoff in ms (default 300). */
   retryBaseDelayMs?: number;
@@ -194,6 +194,9 @@ export class GlpiHttp {
 
     const maxRetries = this.config.maxRetries ?? 2;
     const baseDelay = this.config.retryBaseDelayMs ?? 300;
+    // A timed-out or 5xx POST may already have been committed by GLPI. Replaying it
+    // could create duplicates, so transient retries are restricted to reads.
+    const canRetryTransientFailure = method === 'GET';
     let attempt = 0;
     let lastError: GlpiError | undefined;
     let reauthAttempted = false;
@@ -204,7 +207,7 @@ export class GlpiHttp {
         response = await this.fetchWithTimeout(fullUrl, init);
       } catch (err) {
         // Network error or timeout -> retry with backoff.
-        if (attempt < maxRetries) {
+        if (canRetryTransientFailure && attempt < maxRetries) {
           const delay = baseDelay * Math.pow(2, attempt);
           debugLog(`${method} ${path} network error (${err instanceof Error ? err.message : err}), retry in ${delay}ms`);
           await new Promise((r) => setTimeout(r, delay));
@@ -230,7 +233,7 @@ export class GlpiHttp {
       }
 
       // 429 -> honour Retry-After header if present, else exponential backoff.
-      if (response.status === 429 && attempt < maxRetries) {
+      if (response.status === 429 && canRetryTransientFailure && attempt < maxRetries) {
         const retryAfter = Number(response.headers.get('retry-after'));
         const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelay * Math.pow(2, attempt);
         debugLog(`${method} ${path} -> 429 rate-limited, retry in ${delay}ms`);
@@ -240,7 +243,7 @@ export class GlpiHttp {
       }
 
       // 5xx -> exponential backoff retry.
-      if (response.status >= 500 && attempt < maxRetries) {
+      if (response.status >= 500 && canRetryTransientFailure && attempt < maxRetries) {
         const delay = baseDelay * Math.pow(2, attempt);
         debugLog(`${method} ${path} -> ${response.status}, retry in ${delay}ms`);
         await new Promise((r) => setTimeout(r, delay));

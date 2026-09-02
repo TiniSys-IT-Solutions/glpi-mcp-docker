@@ -40,6 +40,7 @@ import { InventoryPluginResource, InventoryPluginService } from './core/inventor
 import { SessionService } from './core/session/service.js';
 import { ImportEntityRuleService } from './core/rules/service.js';
 import { OrganizationService } from './core/organization/service.js';
+import { entityCreateSchema, entityUpdateSchema } from './core/organization/schemas.js';
 import { PRODUCT_NAME, PRODUCT_VERSION, formatBuildInfo, getBuildInfo } from './build-info.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 import { readSafeUpload } from './security/upload.js';
@@ -168,23 +169,6 @@ const locationCreateSchema = z.object({
   state: z.string().optional(),
   country: z.string().optional(),
   ...gpsFieldsSchema,
-});
-
-const entityCreateSchema = z.object({
-  name: z.string().trim().min(1),
-  parent_entity_id: z.number().int().min(0).optional(),
-  comment: z.string().optional(),
-  registration_number: z.string().optional(),
-  address: z.string().optional(),
-  postcode: z.string().optional(),
-  town: z.string().optional(),
-  state: z.string().optional(),
-  country: z.string().optional(),
-  ...gpsFieldsSchema,
-  website: z.string().url().optional(),
-  phone: z.string().optional(),
-  fax: z.string().optional(),
-  email: z.string().email().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -326,6 +310,7 @@ const ORGANIZATION_SERVICE_TOOLS = new Set([
   'glpi_list_entities',
   'glpi_get_entity',
   'glpi_create_entity',
+  'glpi_update_entity',
 ]);
 
 function isTicketServiceTool(toolName: string): boolean {
@@ -1100,6 +1085,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
+      name: 'glpi_inventory_requeue_task',
+      description: 'Requeue an Inventory task after a network change. The task is safely cycled and marked for re-preparation, then picked up by the GLPI scheduler.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', description: 'GLPI Inventory task id' },
+          confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_TASK'] },
+        },
+        required: ['id', 'confirmation'],
+      },
+    },
+    {
       name: 'glpi_inventory_create_credential',
       description: 'Create a GLPI Inventory remote-device credential. Password is write-only and never returned.',
       inputSchema: {
@@ -1334,22 +1331,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_list_entities',
-      description: 'List entities.',
+      description: 'List entities, including LDAP DN, LDAP search filter, associated LDAP directory ID and inventory TAG when exposed by GLPI.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
     },
     {
       name: 'glpi_get_entity',
-      description: 'Get an entity.',
+      description: 'Get an entity. LDAP fields are returned as ldap_dn, ldap_filter, ldap_directory_id and inventory_tag; native GLPI fields are preserved.',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
     },
     {
       name: 'glpi_create_entity',
-      description: 'Create a GLPI entity with parent hierarchy, address, GPS coordinates and contact information.',
+      description: 'Create a GLPI entity. ldap_dn is the entity DN/base DN, ldap_filter is a separate LDAP user-search filter, ldap_directory_id selects the LDAP directory (0 means no entity-specific directory), and inventory_tag is the inventory assignment TAG.',
       inputSchema: {
         type: 'object',
         properties: {
           name: { type: 'string' }, parent_entity_id: { type: 'number' },
           comment: { type: 'string' }, registration_number: { type: 'string' },
+          ldap_dn: { type: 'string', description: 'Non-empty LDAP distinguished name representing the entity; preserved exactly.' },
+          ldap_filter: { type: 'string', description: 'Optional LDAP search filter. This is not the entity DN.' },
+          ldap_directory_id: { type: 'number', minimum: 0, description: 'GLPI AuthLDAP ID associated with the entity; 0 means no entity-specific directory.' },
+          inventory_tag: { type: 'string', description: 'Inventory tool TAG used to assign inventory to this entity.' },
           address: { type: 'string' }, postcode: { type: 'string' }, town: { type: 'string' },
           state: { type: 'string' }, country: { type: 'string' },
           latitude: { type: 'number', minimum: -90, maximum: 90 },
@@ -1358,6 +1359,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           phone: { type: 'string' }, fax: { type: 'string' }, email: { type: 'string' },
         },
         required: ['name'],
+      },
+    },
+    {
+      name: 'glpi_update_entity',
+      description: 'Partially update one entity after reading it first, then verify it. Omitted fields are unchanged; send null to clear an optional string such as ldap_dn. ldap_directory_id=0 removes the entity-specific LDAP directory.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', minimum: 1 },
+          name: { type: 'string' }, parent_entity_id: { type: 'number', minimum: 0 },
+          comment: { type: ['string', 'null'] }, registration_number: { type: ['string', 'null'] },
+          ldap_dn: { type: ['string', 'null'], description: 'Entity LDAP DN/base DN. null explicitly clears it; omission preserves it.' },
+          ldap_filter: { type: ['string', 'null'], description: 'LDAP user-search filter, distinct from the DN. null clears it.' },
+          ldap_directory_id: { type: 'number', minimum: 0, description: 'Associated GLPI AuthLDAP ID; 0 removes the entity-specific association.' },
+          inventory_tag: { type: ['string', 'null'], description: 'Inventory assignment TAG. null clears it.' },
+          address: { type: ['string', 'null'] }, postcode: { type: ['string', 'null'] }, town: { type: ['string', 'null'] },
+          state: { type: ['string', 'null'] }, country: { type: ['string', 'null'] },
+          latitude: { type: ['number', 'null'], minimum: -90, maximum: 90 },
+          longitude: { type: ['number', 'null'], minimum: -180, maximum: 180 },
+          altitude: { type: ['number', 'null'] }, website: { type: ['string', 'null'] },
+          phone: { type: ['string', 'null'] }, fax: { type: ['string', 'null'] }, email: { type: ['string', 'null'] },
+        },
+        required: ['id'],
       },
     },
     {
@@ -2094,6 +2118,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text(await inventoryPluginService.setTaskActive(z.number().int().min(1).parse(args.id), true));
       case 'glpi_inventory_disable_task':
         return text(await inventoryPluginService.setTaskActive(z.number().int().min(1).parse(args.id), false));
+      case 'glpi_inventory_requeue_task': {
+        const validated = z.object({
+          id: z.number().int().min(1),
+          confirmation: z.literal('I_HAVE_VERIFIED_THE_TASK'),
+        }).parse(args);
+        return text(await inventoryPluginService.requeueTask(validated.id));
+      }
       case 'glpi_inventory_create_credential': {
         const validated = z.object({
           name: z.string().trim().min(1), entity_id: z.number().int().min(0).optional(), credential_type: z.string().trim().min(1), username: z.string().optional(), password: z.string().optional(),
@@ -2238,6 +2269,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           parentEntityId: input.parent_entity_id,
           comment: input.comment,
           registrationNumber: input.registration_number,
+          ldapDn: input.ldap_dn,
+          ldapFilter: input.ldap_filter,
+          ldapDirectoryId: input.ldap_directory_id,
+          inventoryTag: input.inventory_tag,
+          address: input.address,
+          postcode: input.postcode,
+          town: input.town,
+          state: input.state,
+          country: input.country,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          altitude: input.altitude,
+          website: input.website,
+          phone: input.phone,
+          fax: input.fax,
+          email: input.email,
+        }));
+      }
+      case 'glpi_update_entity': {
+        const input = entityUpdateSchema.parse(args);
+        return text(await organizationService.updateEntity(input.id, {
+          name: input.name,
+          parentEntityId: input.parent_entity_id,
+          comment: input.comment,
+          registrationNumber: input.registration_number,
+          ldapDn: input.ldap_dn,
+          ldapFilter: input.ldap_filter,
+          ldapDirectoryId: input.ldap_directory_id,
+          inventoryTag: input.inventory_tag,
           address: input.address,
           postcode: input.postcode,
           town: input.town,

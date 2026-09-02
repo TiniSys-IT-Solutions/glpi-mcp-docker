@@ -62,3 +62,26 @@ test('task writes map booleans and friendly entity id to plugin fields', async (
     },
   });
 });
+
+test('requeueTask cycles an active task and enables scheduler re-preparation', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  const writes: unknown[] = [];
+  (client as any).getItem = async () => ({ id: 9, is_active: 1, reprepare_if_successful: 0 });
+  (client as any).updateItem = async (itemtype: string, id: number, payload: unknown) => {
+    writes.push({ itemtype, id, payload });
+  };
+  const service = new LegacyInventoryPluginService(client);
+
+  assert.deepEqual(await service.requeueTask(9), {
+    success: true,
+    id: 9,
+    active: true,
+    reprepare_if_successful: true,
+    status: 'queued_for_scheduler',
+  });
+  assert.deepEqual(writes, [
+    { itemtype: 'PluginGlpiinventoryTask', id: 9, payload: { is_active: 0 } },
+    { itemtype: 'PluginGlpiinventoryTask', id: 9, payload: { reprepare_if_successful: 1 } },
+    { itemtype: 'PluginGlpiinventoryTask', id: 9, payload: { is_active: 1 } },
+  ]);
+});

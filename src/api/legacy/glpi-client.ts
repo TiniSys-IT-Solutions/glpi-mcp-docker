@@ -314,6 +314,10 @@ export interface GlpiEntity {
   level: number;
   comment: string;
   registration_number: string;
+  ldap_dn: string | null;
+  entity_ldapfilter: string | null;
+  authldaps_id: number;
+  tag: string | null;
   address: string;
   postcode: string;
   town: string;

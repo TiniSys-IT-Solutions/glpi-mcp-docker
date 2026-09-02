@@ -1,6 +1,8 @@
 import { OrganizationService } from '../../core/organization/service.js';
-import { EntityCreateRequest, LocationCreateRequest, OrganizationListRequest } from '../../core/organization/types.js';
+import { normalizeEntityResource } from '../../core/organization/entity.js';
+import { EntityCreateRequest, EntityUpdateRequest, LocationCreateRequest, OrganizationListRequest } from '../../core/organization/types.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
+import { GlpiError } from './http.js';
 
 function listOptions(input: OrganizationListRequest): ListOptions {
   const start = input.start ?? 0;
@@ -21,6 +23,83 @@ function createdResource(resource: unknown, id: number): Record<string, unknown>
   return resource && typeof resource === 'object'
     ? { success: true, ...(resource as Record<string, unknown>) }
     : { success: true, id, resource };
+}
+
+type CreatedItem = { id: number; message?: string };
+
+/** Keep MCP stdout clean while making creation and verification independently observable. */
+function organizationLog(event: 'creation_succeeded' | 'update_succeeded' | 'verification_failed', details: Record<string, unknown>): void {
+  if (process.env.GLPI_DEBUG) {
+    console.error(`[glpi-organization] ${new Date().toISOString()} ${event} ${JSON.stringify(details)}`);
+  }
+}
+
+function verificationFailure(id: number, error: unknown, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  const glpiError = error instanceof GlpiError ? error : undefined;
+  const errorName = error instanceof Error ? error.name : 'UnknownError';
+  const errorMessage = glpiError?.glpiMessage ?? (error instanceof Error ? error.message : String(error));
+
+  return defined({
+    success: true,
+    id,
+    ...extra,
+    verification_status: 'failed',
+    verification_error: glpiError?.glpiCode ?? errorName,
+    verification_http_status: glpiError?.status,
+    verification_message: errorMessage,
+  });
+}
+
+async function verifyCreatedResource(
+  resourceType: 'Entity' | 'Location',
+  created: CreatedItem,
+  verify: (id: number) => Promise<unknown>
+): Promise<Record<string, unknown>> {
+  // The POST has completed at this point. Only the GET belongs in this try/catch:
+  // a verification failure must never cause the caller to repeat the creation here.
+  organizationLog('creation_succeeded', { resource_type: resourceType, id: created.id });
+  try {
+    return createdResource(await verify(created.id), created.id);
+  } catch (error) {
+    const result = verificationFailure(created.id, error, {
+      creation_message: created.message,
+    });
+    organizationLog('verification_failed', {
+      resource_type: resourceType,
+      id: created.id,
+      verification_error: result.verification_error,
+      verification_http_status: result.verification_http_status,
+    });
+    return result;
+  }
+}
+
+async function verifyUpdatedEntity(
+  id: number,
+  verify: () => Promise<unknown>
+): Promise<Record<string, unknown>> {
+  organizationLog('update_succeeded', { resource_type: 'Entity', id });
+  try {
+    return createdResource(await verify(), id);
+  } catch (error) {
+    const result = verificationFailure(id, error, { update_status: 'succeeded' });
+    organizationLog('verification_failed', {
+      resource_type: 'Entity',
+      id,
+      operation: 'update',
+      verification_error: result.verification_error,
+      verification_http_status: result.verification_http_status,
+    });
+    return result;
+  }
+}
+
+function clearable(value: unknown): unknown {
+  return value === null ? '' : value;
+}
+
+function coordinate(value: number | null | undefined): string | undefined {
+  return value === undefined ? undefined : value === null ? '' : String(value);
 }
 
 export function mapLegacyLocation(input: LocationCreateRequest): Record<string, unknown> {
@@ -45,24 +124,28 @@ export function mapLegacyLocation(input: LocationCreateRequest): Record<string, 
   });
 }
 
-export function mapLegacyEntity(input: EntityCreateRequest): Record<string, unknown> {
+export function mapLegacyEntity(input: EntityCreateRequest | EntityUpdateRequest): Record<string, unknown> {
   return defined({
     name: input.name,
     entities_id: input.parentEntityId,
-    comment: input.comment,
-    registration_number: input.registrationNumber,
-    address: input.address,
-    postcode: input.postcode,
-    town: input.town,
-    state: input.state,
-    country: input.country,
-    latitude: input.latitude === undefined ? undefined : String(input.latitude),
-    longitude: input.longitude === undefined ? undefined : String(input.longitude),
-    altitude: input.altitude === undefined ? undefined : String(input.altitude),
-    website: input.website,
-    phonenumber: input.phone,
-    fax: input.fax,
-    email: input.email,
+    comment: clearable(input.comment),
+    registration_number: clearable(input.registrationNumber),
+    ldap_dn: clearable(input.ldapDn),
+    entity_ldapfilter: clearable(input.ldapFilter),
+    authldaps_id: input.ldapDirectoryId,
+    tag: clearable(input.inventoryTag),
+    address: clearable(input.address),
+    postcode: clearable(input.postcode),
+    town: clearable(input.town),
+    state: clearable(input.state),
+    country: clearable(input.country),
+    latitude: coordinate(input.latitude),
+    longitude: coordinate(input.longitude),
+    altitude: coordinate(input.altitude),
+    website: clearable(input.website),
+    phonenumber: clearable(input.phone),
+    fax: clearable(input.fax),
+    email: clearable(input.email),
   });
 }
 
@@ -73,12 +156,23 @@ export class LegacyOrganizationService implements OrganizationService {
   getLocation(id: number) { return this.client.getLocation(id); }
   async createLocation(input: LocationCreateRequest) {
     const created = await this.client.createLocation(mapLegacyLocation(input));
-    return createdResource(await this.getLocation(created.id), created.id);
+    return verifyCreatedResource('Location', created, (id) => this.getLocation(id));
   }
-  listEntities(input: OrganizationListRequest) { return this.client.getEntities(listOptions(input)); }
-  getEntity(id: number) { return this.client.getEntity(id); }
+  async listEntities(input: OrganizationListRequest) {
+    return normalizeEntityResource(await this.client.getEntities({ ...listOptions(input), expand_dropdowns: false }));
+  }
+  async getEntity(id: number) {
+    return normalizeEntityResource(await this.client.getEntity(id, { expand_dropdowns: false }));
+  }
   async createEntity(input: EntityCreateRequest) {
     const created = await this.client.createItem('Entity', mapLegacyEntity(input));
-    return createdResource(await this.getEntity(created.id), created.id);
+    return verifyCreatedResource('Entity', created, (id) => this.getEntity(id));
+  }
+  async updateEntity(id: number, input: EntityUpdateRequest) {
+    await this.getEntity(id);
+    const payload = mapLegacyEntity(input);
+    if (Object.keys(payload).length === 0) throw new Error('Entity update requires at least one field');
+    await this.client.updateItem('Entity', id, payload);
+    return verifyUpdatedEntity(id, () => this.getEntity(id));
   }
 }
