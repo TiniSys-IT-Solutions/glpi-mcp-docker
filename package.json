@@ -1,6 +1,6 @@
 {
   "name": "glpi-mcp-docker",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Docker-first MCP server for GLPI with Legacy, High-Level, and Hybrid API routing.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
