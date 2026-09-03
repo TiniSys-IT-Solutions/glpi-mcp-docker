@@ -19,7 +19,7 @@ Ce projet est une intégration indépendante et non un produit officiel GLPI.
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.3.3
+## État de la version 0.3.4
 
 | Composant | État |
 | --- | --- |
@@ -34,7 +34,8 @@ de l'échec éventuel de sa relecture. Les entités prennent aussi en charge le 
 LDAP, le filtre LDAP, l'annuaire associé, le TAG d'inventaire et les mises à
 jour partielles avec lecture avant/après écriture.
 
-La version 0.3.3 rend les mises à jour partielles non destructives utilisables
+La version 0.3.4 inclut les améliorations fonctionnelles préparées en 0.3.3 et
+corrige leur construction dans l'image Docker. Elle rend les mises à jour partielles non destructives utilisables
 avec une politique d'approbation stricte, rafraîchit sans nouvel élargissement
 le contexte Legacy lors d'une vérification d'entité refusée, et ajoute la
 gestion sécurisée des associations classées entre plages GLPI Inventory et
@@ -69,7 +70,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.3
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.4
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3
 ```
 
@@ -106,7 +107,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.3.3**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.3.4**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité
