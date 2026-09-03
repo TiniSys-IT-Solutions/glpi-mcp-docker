@@ -19,7 +19,7 @@ Ce projet est une intégration indépendante et non un produit officiel GLPI.
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.3.1
+## État de la version 0.3.2
 
 | Composant | État |
 | --- | --- |
@@ -63,7 +63,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.1
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.2
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3
 ```
 
@@ -100,7 +100,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.3.1**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.3.2**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité

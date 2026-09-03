@@ -8,7 +8,7 @@ This file is the authoritative release procedure for this repository.
 | --- | --- |
 | `main` | Current production source and source of Docker `latest`. |
 | `0.3.x` | Current MCP application and Docker release line. |
-| `v0.3.0`, `v0.3.1`, ... | Immutable annotated release tags. |
+| `v0.3.0`, `v0.3.1`, `v0.3.2`, ... | Immutable annotated release tags. |
 | `v1-legacy` | Archived original Docker wrapper. |
 | `v2` | Historical migration branch retained for traceability. |
 
@@ -16,7 +16,7 @@ This file is the authoritative release procedure for this repository.
 `v0.2.7` tags were created from commits after it because this document still
 incorrectly named `0.2.x` as the current line. Do not reuse, move or delete
 those published tags: they remain historical releases. Resume monotonically
-from the highest semantic version, so the next release is `v0.3.1`.
+from the highest semantic version. The current public release is `v0.3.2`.
 
 ## Version sources
 
@@ -59,10 +59,10 @@ git diff --check
 git add <functional-files>
 git commit -m "feat(organization): harden writes and add LDAP updates"
 git add README.md docs package.json package-lock.json src/build-info.ts test-public/build-info.test.ts
-git commit -m "chore(release): prepare version 0.3.1"
-git tag -a v0.3.1 -m "Release glpi-mcp-docker v0.3.1"
+git commit -m "chore(release): prepare version 0.3.2"
+git tag -a v0.3.2 -m "Release glpi-mcp-docker v0.3.2"
 git push origin main
-git push origin v0.3.1
+git push origin v0.3.2
 ```
 
 Do not use `git push --tags`: it may publish unrelated local tags.
@@ -72,7 +72,7 @@ Do not use `git push --tags`: it may publish unrelated local tags.
 GitHub Actions publishes:
 
 - `latest` and a commit-SHA tag after a push to `main`;
-- `0.3.1`, `0.3` and a commit-SHA tag after a push of `v0.3.1`.
+- `0.3.2`, `0.3` and a commit-SHA tag after a push of `v0.3.2`.
 
 Release tags are immutable. If a released version is faulty, fix it in a new
 patch version rather than moving its tag.
