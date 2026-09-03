@@ -5,10 +5,7 @@ pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **133 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
-Ce projet est une évolution de
-[`GMS64260/mcp-glpi`](https://github.com/GMS64260/mcp-glpi), basée sur son
-adaptateur Legacy `v3.3.0`. Ce n'est pas un produit officiel GLPI. Voir
-[NOTICE](NOTICE), [LICENSE](LICENSE) et [docs/UPSTREAM.md](docs/UPSTREAM.md).
+Ce projet est une intégration indépendante et non un produit officiel GLPI.
 
 ## Documentation
 
@@ -105,6 +102,31 @@ privées de validation et reste ignoré.
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
 `glpi-mcp-docker` **0.3.1**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
+
+## Sécurité
+
+Consultez la [politique de sécurité](SECURITY.md) avant toute exposition du
+service et utilisez un compte GLPI dédié avec les droits minimaux nécessaires.
+Les vulnérabilités ne doivent pas être publiées dans une issue publique.
+
+## Contribution
+
+Les correctifs ciblés sont les bienvenus. Le
+[guide de contribution](CONTRIBUTING.md) décrit les tests, la documentation et
+les garanties de sécurité attendus avant une pull request.
+
+## Origines et crédits
+
+Ce projet a été initialement construit à partir de
+[`GMS64260/mcp-glpi`](https://github.com/GMS64260/mcp-glpi), sur la base de son
+adaptateur Legacy `v3.3.0`, puis largement remanié et étendu par TiniSys IT
+Solutions.
+
+Il conserve les attributions et les conditions de licence du projet
+d'origine. La distribution Docker, l'architecture d'intégration, le routage
+des API, les contrats de services, les outils métier, les tests et la
+documentation sont maintenus par TiniSys IT Solutions. La filiation technique
+est détaillée dans [NOTICE](NOTICE) et [docs/UPSTREAM.md](docs/UPSTREAM.md).
 
 ## Licence
 
