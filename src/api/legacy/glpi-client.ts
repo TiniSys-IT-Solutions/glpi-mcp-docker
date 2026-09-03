@@ -1221,6 +1221,17 @@ export class GlpiClient {
     const { data } = await this.http.request<unknown[]>('getMyEntities');
     return data ?? [];
   }
+  async getActiveEntities() {
+    const { data } = await this.http.request<unknown>('getActiveEntities');
+    return data;
+  }
+  async changeActiveEntities(entityId: number | 'all', recursive: boolean) {
+    const { data } = await this.http.request<unknown>('changeActiveEntities', {
+      method: 'POST',
+      json: { entities_id: entityId, is_recursive: recursive },
+    });
+    return data;
+  }
   async getFullSession() {
     const { data } = await this.http.request<unknown>('getFullSession');
     return data;

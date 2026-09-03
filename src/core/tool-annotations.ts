@@ -12,13 +12,16 @@ export function toolAnnotations(name: string): ToolAnnotations {
   if (/^glpi_delete_/.test(name)) {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }
+  if (name === 'glpi_inventory_requeue_task') {
+    return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+  }
   // Activation is reversible, idempotent and already guarded by an exact
   // confirmation phrase. Marking it destructive makes approval-policy=never
   // reject the call before the MCP server can validate that confirmation.
-  if (name === 'glpi_set_import_entity_rule_enabled') {
+  if (name === 'glpi_set_import_entity_rule_enabled' || /^glpi_(?:inventory_)?update_/.test(name)) {
     return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
   }
-  if (/^glpi_(update_|set_|assign_)/.test(name) || /^glpi_inventory_(update_|enable_|disable_)/.test(name)) {
+  if (/^glpi_(set_|assign_)/.test(name) || /^glpi_inventory_(enable_|disable_)/.test(name)) {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }
   return { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };

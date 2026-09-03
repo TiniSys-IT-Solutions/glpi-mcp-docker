@@ -89,6 +89,7 @@ test('Legacy entity creation remains successful when its verification GET is for
       method: 'GET',
     });
   };
+  (client as any).getActiveEntities = async () => ({});
 
   const result = await new LegacyOrganizationService(client).createEntity(entityInput);
 
@@ -103,6 +104,46 @@ test('Legacy entity creation remains successful when its verification GET is for
   });
   assert.equal(postCalls, 1, 'the successful POST must never be repeated after GET failure');
   assert.equal(getCalls, 1);
+});
+
+test('Legacy entity creation refreshes the same active context after stale-tree 403', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let reads = 0;
+  const contextChanges: unknown[] = [];
+  (client as any).createItem = async () => ({ id: 91, message: 'Element ajouté' });
+  (client as any).getEntity = async () => {
+    reads++;
+    if (reads === 1) {
+      throw new GlpiError({
+        status: 403, glpiCode: 'ERROR_RIGHT_MISSING', glpiMessage: 'Forbidden',
+        body: '["ERROR_RIGHT_MISSING","Forbidden"]', url: 'https://glpi.test/apirest.php/Entity/91', method: 'GET',
+      });
+    }
+    return { id: 91, name: 'BL-12 - Test' };
+  };
+  (client as any).getActiveEntities = async () => ({
+    active_entity: { id: 0 }, active_entity_recursive: true,
+  });
+  (client as any).changeActiveEntities = async (...args: unknown[]) => { contextChanges.push(args); };
+
+  assert.deepEqual(await new LegacyOrganizationService(client).createEntity(entityInput), {
+    success: true, id: 91, name: 'BL-12 - Test',
+  });
+  assert.deepEqual(contextChanges, [[0, true]]);
+  assert.equal(reads, 2);
+});
+
+test('Legacy entity creation does not refresh context for non-permission verification errors', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let refreshes = 0;
+  (client as any).createItem = async () => ({ id: 91 });
+  (client as any).getEntity = async () => { throw new Error('network unavailable'); };
+  (client as any).getActiveEntities = async () => { refreshes++; return {}; };
+
+  const result = await new LegacyOrganizationService(client).createEntity(entityInput) as any;
+  assert.equal(result.success, true);
+  assert.equal(result.verification_status, 'failed');
+  assert.equal(refreshes, 0);
 });
 
 test('Legacy location creation uses the same post-verification failure contract', async () => {

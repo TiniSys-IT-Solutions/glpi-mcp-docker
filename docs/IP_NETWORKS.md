@@ -35,6 +35,10 @@ recomputes it from the address, mask, and entity.
 - `glpi_create_ip_network`
 - `glpi_update_ip_network`
 
+Updates are partial, idempotent writes and are not marked destructive. Omitting
+a field preserves it, so a name-only correction does not alter the CIDR,
+gateway, entity or hierarchy fields. Deletion is not exposed by this tool.
+
 The create and update tools validate IPv4 and IPv6 CIDR syntax before calling
 GLPI. GLPI remains responsible for duplicate detection, gateway-in-network
 validation, canonical network-address calculation, hierarchy, and ACLs.

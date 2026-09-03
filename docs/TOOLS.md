@@ -9,8 +9,13 @@ Safety annotations are derived from tool names:
 
 - read operations are marked read-only;
 - create/add/link/attach operations are additive writes;
-- update/set/assign operations overwrite existing state;
+- partial `update_*` operations are idempotent, non-destructive writes;
+- set/assign operations overwrite existing state and may require confirmation;
 - delete operations are destructive, with purge behavior where documented.
+
+`glpi_inventory_requeue_task` remains explicitly destructive because it cycles
+task state and schedules work. Confirmed rule activation is reversible and is
+explicitly classified as a non-destructive write.
 
 ## Server metadata
 
@@ -79,7 +84,7 @@ require a GLPI Legacy session and is available in every API mode.
 | `glpi_list_ip_networks` | Read | List declared IPv4 and IPv6 LANs. |
 | `glpi_get_ip_network` | Read | Read one GLPI `IPNetwork`. |
 | `glpi_create_ip_network` | Write | Declare a LAN from a name, CIDR, entity and optional gateway. |
-| `glpi_update_ip_network` | Write | Update a LAN and let GLPI recompute its implicit hierarchy. |
+| `glpi_update_ip_network` | Non-destructive write | Partially update or rename a LAN and let GLPI recompute its implicit hierarchy. |
 
 ## Entity-assignment rules
 
@@ -152,6 +157,14 @@ Updates always read the entity before writing and read it again after writing. I
 the write succeeds but verification is forbidden, the result remains
 `success: true` with `update_status: "succeeded"` and separate
 `verification_status` / `verification_error` fields.
+
+After a successful Legacy entity creation, a precise
+`ERROR_RIGHT_MISSING` during verification can mean that GLPI's session still
+contains the recursive entity tree calculated before the child existed. The
+adapter reselects the exact same active entity and recursion setting once, then
+retries only the GET. It never broadens the entity scope and never repeats the
+successful POST. A genuine or persistent ACL refusal remains reported as a
+separate verification failure.
 
 Friendly fields such as `parent_entity_id`, `ldap_dn`, `entity_id` and
 `parent_location_id` are mapped inside their respective adapters.

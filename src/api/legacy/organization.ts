@@ -27,6 +27,11 @@ function createdResource(resource: unknown, id: number): Record<string, unknown>
 
 type CreatedItem = { id: number; message?: string };
 
+interface ActiveEntityContext {
+  entityId: number | 'all';
+  recursive: boolean;
+}
+
 /** Keep MCP stdout clean while making creation and verification independently observable. */
 function organizationLog(event: 'creation_succeeded' | 'update_succeeded' | 'verification_failed', details: Record<string, unknown>): void {
   if (process.env.GLPI_DEBUG) {
@@ -72,6 +77,19 @@ async function verifyCreatedResource(
     });
     return result;
   }
+}
+
+function activeEntityContext(resource: unknown): ActiveEntityContext | undefined {
+  if (!resource || typeof resource !== 'object') return undefined;
+  const record = resource as Record<string, unknown>;
+  const active = record.active_entity;
+  const nested = active && typeof active === 'object' ? active as Record<string, unknown> : undefined;
+  const rawId = nested?.id ?? active;
+  const entityId = rawId === 'all' ? 'all' : Number(rawId);
+  if (entityId !== 'all' && (!Number.isInteger(entityId) || entityId < 0)) return undefined;
+  const rawRecursive = record.active_entity_recursive ?? nested?.active_entity_recursive;
+  const recursive = rawRecursive === true || rawRecursive === 1 || rawRecursive === '1';
+  return { entityId, recursive };
 }
 
 async function verifyUpdatedEntity(
@@ -166,7 +184,35 @@ export class LegacyOrganizationService implements OrganizationService {
   }
   async createEntity(input: EntityCreateRequest) {
     const created = await this.client.createItem('Entity', mapLegacyEntity(input));
-    return verifyCreatedResource('Entity', created, (id) => this.getEntity(id));
+    organizationLog('creation_succeeded', { resource_type: 'Entity', id: created.id });
+    try {
+      return createdResource(await this.getEntity(created.id), created.id);
+    } catch (error) {
+      // GLPI caches the active recursive entity tree in the Legacy session. A
+      // freshly-created child may therefore be writable but temporarily absent
+      // from that cached tree. Re-selecting the exact same active context asks
+      // GLPI to rebuild it without widening or bypassing the account ACLs.
+      if (error instanceof GlpiError && error.status === 403 && error.glpiCode === 'ERROR_RIGHT_MISSING') {
+        try {
+          const context = activeEntityContext(await this.client.getActiveEntities());
+          if (context) {
+            await this.client.changeActiveEntities(context.entityId, context.recursive);
+            return createdResource(await this.getEntity(created.id), created.id);
+          }
+        } catch (refreshError) {
+          organizationLog('verification_failed', {
+            resource_type: 'Entity', id: created.id, context_refresh_error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+          });
+        }
+      }
+      const result = verificationFailure(created.id, error, { creation_message: created.message });
+      organizationLog('verification_failed', {
+        resource_type: 'Entity', id: created.id,
+        verification_error: result.verification_error,
+        verification_http_status: result.verification_http_status,
+      });
+      return result;
+    }
   }
   async updateEntity(id: number, input: EntityUpdateRequest) {
     await this.getEntity(id);

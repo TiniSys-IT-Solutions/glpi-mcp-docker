@@ -90,3 +90,21 @@ test('LegacyIPNetworkService lists and updates IPNetwork objects', async () => {
     },
   });
 });
+
+test('IP network rename sends only the name field', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let updateCall: unknown;
+  (client as any).updateItem = async (itemtype: string, id: number, payload: unknown) => {
+    updateCall = { itemtype, id, payload };
+    return true;
+  };
+
+  assert.deepEqual(await new LegacyIPNetworkService(client).update(5, {
+    name: 'GB - LEMPDES : 10.10.7.0/24',
+  }), { success: true, id: 5 });
+  assert.deepEqual(updateCall, {
+    itemtype: 'IPNetwork',
+    id: 5,
+    payload: { name: 'GB - LEMPDES : 10.10.7.0/24' },
+  });
+});
