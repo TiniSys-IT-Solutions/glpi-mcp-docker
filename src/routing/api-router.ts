@@ -13,6 +13,8 @@ import { LegacyImportEntityRuleService } from '../api/legacy/rules.js';
 import { HighLevelImportEntityRuleService } from '../api/highlevel/rules.js';
 import { LegacyOrganizationService } from '../api/legacy/organization.js';
 import { HighLevelOrganizationService } from '../api/highlevel/organization.js';
+import { LegacyDirectoryService } from '../api/legacy/directory.js';
+import { HighLevelDirectoryService } from '../api/highlevel/directory.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
@@ -24,6 +26,7 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_list_import_entity_rule_actions: 'legacy',
   glpi_get_import_entity_rule_action: 'legacy',
   glpi_create_import_entity_subnet_rule: 'legacy',
+  glpi_update_import_entity_rule: 'legacy',
   glpi_set_import_entity_rule_enabled: 'legacy',
   glpi_list_tickets: 'legacy',
   glpi_get_ticket: 'legacy',
@@ -63,31 +66,18 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_delete_computer: 'legacy',
   glpi_list_network_equipments: 'legacy',
   glpi_get_network_equipment: 'legacy',
-  glpi_create_network_equipment: 'legacy',
-  glpi_update_network_equipment: 'legacy',
-  glpi_delete_network_equipment: 'legacy',
   glpi_list_printers: 'legacy',
   glpi_get_printer: 'legacy',
-  glpi_create_printer: 'legacy',
-  glpi_update_printer: 'legacy',
-  glpi_delete_printer: 'legacy',
   glpi_list_monitors: 'legacy',
   glpi_get_monitor: 'legacy',
-  glpi_create_monitor: 'legacy',
-  glpi_update_monitor: 'legacy',
-  glpi_delete_monitor: 'legacy',
   glpi_list_phones: 'legacy',
   glpi_get_phone: 'legacy',
-  glpi_create_phone: 'legacy',
-  glpi_update_phone: 'legacy',
-  glpi_delete_phone: 'legacy',
-  glpi_list_software: 'legacy',
+  glpi_list_softwares: 'legacy',
   glpi_get_software: 'legacy',
   glpi_create_software: 'legacy',
-  glpi_update_software: 'legacy',
-  glpi_delete_software: 'legacy',
   glpi_list_users: 'legacy',
   glpi_get_user: 'legacy',
+  glpi_search_user: 'legacy',
   glpi_create_user: 'legacy',
   glpi_list_groups: 'legacy',
   glpi_get_group: 'legacy',
@@ -95,6 +85,7 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_add_user_to_group: 'legacy',
   glpi_list_categories: 'legacy',
   glpi_list_entities: 'legacy',
+  glpi_get_entity: 'legacy',
   glpi_list_locations: 'legacy',
   glpi_get_location: 'legacy',
   glpi_create_location: 'legacy',
@@ -106,6 +97,7 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_update_project: 'legacy',
   glpi_list_documents: 'legacy',
   glpi_get_document: 'legacy',
+  glpi_list_knowbase: 'legacy',
   glpi_search_knowbase: 'legacy',
   glpi_get_knowbase_item: 'legacy',
   glpi_create_knowbase_item: 'legacy',
@@ -198,6 +190,7 @@ function highLevelClient(config: AppConfig): HighLevelClient {
     url: config.glpiUrl,
     apiVersion: config.apiVersion,
     accessTokenProvider,
+    timeoutMs: config.http.timeoutMs,
   });
 }
 
@@ -210,6 +203,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         session: new HighLevelSessionService(highlevel),
         importEntityRules: new HighLevelImportEntityRuleService(highlevel),
         organization: new HighLevelOrganizationService(highlevel),
+        directory: new HighLevelDirectoryService(highlevel),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -227,6 +221,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       session: new LegacySessionService(client),
       importEntityRules: new LegacyImportEntityRuleService(client),
       organization: new LegacyOrganizationService(client),
+      directory: new LegacyDirectoryService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

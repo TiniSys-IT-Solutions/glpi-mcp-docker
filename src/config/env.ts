@@ -36,12 +36,12 @@ function optionalEnv(name: string): string | undefined {
   return value && value.trim() !== '' ? value : undefined;
 }
 
-function envInt(name: string): number | undefined {
+function envInt(name: string, minimum = 0): number | undefined {
   const raw = optionalEnv(name);
   if (!raw) return undefined;
   const n = Number.parseInt(raw, 10);
-  if (Number.isNaN(n) || n < 0) {
-    throw new Error(`${name} must be a non-negative integer, got "${raw}"`);
+  if (!Number.isSafeInteger(n) || String(n) !== raw || n < minimum) {
+    throw new Error(`${name} must be an integer greater than or equal to ${minimum}, got "${raw}"`);
   }
   return n;
 }
@@ -63,7 +63,13 @@ export function loadConfig(): AppConfig {
   const glpiUrl = optionalEnv('GLPI_URL');
   if (!glpiUrl) throw new Error('GLPI_URL environment variable is required');
   try {
-    new URL(glpiUrl);
+    const parsedUrl = new URL(glpiUrl);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error('unsupported protocol');
+    }
+    if (parsedUrl.username || parsedUrl.password || parsedUrl.hash) {
+      throw new Error('credentials and fragments are forbidden');
+    }
   } catch {
     throw new Error(`GLPI_URL is not a valid URL: "${glpiUrl}"`);
   }
@@ -95,10 +101,15 @@ export function loadConfig(): AppConfig {
     throw new Error('GLPI_AUTH_MODE=per_user is planned but not implemented yet.');
   }
 
+  const apiVersion = optionalEnv('GLPI_API_VERSION') ?? '2.3';
+  if (!/^v?\d+\.\d+$/.test(apiVersion)) {
+    throw new Error('GLPI_API_VERSION must use MAJOR.MINOR format, for example 2.3');
+  }
+
   return {
     glpiUrl,
     apiMode,
-    apiVersion: optionalEnv('GLPI_API_VERSION') ?? '2.3',
+    apiVersion,
     authMode,
     legacy,
     highlevel: {
@@ -109,7 +120,7 @@ export function loadConfig(): AppConfig {
       oauthRedirectUri: optionalEnv('GLPI_OAUTH_REDIRECT_URI'),
     },
     http: {
-      timeoutMs: envInt('GLPI_TIMEOUT_MS'),
+      timeoutMs: envInt('GLPI_TIMEOUT_MS', 1),
       maxRetries: envInt('GLPI_MAX_RETRIES'),
     },
     mcp: {

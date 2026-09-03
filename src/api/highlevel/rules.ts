@@ -1,9 +1,31 @@
 import { ImportEntityRuleService } from '../../core/rules/service.js';
-import { assertCanonicalIPv4CIDR, CreateImportEntitySubnetRuleRequest, RuleListRequest } from '../../core/rules/types.js';
+import { assertCanonicalIPv4CIDR, CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from '../../core/rules/types.js';
 import { HighLevelClient } from './client.js';
 
 const COLLECTION_PATH = 'Rule/Collection/ImportEntity/Rule';
 const PATTERN_CIDR = 333;
+
+function updatePayload(input: UpdateImportEntityRuleRequest): Record<string, unknown> {
+  return Object.fromEntries(Object.entries({
+    name: input.name,
+    description: input.description === null ? '' : input.description,
+    comment: input.comment === null ? '' : input.comment,
+    ranking: input.ranking,
+    is_recursive: input.recursive,
+    match: input.match,
+  }).filter(([, value]) => value !== undefined));
+}
+
+function verificationFailed(ruleId: number, operation: 'update' | 'activation', error: unknown) {
+  return {
+    success: true,
+    rule_id: ruleId,
+    [`${operation}_status`]: 'succeeded',
+    verification_status: 'failed',
+    verification_error: error instanceof Error ? error.name : 'UnknownError',
+    verification_message: error instanceof Error ? error.message : String(error),
+  };
+}
 
 function jsonRequest(method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): RequestInit {
   return {
@@ -110,9 +132,26 @@ export class HighLevelImportEntityRuleService implements ImportEntityRuleService
   }
 
   async setEnabled(ruleId: number, enabled: boolean): Promise<unknown> {
+    await this.get(ruleId);
     await this.client.request(`${COLLECTION_PATH}/${ruleId}`, jsonRequest('PATCH', {
       is_active: enabled,
     }));
-    return { rule: await this.get(ruleId), enabled };
+    try {
+      return { success: true, rule: await this.get(ruleId), enabled, verification_status: 'succeeded' };
+    } catch (error) {
+      return { ...verificationFailed(ruleId, 'activation', error), enabled };
+    }
+  }
+
+  async update(ruleId: number, input: UpdateImportEntityRuleRequest): Promise<unknown> {
+    await this.get(ruleId);
+    const payload = updatePayload(input);
+    if (Object.keys(payload).length === 0) throw new Error('Rule update requires at least one field');
+    await this.client.request(`${COLLECTION_PATH}/${ruleId}`, jsonRequest('PATCH', payload));
+    try {
+      return { success: true, rule: await this.get(ruleId), verification_status: 'succeeded' };
+    } catch (error) {
+      return verificationFailed(ruleId, 'update', error);
+    }
   }
 }

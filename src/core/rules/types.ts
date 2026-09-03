@@ -17,6 +17,16 @@ export interface CreateImportEntitySubnetRuleRequest {
   recursive?: boolean;
 }
 
+/** Undefined preserves the field; null explicitly clears supported text fields. */
+export interface UpdateImportEntityRuleRequest {
+  name?: string;
+  description?: string | null;
+  comment?: string | null;
+  ranking?: number;
+  recursive?: boolean;
+  match?: 'AND' | 'OR';
+}
+
 export function assertCanonicalIPv4CIDR(cidr: string): void {
   const parts = cidr.split('/');
   const octets = parts[0]?.split('.').map(Number) ?? [];

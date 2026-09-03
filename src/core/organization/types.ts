@@ -3,6 +3,7 @@ export interface OrganizationListRequest {
   limit?: number;
   sort?: string;
   order?: 'ASC' | 'DESC';
+  expandDropdowns?: boolean;
 }
 
 export interface LocationCreateRequest {

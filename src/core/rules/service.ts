@@ -1,4 +1,4 @@
-import { CreateImportEntitySubnetRuleRequest, RuleListRequest } from './types.js';
+import { CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from './types.js';
 
 /**
  * Read-only contract for rules assigning inventoried items to an entity.
@@ -15,5 +15,6 @@ export interface ImportEntityRuleService {
   listActions(ruleId: number, input: RuleListRequest): Promise<unknown>;
   getAction(ruleId: number, actionId: number): Promise<unknown>;
   createSubnetRule(input: CreateImportEntitySubnetRuleRequest): Promise<unknown>;
+  update(ruleId: number, input: UpdateImportEntityRuleRequest): Promise<unknown>;
   setEnabled(ruleId: number, enabled: boolean): Promise<unknown>;
 }

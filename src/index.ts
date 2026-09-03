@@ -40,10 +40,12 @@ import { InventoryPluginResource, InventoryPluginService } from './core/inventor
 import { SessionService } from './core/session/service.js';
 import { ImportEntityRuleService } from './core/rules/service.js';
 import { OrganizationService } from './core/organization/service.js';
+import { DirectoryService } from './core/directory/service.js';
 import { entityCreateSchema, entityUpdateSchema } from './core/organization/schemas.js';
 import { PRODUCT_NAME, PRODUCT_VERSION, formatBuildInfo, getBuildInfo } from './build-info.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 import { readSafeUpload } from './security/upload.js';
+import { ToolAnnotations, toolAnnotations } from './core/tool-annotations.js';
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -144,6 +146,18 @@ const importEntityRuleEnabledSchema = z.object({
   rule_id: z.number().int().min(1),
   enabled: z.boolean(),
   confirmation: z.literal('I_HAVE_VERIFIED_THE_RULE'),
+});
+
+const importEntityRuleUpdateSchema = z.object({
+  rule_id: z.number().int().min(1),
+  name: z.string().trim().min(1).optional(),
+  description: z.string().nullable().optional(),
+  comment: z.string().nullable().optional(),
+  ranking: z.number().int().min(0).optional(),
+  recursive: z.boolean().optional(),
+  match: z.enum(['AND', 'OR']).optional(),
+}).refine(({ rule_id: _ruleId, ...fields }) => Object.values(fields).some((value) => value !== undefined), {
+  message: 'At least one field to update is required',
 });
 
 const gpsFieldsSchema = {
@@ -283,6 +297,7 @@ let inventoryPluginService: InventoryPluginService;
 let sessionService: SessionService;
 let importEntityRuleService: ImportEntityRuleService;
 let organizationService: OrganizationService;
+let directoryService: DirectoryService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -300,6 +315,7 @@ const IMPORT_ENTITY_RULE_SERVICE_TOOLS = new Set([
   'glpi_list_import_entity_rule_actions',
   'glpi_get_import_entity_rule_action',
   'glpi_create_import_entity_subnet_rule',
+  'glpi_update_import_entity_rule',
   'glpi_set_import_entity_rule_enabled',
 ]);
 
@@ -313,6 +329,14 @@ const ORGANIZATION_SERVICE_TOOLS = new Set([
   'glpi_update_entity',
 ]);
 
+const DIRECTORY_READ_SERVICE_TOOLS = new Set([
+  'glpi_list_users',
+  'glpi_get_user',
+  'glpi_search_user',
+  'glpi_list_groups',
+  'glpi_get_group',
+]);
+
 function isTicketServiceTool(toolName: string): boolean {
   return TICKET_SERVICE_TOOLS.has(toolName);
 }
@@ -321,6 +345,7 @@ function isBackendServiceTool(toolName: string): boolean {
   return isTicketServiceTool(toolName) ||
     IMPORT_ENTITY_RULE_SERVICE_TOOLS.has(toolName) ||
     ORGANIZATION_SERVICE_TOOLS.has(toolName) ||
+    DIRECTORY_READ_SERVICE_TOOLS.has(toolName) ||
     toolName === 'glpi_get_session_info';
 }
 
@@ -387,27 +412,6 @@ const UPLOAD_MIME_TYPES: Record<string, string> = {
 //   - create/add/link/attach       -> additive write (non-destructive, non-idempotent)
 // openWorldHint is false everywhere: tools only reach the configured GLPI.
 // ---------------------------------------------------------------------------
-
-interface ToolAnnotations {
-  readOnlyHint?: boolean;
-  destructiveHint?: boolean;
-  idempotentHint?: boolean;
-  openWorldHint?: boolean;
-}
-
-function toolAnnotations(name: string): ToolAnnotations {
-  if (/^glpi_(list_|get_|search|count$|tickets_stats)/.test(name) || /^glpi_inventory_(list|get)_/.test(name)) {
-    return { readOnlyHint: true, openWorldHint: false };
-  }
-  if (/^glpi_delete_/.test(name)) {
-    return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
-  }
-  if (/^glpi_(update_|set_|assign_)/.test(name) || /^glpi_inventory_(update_|enable_|disable_)/.test(name)) {
-    return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
-  }
-  // create / add / link / attach: additive writes. Re-running duplicates data.
-  return { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
-}
 
 function annotate<T extends { name: string }>(tool: T): T & { annotations: ToolAnnotations } {
   return { ...tool, annotations: toolAnnotations(tool.name) };
@@ -926,6 +930,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           recursive: { type: 'boolean', description: 'Apply rule scope to sub-entities; defaults to false' },
         },
         required: ['name', 'cidr', 'target_entity_id', 'target_location_id'],
+      },
+    },
+    {
+      name: 'glpi_update_import_entity_rule',
+      description: 'Partially update an existing entity-assignment rule without changing its criteria, actions, subtype or activation state.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          rule_id: { type: 'number', description: 'GLPI RuleImportEntity id' },
+          name: { type: 'string' },
+          description: { type: ['string', 'null'], description: 'Use null to clear the description' },
+          comment: { type: ['string', 'null'], description: 'Use null to clear the comment' },
+          ranking: { type: 'number', description: 'Evaluation order; changing it may shift other rules' },
+          recursive: { type: 'boolean', description: 'Apply the rule scope recursively' },
+          match: { type: 'string', enum: ['AND', 'OR'], description: 'Logical operator for existing criteria' },
+        },
+        required: ['rule_id'],
       },
     },
     {
@@ -1635,6 +1656,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text(await importEntityRuleService.setEnabled(validated.rule_id, validated.enabled));
       }
 
+      case 'glpi_update_import_entity_rule': {
+        const validated = importEntityRuleUpdateSchema.parse(args);
+        return text(await importEntityRuleService.update(validated.rule_id, {
+          name: validated.name,
+          description: validated.description,
+          comment: validated.comment,
+          ranking: validated.ranking,
+          recursive: validated.recursive,
+          match: validated.match,
+        }));
+      }
+
       // ==== TICKETS — read ====
       case 'glpi_list_tickets': {
         const validated = listArgsSchema.parse(args);
@@ -2217,14 +2250,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ==== USERS / GROUPS ====
       case 'glpi_list_users':
-        return text(await client.getUsers({
-          ...parseListArgs(args),
-          is_active: args.active_only === false ? false : true,
+        return text(await directoryService.listUsers({
+          ...listArgsSchema.parse(args),
+          expandDropdowns: args.expand_dropdowns as boolean | undefined,
+          activeOnly: args.active_only === false ? false : true,
         }));
       case 'glpi_get_user':
-        return text(await client.getUser(args.id as number));
+        return text(await directoryService.getUser(args.id as number));
       case 'glpi_search_user':
-        return text(await client.getUserByName(args.name as string));
+        return text(await directoryService.findUserByName(args.name as string));
       case 'glpi_create_user':
         return text({ success: true, ...(await client.createUser({
           name: args.name as string,
@@ -2237,9 +2271,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         })) });
 
       case 'glpi_list_groups':
-        return text(await client.getGroups(parseListArgs(args)));
+        return text(await directoryService.listGroups({
+          ...listArgsSchema.parse(args),
+          expandDropdowns: args.expand_dropdowns as boolean | undefined,
+        }));
       case 'glpi_get_group':
-        return text(await client.getGroup(args.id as number));
+        return text(await directoryService.getGroup(args.id as number));
       case 'glpi_create_group':
         return text({ success: true, ...(await client.createGroup({
           name: args.name as string,
@@ -2586,6 +2623,7 @@ async function main() {
     sessionService = apiRouter.services.session;
     importEntityRuleService = apiRouter.services.importEntityRules;
     organizationService = apiRouter.services.organization;
+    directoryService = apiRouter.services.directory;
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 

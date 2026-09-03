@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 133 tools currently registered by `src/index.ts` on
+This catalogue lists the 134 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -96,13 +96,20 @@ the High-Level API. Stable Hybrid routes them explicitly to Legacy.
 | `glpi_list_import_entity_rule_actions` | Read | List assignment actions attached to one rule. |
 | `glpi_get_import_entity_rule_action` | Read | Read one action and validate its parent rule. |
 | `glpi_create_import_entity_subnet_rule` | Write | Atomically create a disabled IPv4 CIDR rule with entity and location assignments; rollback on partial failure. |
-| `glpi_set_import_entity_rule_enabled` | Destructive | Enable or disable a verified rule; requires an explicit confirmation value. |
+| `glpi_update_import_entity_rule` | Write | Partially update name, description, comment, ranking, recursion or match mode without modifying subtype, criteria, actions or activation. Reads before writing and verifies afterward. |
+| `glpi_set_import_entity_rule_enabled` | Confirmed write | Enable or disable a verified rule; requires the exact confirmation value. The operation is reversible and idempotent, so it is not advertised as destructive. |
 
 Subnet rules are always created inactive. Read the new rule back and verify its
 CIDR, target entity, target location and ranking before calling the enable tool.
 High-Level writes use the official `RuleController` routes and schemas
 introduced in API 2.0. Hybrid continues to route both write tools explicitly to
 Legacy; there is no implicit fallback between APIs.
+
+For partial rule updates, omitted fields remain unchanged. JSON `null` clears
+`description` or `comment`; `sub_type`, criteria, actions and `is_active` are
+never accepted by the update tool. A successful write remains `success: true`
+if the post-write GET is forbidden, with `verification_status: "failed"`
+reported separately.
 
 ## Organization and reference data
 
@@ -229,6 +236,6 @@ deprecated compatibility alias.
 The following are deliberately not presented as active tools:
 
 - VLAN management and `IPNetwork`/VLAN relationships;
-- High-Level API domains other than session and entity-assignment rule reads;
+- High-Level API domains not marked implemented in the compatibility matrix;
 - per-user OAuth authentication;
 - generic destructive operations outside explicitly registered tools.

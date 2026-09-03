@@ -1,8 +1,30 @@
 import { ImportEntityRuleService } from '../../core/rules/service.js';
-import { assertCanonicalIPv4CIDR, CreateImportEntitySubnetRuleRequest, RuleListRequest } from '../../core/rules/types.js';
+import { assertCanonicalIPv4CIDR, CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from '../../core/rules/types.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
 
 const PATTERN_CIDR = 333;
+
+function legacyUpdatePayload(input: UpdateImportEntityRuleRequest): Record<string, unknown> {
+  return Object.fromEntries(Object.entries({
+    name: input.name,
+    description: input.description === null ? '' : input.description,
+    comment: input.comment === null ? '' : input.comment,
+    ranking: input.ranking,
+    is_recursive: input.recursive === undefined ? undefined : input.recursive ? 1 : 0,
+    match: input.match,
+  }).filter(([, value]) => value !== undefined));
+}
+
+function verificationFailed(ruleId: number, operation: 'update' | 'activation', error: unknown) {
+  return {
+    success: true,
+    rule_id: ruleId,
+    [`${operation}_status`]: 'succeeded',
+    verification_status: 'failed',
+    verification_error: error instanceof Error ? error.name : 'UnknownError',
+    verification_message: error instanceof Error ? error.message : String(error),
+  };
+}
 
 function toListOptions(input: RuleListRequest): ListOptions {
   const start = input.start ?? 0;
@@ -114,8 +136,25 @@ export class LegacyImportEntityRuleService implements ImportEntityRuleService {
   }
 
   async setEnabled(ruleId: number, enabled: boolean): Promise<unknown> {
+    await this.get(ruleId);
     await this.client.updateItem('RuleImportEntity', ruleId, { is_active: enabled ? 1 : 0 });
-    return { rule: await this.get(ruleId), enabled };
+    try {
+      return { success: true, rule: await this.get(ruleId), enabled, verification_status: 'succeeded' };
+    } catch (error) {
+      return { ...verificationFailed(ruleId, 'activation', error), enabled };
+    }
+  }
+
+  async update(ruleId: number, input: UpdateImportEntityRuleRequest): Promise<unknown> {
+    await this.get(ruleId);
+    const payload = legacyUpdatePayload(input);
+    if (Object.keys(payload).length === 0) throw new Error('Rule update requires at least one field');
+    await this.client.updateItem('RuleImportEntity', ruleId, payload);
+    try {
+      return { success: true, rule: await this.get(ruleId), verification_status: 'succeeded' };
+    } catch (error) {
+      return verificationFailed(ruleId, 'update', error);
+    }
   }
 
   private toQuery(input: RuleListRequest): Record<string, string> {

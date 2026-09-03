@@ -134,6 +134,7 @@ export interface AccessTokenProvider {
 
 export class PasswordGrantTokenProvider implements AccessTokenProvider {
   private token?: OAuthTokenSet;
+  private pendingToken?: Promise<OAuthTokenSet>;
 
   constructor(
     private readonly oauth: GlpiOAuthClient,
@@ -146,10 +147,15 @@ export class PasswordGrantTokenProvider implements AccessTokenProvider {
     if (this.token && now < this.token.obtainedAt + this.token.expiresIn * 1000 - refreshBeforeMs) {
       return this.token.accessToken;
     }
-    if (this.token?.refreshToken) {
-      this.token = await this.oauth.refresh(this.token.refreshToken, this.credentials.scope);
-    } else {
-      this.token = await this.oauth.password(this.credentials);
+    if (!this.pendingToken) {
+      this.pendingToken = this.token?.refreshToken
+        ? this.oauth.refresh(this.token.refreshToken, this.credentials.scope)
+        : this.oauth.password(this.credentials);
+    }
+    try {
+      this.token = await this.pendingToken;
+    } finally {
+      this.pendingToken = undefined;
     }
     return this.token.accessToken;
   }

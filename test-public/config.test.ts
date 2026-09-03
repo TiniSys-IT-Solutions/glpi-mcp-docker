@@ -67,3 +67,23 @@ test('legacy service_account requires a legacy authentication method', () => {
     }
   );
 });
+
+test('loadConfig only accepts credential-free HTTP(S) GLPI URLs', () => {
+  for (const GLPI_URL of ['file:///etc/passwd', 'https://user:secret@glpi.example.local', 'https://glpi.example.local/#fragment']) {
+    withEnv({ GLPI_URL, GLPI_API_MODE: 'highlevel' }, () => {
+      assert.throws(() => loadConfig(), /GLPI_URL is not a valid URL/);
+    });
+  }
+});
+
+test('loadConfig strictly validates API version and numeric HTTP settings', () => {
+  withEnv({ GLPI_URL: 'https://glpi.example.local', GLPI_API_MODE: 'highlevel', GLPI_API_VERSION: 'latest' }, () => {
+    assert.throws(() => loadConfig(), /MAJOR\.MINOR/);
+  });
+  withEnv({ GLPI_URL: 'https://glpi.example.local', GLPI_API_MODE: 'highlevel', GLPI_TIMEOUT_MS: '0' }, () => {
+    assert.throws(() => loadConfig(), /GLPI_TIMEOUT_MS/);
+  });
+  withEnv({ GLPI_URL: 'https://glpi.example.local', GLPI_API_MODE: 'highlevel', GLPI_MAX_RETRIES: '2oops' }, () => {
+    assert.throws(() => loadConfig(), /GLPI_MAX_RETRIES/);
+  });
+});

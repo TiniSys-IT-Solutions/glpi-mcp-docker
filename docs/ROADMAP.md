@@ -17,14 +17,14 @@ the GLPI 11 High-Level API without disrupting the production endpoint.
 
 | Stage | Status | Exit criteria |
 | --- | --- | --- |
-| Dual endpoint configuration | Implemented, pending container validation | Existing configuration keeps one Legacy endpoint; Preview is opt-in |
-| Process supervision | Implemented, pending container validation | Stable is critical; Preview restarts independently |
+| Dual endpoint configuration | Implemented and unit-tested; container smoke pending | Existing configuration keeps one Legacy endpoint; Preview is opt-in |
+| Process supervision | Implemented and unit-tested; container smoke pending | Stable is critical; Preview restarts independently |
 | High-Level OAuth client | Implemented and unit-tested | Authorization Code, Password and Refresh requests are supported without secret leakage |
 | High-Level session read | Implemented and unit-tested | `glpi_get_session_info` calls `/api.php/v2.3/session` with a Bearer token |
-| High-Level read-only domains | Entity and Location slices implemented and unit-tested | Migrate users, tickets, assets and network reads incrementally |
+| High-Level read-only domains | Entity, Location, User and Group slices implemented and unit-tested | Migrate tickets, assets and network reads incrementally |
 | High-Level writes | ImportEntity, Entity and Location slices implemented and unit-tested | Validate OAuth writes against a non-production GLPI before promoting additional domains |
 | Per-user authentication | Planned | Bind an MCP session to one GLPI identity with auditable authorization context |
-| Production release | Planned | Container smoke tests, compatibility matrix, upgrade/rollback guide and versioned release |
+| Production release | Released (`v0.3.1`) | Versioned image workflow, compatibility matrix and release procedure are present; host-level container smoke remains required |
 
 ## Next validation slice
 
@@ -35,7 +35,8 @@ the GLPI 11 High-Level API without disrupting the production endpoint.
    result contract and permissions are confirmed.
 5. Smoke-test Entity and Location reads against Preview without creating data.
 6. Validate writes only against a dedicated non-production entity tree.
-7. Select the next read-only domain from the compatibility matrix.
+7. Select tickets or assets as the next read-only High-Level domain after
+   confirming its response contract against a non-production instance.
 
 Do not route a Stable Hybrid tool to High-Level merely because its Preview
 implementation exists. Promotion is a separate, explicit compatibility decision.

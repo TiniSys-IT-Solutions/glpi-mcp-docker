@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { createApiRouter } from '../src/routing/api-router.js';
+import { createApiRouter, HYBRID_TOOL_BACKENDS } from '../src/routing/api-router.js';
 import { AppConfig } from '../src/config/env.js';
 
 function config(apiMode: AppConfig['apiMode']): AppConfig {
@@ -58,6 +59,14 @@ test('highlevel mode exposes organization reads and writes', () => {
   assert.equal(router.backendForTool('glpi_create_location'), 'highlevel');
 });
 
+test('highlevel mode exposes User and Group read services', () => {
+  const router = createApiRouter(config('highlevel'));
+  assert.ok(router.services.directory);
+  for (const tool of ['glpi_list_users', 'glpi_get_user', 'glpi_search_user', 'glpi_list_groups', 'glpi_get_group']) {
+    assert.equal(router.backendForTool(tool), 'highlevel');
+  }
+});
+
 test('hybrid mode uses explicit compatibility matrix', () => {
   const router = createApiRouter(config('hybrid'));
   assert.equal(router.backendForTool('glpi_create_ticket'), 'legacy');
@@ -76,4 +85,24 @@ test('hybrid mode uses explicit compatibility matrix', () => {
     () => router.backendForTool('unknown_future_tool'),
     /Not supported in GLPI_API_MODE=highlevel/
   );
+});
+
+test('hybrid matrix covers every registered MCP tool and contains no phantom tools', () => {
+  const source = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8');
+  const active = [...source.matchAll(/name:\s*'((?:glpi_)[^']+)'/g)].map((match) => match[1]);
+
+  for (const asset of ['computers', 'softwares', 'network_equipments', 'printers', 'monitors', 'phones']) {
+    active.push(`glpi_list_${asset}`, `glpi_get_${asset.replace(/s$/, '')}`);
+  }
+  for (const [plural, singular] of [
+    ['credentials', 'credential'], ['tasks', 'task'], ['task_jobs', 'task_job'],
+    ['task_job_states', 'task_job_state'], ['timeslots', 'timeslot'], ['collects', 'collect'],
+    ['collect_files', 'collect_file'], ['collect_registries', 'collect_registry'],
+    ['collect_wmi_queries', 'collect_wmi_query'], ['deploy_packages', 'deploy_package'],
+    ['deploy_groups', 'deploy_group'],
+  ]) {
+    active.push(`glpi_inventory_list_${plural}`, `glpi_inventory_get_${singular}`);
+  }
+
+  assert.deepEqual(Object.keys(HYBRID_TOOL_BACKENDS).sort(), [...new Set(active)].sort());
 });

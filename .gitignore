@@ -7,6 +7,9 @@ dist/
 coverage/
 uploads/
 
+# Archived legacy MCP repository; retained locally for historical reference.
+/upstream/legacy-mcp-glpi/
+
 # Maintainer/customer-specific validation workspace. Never publish its data.
 /test/
 

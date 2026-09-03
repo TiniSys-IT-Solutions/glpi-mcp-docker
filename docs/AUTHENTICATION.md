@@ -79,6 +79,7 @@ is confirmed.
 
 Legacy and Hybrid service-account modes require a Legacy auth method.
 
-High-Level mode does not require Legacy credentials, but currently returns
-not-supported errors because no High-Level domain has been implemented from
-Swagger yet.
+High-Level mode does not require Legacy credentials at configuration parsing
+time. Session, entity-assignment rules, entities and locations are implemented;
+other domains return explicit not-supported errors until their GLPI 11 contract
+has been validated.

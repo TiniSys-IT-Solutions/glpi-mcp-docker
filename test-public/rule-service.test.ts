@@ -173,6 +173,52 @@ test('Legacy rule activation updates only is_active and returns the verified rul
   assert.equal(result.rule.id, 101);
 });
 
+test('Legacy rule update is partial, clears text explicitly and preserves children', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  const writes: unknown[] = [];
+  let reads = 0;
+  (client as any).getItem = async () => ({ id: 101, name: 'Old', sub_type: 'RuleImportEntity' });
+  (client.http as any).request = async () => ({ data: [] });
+  (client as any).updateItem = async (...args: unknown[]) => { writes.push(args); return true; };
+  const service = new LegacyImportEntityRuleService(client);
+
+  const result = await service.update(101, {
+    description: 'importe regle affectation par cidr — 02/09/2026',
+    comment: null,
+    ranking: 1,
+    recursive: false,
+    match: 'AND',
+  }) as any;
+
+  assert.deepEqual(writes, [[
+    'RuleImportEntity', 101, {
+      description: 'importe regle affectation par cidr — 02/09/2026',
+      comment: '', ranking: 1, is_recursive: 0, match: 'AND',
+    },
+  ]]);
+  assert.equal(result.success, true);
+  assert.equal(result.verification_status, 'succeeded');
+  assert.equal('sub_type' in (writes[0] as any[])[2], false);
+  assert.equal(reads, 0);
+});
+
+test('Legacy rule update reports a successful write separately from failed verification', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let itemReads = 0;
+  (client as any).getItem = async () => {
+    itemReads++;
+    if (itemReads > 1) throw new Error('verification forbidden');
+    return { id: 101 };
+  };
+  (client.http as any).request = async () => ({ data: [] });
+  (client as any).updateItem = async () => true;
+
+  const result = await new LegacyImportEntityRuleService(client).update(101, { description: 'new' }) as any;
+  assert.equal(result.success, true);
+  assert.equal(result.update_status, 'succeeded');
+  assert.equal(result.verification_status, 'failed');
+});
+
 test('High-Level subnet rule creation follows the official RuleController write schemas', async () => {
   const requests: Array<{ url: string; method: string; body?: unknown }> = [];
   const client = new HighLevelClient({
@@ -250,7 +296,31 @@ test('High-Level activation uses PATCH with a native boolean', async () => {
   const result = await service.setEnabled(101, true) as any;
   assert.equal(result.enabled, true);
   assert.deepEqual(requests, [
+    { method: 'GET' },
     { method: 'PATCH', body: { is_active: true } },
+    { method: 'GET' },
+  ]);
+});
+
+test('High-Level rule update reads before PATCH and sends only explicit fields', async () => {
+  const requests: Array<{ method: string; body?: unknown }> = [];
+  const client = new HighLevelClient({
+    url: 'https://glpi.test', apiVersion: '2.3',
+    accessTokenProvider: { getAccessToken: async () => 'token' },
+    fetchImpl: async (_input, init) => {
+      requests.push({ method: init?.method ?? 'GET', ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
+      return new Response(JSON.stringify({ id: 101, criteria: [{ id: 1 }], actions: [{ id: 2 }] }), { status: 200 });
+    },
+  });
+
+  const result = await new HighLevelImportEntityRuleService(client).update(101, {
+    description: 'importe regle affectation par cidr — 02/09/2026',
+    comment: null,
+  }) as any;
+  assert.equal(result.verification_status, 'succeeded');
+  assert.deepEqual(requests, [
+    { method: 'GET' },
+    { method: 'PATCH', body: { description: 'importe regle affectation par cidr — 02/09/2026', comment: '' } },
     { method: 'GET' },
   ]);
 });

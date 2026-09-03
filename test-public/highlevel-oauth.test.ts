@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GlpiOAuthClient, GlpiOAuthError } from '../src/api/highlevel/oauth.js';
+import { GlpiOAuthClient, GlpiOAuthError, PasswordGrantTokenProvider } from '../src/api/highlevel/oauth.js';
 
 test('OAuth authorization URL uses GLPI endpoints, state and PKCE', () => {
   const client = new GlpiOAuthClient({
@@ -45,4 +45,24 @@ test('OAuth errors expose no submitted client secret', async () => {
     () => client.password({ username: 'user', password: 'password' }),
     (error: unknown) => error instanceof GlpiOAuthError && !error.message.includes('do-not-leak')
   );
+});
+
+test('concurrent token requests share one OAuth exchange', async () => {
+  let calls = 0;
+  const oauth = {
+    password: async () => {
+      calls++;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return { tokenType: 'Bearer', accessToken: 'shared', expiresIn: 3600, obtainedAt: Date.now() };
+    },
+    refresh: async () => { throw new Error('unexpected refresh'); },
+  } as unknown as GlpiOAuthClient;
+  const provider = new PasswordGrantTokenProvider(oauth, { username: 'api', password: 'secret' });
+
+  assert.deepEqual(await Promise.all([
+    provider.getAccessToken(),
+    provider.getAccessToken(),
+    provider.getAccessToken(),
+  ]), ['shared', 'shared', 'shared']);
+  assert.equal(calls, 1);
 });
