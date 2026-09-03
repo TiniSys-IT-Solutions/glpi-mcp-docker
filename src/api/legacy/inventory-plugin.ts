@@ -4,7 +4,10 @@ import {
   InventoryIPRangeWriteRequest,
   InventoryPluginListRequest,
   InventoryTaskWriteRequest,
+  InventoryIPRangeSNMPAssociationCreateRequest,
+  InventoryIPRangeSNMPAssociationListRequest,
 } from '../../core/inventory-plugin/types.js';
+import { SearchCriterion } from './search.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
 
 export const INVENTORY_PLUGIN_ITEMTYPES: Record<InventoryPluginResource, string> = {
@@ -20,6 +23,9 @@ export const INVENTORY_PLUGIN_ITEMTYPES: Record<InventoryPluginResource, string>
   deploy_packages: 'PluginGlpiinventoryDeployPackage',
   deploy_groups: 'PluginGlpiinventoryDeployGroup',
 };
+
+const IP_RANGE_SNMP_RELATION = 'PluginGlpiinventoryIPRange_SNMPCredential';
+const SNMP_CREDENTIAL = 'SNMPCredential';
 
 function listOptions(input: InventoryPluginListRequest): ListOptions {
   const start = input.start ?? 0;
@@ -121,6 +127,73 @@ export class LegacyInventoryPluginService implements InventoryPluginService {
     return this.createIPRange({ name: input.name, entity_id: input.entity_id, ...cidrToIPRange(input.cidr, input.usable_hosts_only !== false) });
   }
   async updateIPRange(id: number, input: InventoryIPRangeWriteRequest) { await this.client.updateItem('PluginGlpiinventoryIPRange', id, mapIPRange(input)); return { success: true, id }; }
+  async listIPRangeSNMPCredentials(input: InventoryIPRangeSNMPAssociationListRequest): Promise<unknown[]> {
+    const criteria: SearchCriterion[] = [];
+    if (input.ip_range_id !== undefined) criteria.push({ field: 3, searchtype: 'equals', value: input.ip_range_id });
+    if (input.snmp_credential_id !== undefined) criteria.push({
+      field: 4, searchtype: 'equals', value: input.snmp_credential_id,
+      ...(criteria.length ? { link: 'AND' as const } : {}),
+    });
+    const result = await this.client.search.search(IP_RANGE_SNMP_RELATION, {
+      criteria,
+      forcedisplay: [2, 3, 4],
+      start: input.start ?? 0,
+      limit: input.limit ?? 50,
+      sort: input.sort === undefined ? undefined : Number(input.sort),
+      order: input.order ?? 'ASC',
+      giveItems: true,
+    });
+    return result.data;
+  }
+  async getIPRangeSNMPCredential(id: number) {
+    return this.client.getItem(IP_RANGE_SNMP_RELATION, id, { expand_dropdowns: false });
+  }
+  async attachSNMPCredentialToIPRange(input: InventoryIPRangeSNMPAssociationCreateRequest) {
+    await Promise.all([
+      this.client.getItem('PluginGlpiinventoryIPRange', input.ip_range_id, { expand_dropdowns: false }),
+      this.client.getItem(SNMP_CREDENTIAL, input.snmp_credential_id, { expand_dropdowns: false }),
+    ]);
+    const existing = await this.listIPRangeSNMPCredentials({
+      ip_range_id: input.ip_range_id,
+      snmp_credential_id: input.snmp_credential_id,
+      limit: 1,
+    });
+    if (existing.length > 0) {
+      throw new Error(`SNMP credential ${input.snmp_credential_id} is already associated with IP range ${input.ip_range_id}`);
+    }
+    const created = await this.client.createItem(IP_RANGE_SNMP_RELATION, {
+      plugin_glpiinventory_ipranges_id: input.ip_range_id,
+      snmpcredentials_id: input.snmp_credential_id,
+      ...(input.rank === undefined ? {} : { rank: input.rank }),
+    });
+    try {
+      return { success: true, ...(await this.getIPRangeSNMPCredential(created.id) as Record<string, unknown>) };
+    } catch (error) {
+      return {
+        success: true, id: created.id, creation_status: 'succeeded', verification_status: 'failed',
+        verification_error: error instanceof Error ? error.name : 'UnknownError',
+        verification_message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+  async updateIPRangeSNMPCredential(id: number, rank: number) {
+    await this.getIPRangeSNMPCredential(id);
+    await this.client.updateItem(IP_RANGE_SNMP_RELATION, id, { rank });
+    try {
+      return { success: true, ...(await this.getIPRangeSNMPCredential(id) as Record<string, unknown>) };
+    } catch (error) {
+      return {
+        success: true, id, update_status: 'succeeded', verification_status: 'failed',
+        verification_error: error instanceof Error ? error.name : 'UnknownError',
+        verification_message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+  async detachSNMPCredentialFromIPRange(id: number) {
+    const relation = await this.getIPRangeSNMPCredential(id);
+    await this.client.deleteItem(IP_RANGE_SNMP_RELATION, id, true);
+    return { success: true, id, deleted: true, relation };
+  }
   async createTask(input: InventoryTaskWriteRequest & { name: string }) { return this.client.createItem('PluginGlpiinventoryTask', mapTask(input)); }
   async updateTask(id: number, input: InventoryTaskWriteRequest) { await this.client.updateItem('PluginGlpiinventoryTask', id, mapTask(input)); return { success: true, id }; }
   async setTaskActive(id: number, active: boolean) { await this.client.updateItem('PluginGlpiinventoryTask', id, { is_active: active ? 1 : 0 }); return { success: true, id, active }; }

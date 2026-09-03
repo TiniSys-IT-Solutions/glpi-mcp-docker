@@ -32,3 +32,14 @@ export interface InventoryCredentialWriteRequest {
   username?: string;
   password?: string;
 }
+
+export interface InventoryIPRangeSNMPAssociationListRequest extends InventoryPluginListRequest {
+  ip_range_id?: number;
+  snmp_credential_id?: number;
+}
+
+export interface InventoryIPRangeSNMPAssociationCreateRequest {
+  ip_range_id: number;
+  snmp_credential_id: number;
+  rank?: number;
+}

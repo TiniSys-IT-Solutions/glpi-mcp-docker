@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 134 tools currently registered by `src/index.ts` on
+This catalogue lists the 139 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -214,6 +214,11 @@ deprecated compatibility alias.
 | `glpi_inventory_create_ip_range` | Write | Create a range from explicit first/last addresses. |
 | `glpi_inventory_create_ip_range_from_cidr` | Write | Calculate and create usable addresses from IPv4 CIDR. |
 | `glpi_inventory_update_ip_range` | Write | Update range name, entity or bounds. |
+| `glpi_inventory_list_ip_range_snmp_credentials` | Read | List range/SNMP-credential relations, optionally filtered by range or credential id. |
+| `glpi_inventory_get_ip_range_snmp_credential` | Read | Read one relation by its own id. |
+| `glpi_inventory_attach_snmp_credential_to_ip_range` | Write | Validate both referenced objects, reject an existing pair, then create the relation with an optional rank. |
+| `glpi_inventory_update_ip_range_snmp_credential` | Write | Change only the priority rank of a relation. |
+| `glpi_inventory_detach_snmp_credential_from_ip_range` | Destructive | Delete only the relation after confirmation `I_HAVE_VERIFIED_THE_ASSOCIATION`; preserve both referenced objects. |
 | `glpi_inventory_list_credentials` | Read | List credential metadata with all secrets stripped recursively. |
 | `glpi_inventory_get_credential` | Read | Read one credential with all secrets stripped recursively. |
 | `glpi_inventory_create_credential` | Write | Create write-only remote-device credentials. |
@@ -243,6 +248,23 @@ deprecated compatibility alias.
 | `glpi_inventory_get_deploy_package` | Read | Read one deployment package without executing it. |
 | `glpi_inventory_list_deploy_groups` | Read | List deployment target-group metadata. |
 | `glpi_inventory_get_deploy_group` | Read | Read one deployment target group. |
+
+The SNMP association tools use the plugin relation
+`PluginGlpiinventoryIPRange_SNMPCredential`. Friendly MCP fields map as follows:
+
+| MCP field | GLPI relation field | Meaning |
+| --- | --- | --- |
+| `id` | `id` | Identifier of the association itself |
+| `ip_range_id` | `plugin_glpiinventory_ipranges_id` | Existing plugin IP range |
+| `snmp_credential_id` | `snmpcredentials_id` | Existing native GLPI `SNMPCredential`; no secret is returned |
+| `rank` | `rank` | Credential priority within the range |
+
+Attach performs read-before-write checks for both referenced objects and an
+exact duplicate search. It never retries the POST after a failed verification
+GET; instead it returns the created relation id with a separate failed
+verification status. High-Level support is not guessed: Legacy and explicit
+Hybrid-to-Legacy routing are supported until the GLPI 11 High-Level schema
+documents this plugin relation.
 
 ## Planned but not active
 

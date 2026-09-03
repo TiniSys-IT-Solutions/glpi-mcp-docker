@@ -1072,6 +1072,54 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'glpi_inventory_list_ip_range_snmp_credentials',
+      description: 'List associations between GLPI Inventory IP ranges and native GLPI SNMP credentials. Filters use relation ids, not credential secrets.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ...LIST_TOOL_COMMON_PROPS,
+          ip_range_id: { type: 'number', description: 'PluginGlpiinventoryIPRange id' },
+          snmp_credential_id: { type: 'number', description: 'Native GLPI SNMPCredential id' },
+        },
+      },
+    },
+    {
+      name: 'glpi_inventory_get_ip_range_snmp_credential',
+      description: 'Get one IP-range/SNMP-credential association by its relation id.',
+      inputSchema: { type: 'object', properties: { id: { type: 'number' } }, required: ['id'] },
+    },
+    {
+      name: 'glpi_inventory_attach_snmp_credential_to_ip_range',
+      description: 'Attach an existing native GLPI SNMP credential to an existing GLPI Inventory IP range. Duplicate associations are rejected.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ip_range_id: { type: 'number' }, snmp_credential_id: { type: 'number' },
+          rank: { type: 'number', description: 'Credential priority; lower ranks are tried first' },
+        },
+        required: ['ip_range_id', 'snmp_credential_id'],
+      },
+    },
+    {
+      name: 'glpi_inventory_update_ip_range_snmp_credential',
+      description: 'Update only the rank of an existing IP-range/SNMP-credential association.',
+      inputSchema: {
+        type: 'object', properties: { id: { type: 'number' }, rank: { type: 'number' } }, required: ['id', 'rank'],
+      },
+    },
+    {
+      name: 'glpi_inventory_detach_snmp_credential_from_ip_range',
+      description: 'Delete one IP-range/SNMP-credential association after an exact confirmation. The IP range and credential remain intact.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', description: 'Relation id' },
+          confirmation: { type: 'string', description: 'Must be I_HAVE_VERIFIED_THE_ASSOCIATION' },
+        },
+        required: ['id', 'confirmation'],
+      },
+    },
+    {
       name: 'glpi_inventory_create_task',
       description: 'Create a GLPI Inventory task definition without running it.',
       inputSchema: {
@@ -2131,6 +2179,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }).parse(args);
         const { id, ...updates } = validated;
         return text(await inventoryPluginService.updateIPRange(id, updates));
+      }
+      case 'glpi_inventory_list_ip_range_snmp_credentials': {
+        const validated = listArgsSchema.extend({
+          ip_range_id: z.number().int().min(1).optional(),
+          snmp_credential_id: z.number().int().min(1).optional(),
+        }).parse(args);
+        return text(await inventoryPluginService.listIPRangeSNMPCredentials(validated));
+      }
+      case 'glpi_inventory_get_ip_range_snmp_credential': {
+        const { id } = z.object({ id: z.number().int().min(1) }).parse(args);
+        return text(await inventoryPluginService.getIPRangeSNMPCredential(id));
+      }
+      case 'glpi_inventory_attach_snmp_credential_to_ip_range': {
+        const validated = z.object({
+          ip_range_id: z.number().int().min(1), snmp_credential_id: z.number().int().min(1),
+          rank: z.number().int().min(0).optional(),
+        }).parse(args);
+        return text(await inventoryPluginService.attachSNMPCredentialToIPRange(validated));
+      }
+      case 'glpi_inventory_update_ip_range_snmp_credential': {
+        const validated = z.object({ id: z.number().int().min(1), rank: z.number().int().min(0) }).parse(args);
+        return text(await inventoryPluginService.updateIPRangeSNMPCredential(validated.id, validated.rank));
+      }
+      case 'glpi_inventory_detach_snmp_credential_from_ip_range': {
+        const validated = z.object({
+          id: z.number().int().min(1), confirmation: z.literal('I_HAVE_VERIFIED_THE_ASSOCIATION'),
+        }).parse(args);
+        return text(await inventoryPluginService.detachSNMPCredentialFromIPRange(validated.id));
       }
       case 'glpi_inventory_create_task': {
         const validated = z.object({

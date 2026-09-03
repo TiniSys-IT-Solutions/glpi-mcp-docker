@@ -14,6 +14,7 @@ test('verified rule activation is reversible and does not request destructive ap
 test('genuinely destructive tools remain annotated as destructive', () => {
   assert.equal(toolAnnotations('glpi_delete_ticket').destructiveHint, true);
   assert.equal(toolAnnotations('glpi_inventory_requeue_task').destructiveHint, true);
+  assert.equal(toolAnnotations('glpi_inventory_detach_snmp_credential_from_ip_range').destructiveHint, true);
 });
 
 test('IP network and other partial updates are non-destructive writes', () => {
@@ -26,4 +27,15 @@ test('IP network and other partial updates are non-destructive writes', () => {
   assert.deepEqual(toolAnnotations('glpi_update_ip_network'), expected);
   assert.deepEqual(toolAnnotations('glpi_update_entity'), expected);
   assert.deepEqual(toolAnnotations('glpi_update_import_entity_rule'), expected);
+  assert.deepEqual(toolAnnotations('glpi_inventory_update_ip_range_snmp_credential'), expected);
+});
+
+test('SNMP association reads and attach use appropriate annotations', () => {
+  assert.equal(toolAnnotations('glpi_inventory_list_ip_range_snmp_credentials').readOnlyHint, true);
+  assert.deepEqual(toolAnnotations('glpi_inventory_attach_snmp_credential_to_ip_range'), {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  });
 });

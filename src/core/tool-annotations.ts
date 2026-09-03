@@ -12,7 +12,7 @@ export function toolAnnotations(name: string): ToolAnnotations {
   if (/^glpi_delete_/.test(name)) {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }
-  if (name === 'glpi_inventory_requeue_task') {
+  if (name === 'glpi_inventory_requeue_task' || name === 'glpi_inventory_detach_snmp_credential_from_ip_range') {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }
   // Activation is reversible, idempotent and already guarded by an exact

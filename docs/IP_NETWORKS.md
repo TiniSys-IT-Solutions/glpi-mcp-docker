@@ -50,6 +50,20 @@ the task, enables `reprepare_if_successful`, and leaves the official GLPI
 scheduler to prepare the next execution. It does not emulate the web-only
 `Force start` action or claim that an agent has already begun scanning.
 
+## SNMP credentials on Inventory ranges
+
+An Inventory plugin range (`PluginGlpiinventoryIPRange`) does not store SNMP
+credential ids directly. The MCP manages the dedicated
+`PluginGlpiinventoryIPRange_SNMPCredential` relation through five list, get,
+attach, rank-update and detach tools documented in [TOOLS.md](TOOLS.md).
+
+Attach accepts an existing range id and native GLPI `SNMPCredential` id. It
+checks both objects and prevents duplicate pairs before creating the relation.
+Detach requires `I_HAVE_VERIFIED_THE_ASSOCIATION` and removes only the relation,
+not the range or credential. These operations currently use Legacy in both
+Legacy and Hybrid modes; High-Level remains unavailable until its official
+plugin route is documented.
+
 ## VLAN follow-up
 
 VLAN linkage is intentionally outside this first slice. The next slice should

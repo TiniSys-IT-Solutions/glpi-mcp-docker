@@ -3,6 +3,8 @@ import {
   InventoryIPRangeWriteRequest,
   InventoryPluginListRequest,
   InventoryTaskWriteRequest,
+  InventoryIPRangeSNMPAssociationCreateRequest,
+  InventoryIPRangeSNMPAssociationListRequest,
 } from './types.js';
 
 export type InventoryPluginResource =
@@ -18,6 +20,11 @@ export interface InventoryPluginService {
   createIPRange(input: InventoryIPRangeWriteRequest & { name: string; ip_start: string; ip_end: string }): Promise<unknown>;
   createIPRangeFromCIDR(input: { name: string; cidr: string; entity_id?: number; usable_hosts_only?: boolean }): Promise<unknown>;
   updateIPRange(id: number, input: InventoryIPRangeWriteRequest): Promise<unknown>;
+  listIPRangeSNMPCredentials(input: InventoryIPRangeSNMPAssociationListRequest): Promise<unknown[]>;
+  getIPRangeSNMPCredential(id: number): Promise<unknown>;
+  attachSNMPCredentialToIPRange(input: InventoryIPRangeSNMPAssociationCreateRequest): Promise<unknown>;
+  updateIPRangeSNMPCredential(id: number, rank: number): Promise<unknown>;
+  detachSNMPCredentialFromIPRange(id: number): Promise<unknown>;
   createTask(input: InventoryTaskWriteRequest & { name: string }): Promise<unknown>;
   updateTask(id: number, input: InventoryTaskWriteRequest): Promise<unknown>;
   setTaskActive(id: number, active: boolean): Promise<unknown>;
