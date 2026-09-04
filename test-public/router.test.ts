@@ -57,6 +57,7 @@ test('highlevel mode exposes organization reads and writes', () => {
   assert.equal(router.backendForTool('glpi_create_entity'), 'highlevel');
   assert.equal(router.backendForTool('glpi_update_entity'), 'highlevel');
   assert.equal(router.backendForTool('glpi_create_location'), 'highlevel');
+  assert.equal(router.backendForTool('glpi_update_location'), 'highlevel');
 });
 
 test('highlevel mode exposes User and Group read services', () => {
@@ -79,6 +80,7 @@ test('hybrid mode uses explicit compatibility matrix', () => {
   assert.equal(router.backendForTool('glpi_create_entity'), 'legacy');
   assert.equal(router.backendForTool('glpi_update_entity'), 'legacy');
   assert.equal(router.backendForTool('glpi_create_location'), 'legacy');
+  assert.equal(router.backendForTool('glpi_update_location'), 'legacy');
   assert.ok(router.services.ipNetworks);
   assert.ok(router.services.inventoryPlugin);
   assert.throws(

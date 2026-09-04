@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 139 tools currently registered by `src/index.ts` on
+This catalogue lists the 140 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -136,6 +136,7 @@ reported separately.
 | `glpi_list_locations` | Read | List locations. |
 | `glpi_get_location` | Read | Read a location. |
 | `glpi_create_location` | Write | Create a location with code, alias, parent, entity scope, recursive flag, address and GPS coordinates. |
+| `glpi_update_location` | Write | Partially update a location after a pre-read, preserving omitted fields and verifying the result. Legacy only until the High-Level PATCH route is confirmed. |
 
 Entity and location tools use a shared business contract across Legacy and
 High-Level APIs. Entity LDAP and inventory fields map as follows:
@@ -165,6 +166,13 @@ adapter reselects the exact same active entity and recursion setting once, then
 retries only the GET. It never broadens the entity scope and never repeats the
 successful POST. A genuine or persistent ACL refusal remains reported as a
 separate verification failure.
+
+For `glpi_update_location`, `entity_id` maps to Legacy `entities_id` and
+`parent_location_id` maps to `locations_id`. Omitted fields are never sent.
+JSON `null` clears optional text/address/GPS fields; `parent_location_id: null`
+removes the parent by sending `locations_id: 0`. `name`, `entity_id` and
+`is_recursive` do not accept null. The operation always reads before writing
+and reads again for verification.
 
 Friendly fields such as `parent_entity_id`, `ldap_dn`, `entity_id` and
 `parent_location_id` are mapped inside their respective adapters.

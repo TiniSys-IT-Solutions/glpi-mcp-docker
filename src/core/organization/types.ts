@@ -26,6 +26,27 @@ export interface LocationCreateRequest {
   altitude?: number;
 }
 
+/** Partial location update. Undefined preserves a field; null clears a clearable field. */
+export interface LocationUpdateRequest {
+  name?: string;
+  code?: string | null;
+  alias?: string | null;
+  comment?: string | null;
+  entityId?: number;
+  recursive?: boolean;
+  parentLocationId?: number | null;
+  room?: string | null;
+  building?: string | null;
+  address?: string | null;
+  town?: string | null;
+  postcode?: string | null;
+  state?: string | null;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  altitude?: number | null;
+}
+
 export interface EntityCreateRequest {
   name: string;
   parentEntityId?: number;

@@ -26,7 +26,7 @@ Status values:
 | Users | OK | PARTIAL | OK VIA LEGACY | Legacy + High-Level directory service tests | High-Level list/get/username lookup use official `/Administration/User` routes; create remains Legacy-only. |
 | Groups | OK | PARTIAL | OK VIA LEGACY | Legacy + High-Level directory service tests | High-Level list/get use official `/Administration/Group` routes; writes remain Legacy-only. |
 | Entities | OK | OK (API >= 2.3) | OK VIA LEGACY | Organization mapper/service tests | List/get/create/update use a shared contract for LDAP DN, LDAP filter, LDAP directory and inventory TAG. Updates are partial with read-before-write and post-write verification. High-Level uses `/Administration/Entity`; advanced fields were introduced in API 2.3. |
-| Locations | OK | OK | OK VIA LEGACY | Organization mapper/service tests | List/get/create support code, alias, parent, entity scope, recursion, address and GPS coordinates. High-Level uses `/Dropdown/Location`. |
+| Locations | OK | PARTIAL | OK VIA LEGACY | Organization mapper/service/schema/router tests | List/get/create support code, alias, parent, entity scope, recursion, address and GPS coordinates. Partial update is Legacy-only with read-before-write and verification; High-Level update fails clearly until its Swagger PATCH contract is confirmed. |
 | Computers | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Asset age business logic still TODO. |
 | Network equipment | OK | TODO | OK VIA LEGACY | Smoke read-only planned | Inherited from upstream. |
 | IP networks / LANs | OK | TODO | OK VIA LEGACY | IPNetwork service tests | Dedicated list/get/create/update tools use CIDR and friendly entity fields. GLPI computes hierarchy implicitly. |

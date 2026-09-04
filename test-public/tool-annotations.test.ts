@@ -26,6 +26,7 @@ test('IP network and other partial updates are non-destructive writes', () => {
   };
   assert.deepEqual(toolAnnotations('glpi_update_ip_network'), expected);
   assert.deepEqual(toolAnnotations('glpi_update_entity'), expected);
+  assert.deepEqual(toolAnnotations('glpi_update_location'), expected);
   assert.deepEqual(toolAnnotations('glpi_update_import_entity_rule'), expected);
   assert.deepEqual(toolAnnotations('glpi_inventory_update_ip_range_snmp_credential'), expected);
 });

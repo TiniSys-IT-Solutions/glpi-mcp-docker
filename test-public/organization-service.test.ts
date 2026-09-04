@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { GlpiClient } from '../src/api/legacy/glpi-client.js';
-import { LegacyOrganizationService, mapLegacyEntity, mapLegacyLocation } from '../src/api/legacy/organization.js';
+import { LegacyOrganizationService, mapLegacyEntity, mapLegacyLocation, mapLegacyLocationUpdate } from '../src/api/legacy/organization.js';
 import { HighLevelClient } from '../src/api/highlevel/client.js';
 import { HighLevelApiError } from '../src/api/highlevel/client.js';
 import { HighLevelOrganizationService, mapHighLevelEntity, mapHighLevelEntityUpdate, mapHighLevelLocation } from '../src/api/highlevel/organization.js';
 import { GlpiError } from '../src/api/legacy/http.js';
-import { entityCreateSchema, entityUpdateSchema } from '../src/core/organization/schemas.js';
+import { entityCreateSchema, entityUpdateSchema, locationUpdateSchema } from '../src/core/organization/schemas.js';
 
 const locationInput = {
   name: 'GB - Test', code: 'GB-T', alias: 'TEST', entityId: 11,
@@ -42,6 +42,59 @@ test('Legacy organization mapper exposes enriched location fields', () => {
     postcode: '63000', town: 'Test', country: 'France',
     latitude: '45.5', longitude: '3.7', altitude: '420',
   });
+});
+
+test('Legacy location update maps friendly ids, null clearing and only supplied fields', () => {
+  assert.deepEqual(mapLegacyLocationUpdate({
+    entityId: 22, parentLocationId: 7, code: null, latitude: null, recursive: false,
+  }), {
+    entities_id: 22, locations_id: 7, code: '', latitude: '', is_recursive: 0,
+  });
+  assert.deepEqual(mapLegacyLocationUpdate({ parentLocationId: null }), { locations_id: 0 });
+  assert.deepEqual(mapLegacyLocationUpdate({ town: 'Guéret' }), { town: 'Guéret' });
+});
+
+test('location update schema rejects empty and invalid updates while preserving explicit null', () => {
+  assert.throws(() => locationUpdateSchema.parse({ id: 12 }), /At least one location field/);
+  assert.throws(() => locationUpdateSchema.parse({ id: 0, town: 'Guéret' }));
+  assert.throws(() => locationUpdateSchema.parse({ id: 12, latitude: 91 }));
+  assert.throws(() => locationUpdateSchema.parse({ id: 12, unknown_field: true }));
+  assert.equal(locationUpdateSchema.parse({ id: 12, comment: null }).comment, null);
+});
+
+test('Legacy location update reads first, sends a partial payload and verifies after writing', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  const calls: unknown[] = [];
+  let reads = 0;
+  (client as any).getLocation = async (id: number) => {
+    calls.push(['GET', id]);
+    reads++;
+    return { id, name: 'Site', town: reads === 1 ? 'Ancienne ville' : 'Guéret', country: 'France' };
+  };
+  (client as any).updateItem = async (itemtype: string, id: number, payload: unknown) => {
+    calls.push(['PUT', itemtype, id, payload]);
+  };
+  const result = await new LegacyOrganizationService(client).updateLocation(12, {
+    entityId: 80, parentLocationId: 3, town: 'Guéret', comment: null,
+  });
+
+  assert.deepEqual(calls, [
+    ['GET', 12],
+    ['PUT', 'Location', 12, { entities_id: 80, locations_id: 3, town: 'Guéret', comment: '' }],
+    ['GET', 12],
+  ]);
+  assert.deepEqual(result, { success: true, id: 12, name: 'Site', town: 'Guéret', country: 'France' });
+});
+
+test('High-Level location update fails clearly until its PATCH route is confirmed', async () => {
+  const client = new HighLevelClient({
+    url: 'https://glpi.test', apiVersion: '2.3',
+    accessTokenProvider: { getAccessToken: async () => 'token' },
+  });
+  await assert.rejects(
+    () => new HighLevelOrganizationService(client).updateLocation(12, { town: 'Guéret' }),
+    /Not supported in GLPI_API_MODE=highlevel: glpi_update_location/,
+  );
 });
 
 test('Legacy entity mapper translates friendly hierarchy and contact fields', () => {

@@ -89,6 +89,7 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_list_locations: 'legacy',
   glpi_get_location: 'legacy',
   glpi_create_location: 'legacy',
+  glpi_update_location: 'legacy',
   glpi_create_entity: 'legacy',
   glpi_update_entity: 'legacy',
   glpi_list_projects: 'legacy',

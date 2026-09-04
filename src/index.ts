@@ -41,7 +41,7 @@ import { SessionService } from './core/session/service.js';
 import { ImportEntityRuleService } from './core/rules/service.js';
 import { OrganizationService } from './core/organization/service.js';
 import { DirectoryService } from './core/directory/service.js';
-import { entityCreateSchema, entityUpdateSchema } from './core/organization/schemas.js';
+import { entityCreateSchema, entityUpdateSchema, locationUpdateSchema } from './core/organization/schemas.js';
 import { PRODUCT_NAME, PRODUCT_VERSION, formatBuildInfo, getBuildInfo } from './build-info.js';
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 import { readSafeUpload } from './security/upload.js';
@@ -323,6 +323,7 @@ const ORGANIZATION_SERVICE_TOOLS = new Set([
   'glpi_list_locations',
   'glpi_get_location',
   'glpi_create_location',
+  'glpi_update_location',
   'glpi_list_entities',
   'glpi_get_entity',
   'glpi_create_entity',
@@ -1291,6 +1292,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           altitude: { type: 'number' },
         },
         required: ['name'],
+      },
+    },
+    {
+      name: 'glpi_update_location',
+      description: 'Partially update an existing GLPI location after reading it. Omitted fields are preserved; null clears supported optional fields.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'number' }, entity_id: { type: 'number' },
+          parent_location_id: { anyOf: [{ type: 'number' }, { type: 'null' }], description: 'Parent location id; null removes the parent' },
+          name: { type: 'string' },
+          code: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          alias: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          address: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          postcode: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          town: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          state: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          country: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          building: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          room: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          latitude: { anyOf: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'null' }] },
+          longitude: { anyOf: [{ type: 'number', minimum: -180, maximum: 180 }, { type: 'null' }] },
+          altitude: { anyOf: [{ type: 'number' }, { type: 'null' }] },
+          comment: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          is_recursive: { type: 'boolean' },
+        },
+        required: ['id'],
       },
     },
     {
@@ -2305,6 +2334,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           latitude: input.latitude,
           longitude: input.longitude,
           altitude: input.altitude,
+        }));
+      }
+      case 'glpi_update_location': {
+        const input = locationUpdateSchema.parse(args);
+        const { id } = input;
+        return text(await organizationService.updateLocation(id, {
+          entityId: input.entity_id,
+          parentLocationId: input.parent_location_id,
+          name: input.name,
+          code: input.code,
+          alias: input.alias,
+          address: input.address,
+          postcode: input.postcode,
+          town: input.town,
+          state: input.state,
+          country: input.country,
+          building: input.building,
+          room: input.room,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          altitude: input.altitude,
+          comment: input.comment,
+          recursive: input.is_recursive,
         }));
       }
 

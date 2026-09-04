@@ -56,3 +56,29 @@ export const entityUpdateSchema = z.object({
   (input) => Object.entries(input).some(([key, value]) => key !== 'id' && value !== undefined),
   'At least one entity field must be provided'
 );
+
+const clearableString = z.string().nullable().optional();
+
+export const locationUpdateSchema = z.object({
+  id: z.number().int().min(1),
+  entity_id: z.number().int().min(0).optional(),
+  parent_location_id: z.number().int().min(1).nullable().optional(),
+  name: z.string().trim().min(1).optional(),
+  code: clearableString,
+  alias: clearableString,
+  address: clearableString,
+  postcode: clearableString,
+  town: clearableString,
+  state: clearableString,
+  country: clearableString,
+  building: clearableString,
+  room: clearableString,
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  altitude: z.number().nullable().optional(),
+  comment: clearableString,
+  is_recursive: z.boolean().optional(),
+}).strict().refine(
+  (input) => Object.entries(input).some(([key, value]) => key !== 'id' && value !== undefined),
+  'At least one location field must be provided'
+);

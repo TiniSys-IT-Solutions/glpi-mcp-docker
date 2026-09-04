@@ -1,6 +1,6 @@
 import { OrganizationService } from '../../core/organization/service.js';
 import { normalizeEntityResource } from '../../core/organization/entity.js';
-import { EntityCreateRequest, EntityUpdateRequest, LocationCreateRequest, OrganizationListRequest } from '../../core/organization/types.js';
+import { EntityCreateRequest, EntityUpdateRequest, LocationCreateRequest, LocationUpdateRequest, OrganizationListRequest } from '../../core/organization/types.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
 import { GlpiError } from './http.js';
 
@@ -142,6 +142,28 @@ export function mapLegacyLocation(input: LocationCreateRequest): Record<string, 
   });
 }
 
+export function mapLegacyLocationUpdate(input: LocationUpdateRequest): Record<string, unknown> {
+  return defined({
+    name: input.name,
+    code: clearable(input.code),
+    alias: clearable(input.alias),
+    comment: clearable(input.comment),
+    entities_id: input.entityId,
+    is_recursive: input.recursive === undefined ? undefined : input.recursive ? 1 : 0,
+    locations_id: input.parentLocationId === null ? 0 : input.parentLocationId,
+    room: clearable(input.room),
+    building: clearable(input.building),
+    address: clearable(input.address),
+    town: clearable(input.town),
+    postcode: clearable(input.postcode),
+    state: clearable(input.state),
+    country: clearable(input.country),
+    latitude: coordinate(input.latitude),
+    longitude: coordinate(input.longitude),
+    altitude: coordinate(input.altitude),
+  });
+}
+
 export function mapLegacyEntity(input: EntityCreateRequest | EntityUpdateRequest): Record<string, unknown> {
   return defined({
     name: input.name,
@@ -175,6 +197,20 @@ export class LegacyOrganizationService implements OrganizationService {
   async createLocation(input: LocationCreateRequest) {
     const created = await this.client.createLocation(mapLegacyLocation(input));
     return verifyCreatedResource('Location', created, (id) => this.getLocation(id));
+  }
+  async updateLocation(id: number, input: LocationUpdateRequest) {
+    await this.getLocation(id);
+    const payload = mapLegacyLocationUpdate(input);
+    if (Object.keys(payload).length === 0) throw new Error('Location update requires at least one field');
+    await this.client.updateItem('Location', id, payload);
+    organizationLog('update_succeeded', { resource_type: 'Location', id });
+    try {
+      return createdResource(await this.getLocation(id), id);
+    } catch (error) {
+      const result = verificationFailure(id, error, { update_status: 'succeeded' });
+      organizationLog('verification_failed', { resource_type: 'Location', id, operation: 'update' });
+      return result;
+    }
   }
   async listEntities(input: OrganizationListRequest) {
     return normalizeEntityResource(await this.client.getEntities({ ...listOptions(input), expand_dropdowns: false }));

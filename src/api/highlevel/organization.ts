@@ -1,7 +1,7 @@
 import { OrganizationService } from '../../core/organization/service.js';
 import { normalizeEntityResource } from '../../core/organization/entity.js';
-import { EntityCreateRequest, EntityUpdateRequest, LocationCreateRequest, OrganizationListRequest } from '../../core/organization/types.js';
-import { HighLevelClient } from './client.js';
+import { EntityCreateRequest, EntityUpdateRequest, LocationCreateRequest, LocationUpdateRequest, OrganizationListRequest } from '../../core/organization/types.js';
+import { HighLevelClient, HighLevelNotSupportedError } from './client.js';
 
 function query(input: OrganizationListRequest): string {
   const params = new URLSearchParams();
@@ -127,6 +127,9 @@ export class HighLevelOrganizationService implements OrganizationService {
   listLocations(input: OrganizationListRequest) { return this.client.request(`Dropdown/Location?${query(input)}`); }
   getLocation(id: number) { return this.client.request(`Dropdown/Location/${id}`); }
   async createLocation(input: LocationCreateRequest) { return createdResource(await this.client.request('Dropdown/Location', jsonPost(mapHighLevelLocation(input)))); }
+  async updateLocation(_id: number, _input: LocationUpdateRequest): Promise<never> {
+    throw new HighLevelNotSupportedError('glpi_update_location');
+  }
   async listEntities(input: OrganizationListRequest) {
     return normalizeEntityResource(await this.client.request(`Administration/Entity?${query(input)}`));
   }
