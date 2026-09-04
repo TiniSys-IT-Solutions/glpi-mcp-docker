@@ -1,7 +1,7 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **139 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **140 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
@@ -11,7 +11,7 @@ Ce projet est une intégration indépendante et non un produit officiel GLPI.
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 139 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 140 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |
@@ -19,7 +19,7 @@ Ce projet est une intégration indépendante et non un produit officiel GLPI.
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.3.4
+## État de la version 0.3.5
 
 | Composant | État |
 | --- | --- |
@@ -34,8 +34,9 @@ de l'échec éventuel de sa relecture. Les entités prennent aussi en charge le 
 LDAP, le filtre LDAP, l'annuaire associé, le TAG d'inventaire et les mises à
 jour partielles avec lecture avant/après écriture.
 
-La version 0.3.4 inclut les améliorations fonctionnelles préparées en 0.3.3 et
-corrige leur construction dans l'image Docker. Elle rend les mises à jour partielles non destructives utilisables
+La version 0.3.5 inclut les améliorations fonctionnelles préparées depuis 0.3.3,
+corrige leur construction dans l'image Docker et ajoute la mise à jour partielle
+sécurisée des lieux. Elle rend les mises à jour partielles non destructives utilisables
 avec une politique d'approbation stricte, rafraîchit sans nouvel élargissement
 le contexte Legacy lors d'une vérification d'entité refusée, et ajoute la
 gestion sécurisée des associations classées entre plages GLPI Inventory et
@@ -70,7 +71,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.4
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.5
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3
 ```
 
@@ -107,7 +108,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.3.4**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.3.5**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité
