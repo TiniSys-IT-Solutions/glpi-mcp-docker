@@ -39,6 +39,8 @@ import { IPNetworkService } from './core/ip-networks/service.js';
 import { InventoryPluginResource, InventoryPluginService } from './core/inventory-plugin/service.js';
 import { SessionService } from './core/session/service.js';
 import { ImportEntityRuleService } from './core/rules/service.js';
+import { IMPORT_ENTITY_RULE_CRITERIA } from './core/rules/types.js';
+import { importEntityRuleCriterionCreateSchema } from './core/rules/schemas.js';
 import { OrganizationService } from './core/organization/service.js';
 import { DirectoryService } from './core/directory/service.js';
 import { entityCreateSchema, entityUpdateSchema, locationUpdateSchema } from './core/organization/schemas.js';
@@ -46,6 +48,8 @@ import { PRODUCT_NAME, PRODUCT_VERSION, formatBuildInfo, getBuildInfo } from './
 import { ApiRouter, createApiRouter } from './routing/api-router.js';
 import { readSafeUpload } from './security/upload.js';
 import { ToolAnnotations, toolAnnotations } from './core/tool-annotations.js';
+import { PrinterService } from './core/assets/service.js';
+import { appendPrinterCommentSchema, printerUpdateSchema, reassignPrintersSchema } from './core/assets/schemas.js';
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -298,6 +302,7 @@ let sessionService: SessionService;
 let importEntityRuleService: ImportEntityRuleService;
 let organizationService: OrganizationService;
 let directoryService: DirectoryService;
+let printerService: PrinterService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -315,6 +320,7 @@ const IMPORT_ENTITY_RULE_SERVICE_TOOLS = new Set([
   'glpi_list_import_entity_rule_actions',
   'glpi_get_import_entity_rule_action',
   'glpi_create_import_entity_subnet_rule',
+  'glpi_add_import_entity_rule_criterion',
   'glpi_update_import_entity_rule',
   'glpi_set_import_entity_rule_enabled',
 ]);
@@ -338,6 +344,12 @@ const DIRECTORY_READ_SERVICE_TOOLS = new Set([
   'glpi_get_group',
 ]);
 
+const PRINTER_SERVICE_TOOLS = new Set([
+  'glpi_update_printer',
+  'glpi_append_printer_comment',
+  'glpi_reassign_printers_from_import_entity_rules',
+]);
+
 function isTicketServiceTool(toolName: string): boolean {
   return TICKET_SERVICE_TOOLS.has(toolName);
 }
@@ -347,6 +359,7 @@ function isBackendServiceTool(toolName: string): boolean {
     IMPORT_ENTITY_RULE_SERVICE_TOOLS.has(toolName) ||
     ORGANIZATION_SERVICE_TOOLS.has(toolName) ||
     DIRECTORY_READ_SERVICE_TOOLS.has(toolName) ||
+    PRINTER_SERVICE_TOOLS.has(toolName) ||
     toolName === 'glpi_get_session_info';
 }
 
@@ -819,6 +832,51 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       ];
     }),
     {
+      name: 'glpi_update_printer',
+      description: 'Safely update only explicitly supplied printer fields after validating references and entity/location consistency, with before/after verification.',
+      inputSchema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          id: { type: 'number', minimum: 1 }, entity_id: { type: 'number', minimum: 0 },
+          location_id: { type: 'number', minimum: 0 }, name: { type: 'string', minLength: 1 },
+          serial: { type: ['string', 'null'] }, inventory_number: { type: ['string', 'null'] },
+          comment: { type: ['string', 'null'] }, state_id: { type: 'number', minimum: 0 },
+          manufacturer_id: { type: 'number', minimum: 0 }, model_id: { type: 'number', minimum: 0 },
+          printer_type_id: { type: 'number', minimum: 0 }, network_id: { type: 'number', minimum: 0 },
+          assigned_user_id: { type: 'number', minimum: 0 }, assigned_technician_id: { type: 'number', minimum: 0 },
+          contact: { type: ['string', 'null'] }, contact_number: { type: ['string', 'null'] },
+          memory_size: { type: 'number', minimum: 0 }, is_recursive: { type: 'boolean' }, is_global: { type: 'boolean' },
+        },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'glpi_append_printer_comment',
+      description: 'Idempotently append text to a printer comment without replacing existing content.',
+      inputSchema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          printer_id: { type: 'number', minimum: 1 }, text: { type: 'string', minLength: 1 },
+          separator: { type: 'string', default: '\n' },
+        },
+        required: ['printer_id', 'text'],
+      },
+    },
+    {
+      name: 'glpi_reassign_printers_from_import_entity_rules',
+      description: 'Plan or apply idempotent printer entity/location reassignment from active RuleImportEntity CIDR rules. Dry-run is the default.',
+      inputSchema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          printer_ids: { type: 'array', minItems: 1, items: { type: 'number', minimum: 1 } },
+          dry_run: { type: 'boolean', default: true },
+          preserve_previous_location_in_comment: { type: 'boolean', default: true },
+          comment_prefix: { type: 'string', default: 'Ancien lieu GLPI : ' },
+          confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_PRINTER_REASSIGNMENT_PLAN'] },
+        },
+      },
+    },
+    {
       name: 'glpi_create_computer',
       description: 'Add a computer to inventory.',
       inputSchema: {
@@ -931,6 +989,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           recursive: { type: 'boolean', description: 'Apply rule scope to sub-entities; defaults to false' },
         },
         required: ['name', 'cidr', 'target_entity_id', 'target_location_id'],
+      },
+    },
+    {
+      name: 'glpi_add_import_entity_rule_criterion',
+      description: 'Idempotently add one validated criterion to an existing RuleImportEntity rule, after checking its subtype and exact existing criteria.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          rule_id: { type: 'number', description: 'Positive RuleImportEntity id' },
+          criterion: { type: 'string', enum: [...IMPORT_ENTITY_RULE_CRITERIA] },
+          condition: {
+            type: 'number',
+            enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 333, 334],
+            description: 'Native GLPI condition: 0 is, 1 is not, 2 contains, 3 does not contain, 4 starts with, 5 ends with, 6 regex matches, 7 regex does not match, 8 exists, 9 does not exist, 333 is CIDR, 334 is not CIDR. CIDR conditions are restricted to ip/subnet; _source accepts only 0/1.',
+          },
+          pattern: { type: 'string', minLength: 1, description: 'Pattern sent unchanged, for example 10.63.170.0/24' },
+        },
+        required: ['rule_id', 'criterion', 'condition', 'pattern'],
       },
     },
     {
@@ -1728,6 +1805,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }));
       }
 
+      case 'glpi_add_import_entity_rule_criterion': {
+        const validated = importEntityRuleCriterionCreateSchema.parse(args);
+        return text(await importEntityRuleService.addCriterion(validated.rule_id, {
+          criterion: validated.criterion,
+          condition: validated.condition,
+          pattern: validated.pattern,
+        }));
+      }
+
       case 'glpi_set_import_entity_rule_enabled': {
         const validated = importEntityRuleEnabledSchema.parse(args);
         return text(await importEntityRuleService.setEnabled(validated.rule_id, validated.enabled));
@@ -2148,6 +2234,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text(await client.getPrinters(parseListArgs(args)));
       case 'glpi_get_printer':
         return text(await client.getPrinter(args.id as number));
+      case 'glpi_update_printer': {
+        const value = printerUpdateSchema.parse(args);
+        return text(await printerService.update(value.id, {
+          entityId: value.entity_id, locationId: value.location_id, name: value.name,
+          serial: value.serial, inventoryNumber: value.inventory_number, comment: value.comment,
+          stateId: value.state_id, manufacturerId: value.manufacturer_id, modelId: value.model_id,
+          printerTypeId: value.printer_type_id, networkId: value.network_id,
+          assignedUserId: value.assigned_user_id, assignedTechnicianId: value.assigned_technician_id,
+          contact: value.contact, contactNumber: value.contact_number, memorySize: value.memory_size,
+          recursive: value.is_recursive, global: value.is_global,
+        }));
+      }
+      case 'glpi_append_printer_comment': {
+        const value = appendPrinterCommentSchema.parse(args);
+        return text(await printerService.appendComment(value.printer_id, { text: value.text, separator: value.separator }));
+      }
+      case 'glpi_reassign_printers_from_import_entity_rules': {
+        const value = reassignPrintersSchema.parse(args);
+        return text(await printerService.reassignFromImportEntityRules({
+          printerIds: value.printer_ids, dryRun: value.dry_run,
+          preservePreviousLocationInComment: value.preserve_previous_location_in_comment,
+          commentPrefix: value.comment_prefix, confirmation: value.confirmation,
+        }));
+      }
 
       case 'glpi_list_monitors':
         return text(await client.getMonitors(parseListArgs(args)));
@@ -2752,6 +2862,7 @@ async function main() {
     importEntityRuleService = apiRouter.services.importEntityRules;
     organizationService = apiRouter.services.organization;
     directoryService = apiRouter.services.directory;
+    printerService = apiRouter.services.printers;
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 

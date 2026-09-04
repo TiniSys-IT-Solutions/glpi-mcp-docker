@@ -40,3 +40,17 @@ test('SNMP association reads and attach use appropriate annotations', () => {
     openWorldHint: false,
   });
 });
+
+test('idempotent criterion addition is a non-destructive write', () => {
+  assert.deepEqual(toolAnnotations('glpi_add_import_entity_rule_criterion'), {
+    readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false,
+  });
+});
+
+test('printer update, comment append and controlled reassignment are idempotent non-destructive writes', () => {
+  for (const name of ['glpi_update_printer', 'glpi_append_printer_comment', 'glpi_reassign_printers_from_import_entity_rules']) {
+    assert.deepEqual(toolAnnotations(name), {
+      readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false,
+    });
+  }
+});

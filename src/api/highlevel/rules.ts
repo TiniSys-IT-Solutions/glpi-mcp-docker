@@ -1,5 +1,5 @@
 import { ImportEntityRuleService } from '../../core/rules/service.js';
-import { assertCanonicalIPv4CIDR, CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from '../../core/rules/types.js';
+import { AddImportEntityRuleCriterionRequest, assertCanonicalIPv4CIDR, assertImportEntityRuleCondition, CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from '../../core/rules/types.js';
 import { HighLevelClient } from './client.js';
 
 const COLLECTION_PATH = 'Rule/Collection/ImportEntity/Rule';
@@ -129,6 +129,43 @@ export class HighLevelImportEntityRuleService implements ImportEntityRuleService
       }
       throw error;
     }
+  }
+
+  async addCriterion(ruleId: number, input: AddImportEntityRuleCriterionRequest): Promise<unknown> {
+    assertImportEntityRuleCondition(input.criterion, input.condition);
+    const rule = await this.get(ruleId) as Record<string, unknown>;
+    if (rule.sub_type !== 'RuleImportEntity') {
+      throw new Error(`Rule ${ruleId} is not a RuleImportEntity rule`);
+    }
+    const existingCriteria = await this.listCriteria(ruleId, {}) as Record<string, unknown>[];
+    const existing = existingCriteria.find((item) =>
+      item.criteria === input.criterion &&
+      Number(item.condition) === input.condition &&
+      item.pattern === input.pattern
+    );
+    if (existing) {
+      return { created: false, already_exists: true, rule, criterion: existing };
+    }
+
+    const created = await this.client.request(
+      `${COLLECTION_PATH}/${ruleId}/Criteria`,
+      jsonRequest('POST', {
+        criteria: input.criterion,
+        condition: input.condition,
+        pattern: input.pattern,
+      })
+    );
+    const criterionId = createdId(created, 'ImportEntity criterion');
+    const criterion = await this.getCriterion(ruleId, criterionId) as Record<string, unknown>;
+    if (
+      Number(criterion.rules_id ?? ruleId) !== ruleId ||
+      criterion.criteria !== input.criterion ||
+      Number(criterion.condition) !== input.condition ||
+      criterion.pattern !== input.pattern
+    ) {
+      throw new Error('Created ImportEntity criterion verification failed: GLPI returned different fields');
+    }
+    return { created: true, already_exists: false, rule: await this.get(ruleId), criterion };
   }
 
   async setEnabled(ruleId: number, enabled: boolean): Promise<unknown> {

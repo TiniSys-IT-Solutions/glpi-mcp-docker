@@ -68,6 +68,24 @@ test('highlevel mode exposes User and Group read services', () => {
   }
 });
 
+test('criterion addition routing is explicit in every API mode', () => {
+  assert.equal(createApiRouter(config('legacy')).backendForTool('glpi_add_import_entity_rule_criterion'), 'legacy');
+  assert.equal(createApiRouter(config('highlevel')).backendForTool('glpi_add_import_entity_rule_criterion'), 'highlevel');
+  assert.equal(createApiRouter(config('hybrid')).backendForTool('glpi_add_import_entity_rule_criterion'), 'legacy');
+});
+
+test('printer writes use their service and explicit Legacy Hybrid routing', async () => {
+  const legacy = createApiRouter(config('legacy'));
+  const highlevel = createApiRouter(config('highlevel'));
+  const hybrid = createApiRouter(config('hybrid'));
+  for (const tool of ['glpi_update_printer', 'glpi_append_printer_comment', 'glpi_reassign_printers_from_import_entity_rules']) {
+    assert.equal(legacy.backendForTool(tool), 'legacy');
+    assert.equal(highlevel.backendForTool(tool), 'highlevel');
+    assert.equal(hybrid.backendForTool(tool), 'legacy');
+  }
+  await assert.rejects(() => highlevel.services.printers.update(1, { name: 'P' }), /not supported/i);
+});
+
 test('hybrid mode uses explicit compatibility matrix', () => {
   const router = createApiRouter(config('hybrid'));
   assert.equal(router.backendForTool('glpi_create_ticket'), 'legacy');

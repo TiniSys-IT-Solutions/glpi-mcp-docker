@@ -48,18 +48,21 @@ src/
 |   |   |-- glpi-client.ts
 |   |   |-- http.ts
 |   |   |-- mapper.ts
+|   |   |-- printers.ts
 |   |   |-- rules.ts
 |   |   |-- search.ts
 |   |   `-- search-options.ts
 |   `-- highlevel/
 |       |-- client.ts
 |       |-- rules.ts
+|       |-- printers.ts
 |       `-- tickets.ts
 |-- auth/
 |-- config/
 |   `-- env.ts
 |-- core/
 |   |-- rules/
+|   |-- assets/
 |   `-- tickets/
 |-- routing/
 |   `-- api-router.ts
@@ -104,11 +107,20 @@ MCP entity/location tools
 OrganizationService
   +-- LegacyOrganizationService    -> Entity / Location via `/apirest.php`
   `-- HighLevelOrganizationService -> `/Administration/Entity` and `/Dropdown/Location`
+
+MCP printer tools
+  |
+PrinterService
+  +-- LegacyPrinterService    -> Printer and validated related objects
+  `-- HighLevelPrinterService -> explicit not-supported pending Swagger
 ```
 
-It exposes read-only rule, criterion and action inspection. Stable Hybrid is
-explicitly routed to Legacy, while Preview uses the official High-Level rule
-routes available since API 2.0.
+It exposes rule, criterion and action inspection plus idempotent criterion
+addition. Criterion writes validate the `RuleImportEntity` subtype, reject
+unknown native criterion keys, prevent exact duplicates and verify the child
+after creation. Stable Hybrid is explicitly routed to Legacy, while Preview
+uses the same official High-Level Criteria route already used by complete rule
+creation.
 
 Other domains still use the Legacy client directly while parity is validated.
 

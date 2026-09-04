@@ -5,6 +5,7 @@ import { SessionService } from './session/service.js';
 import { ImportEntityRuleService } from './rules/service.js';
 import { OrganizationService } from './organization/service.js';
 import { DirectoryService } from './directory/service.js';
+import { PrinterService } from './assets/service.js';
 
 export interface GlpiServices {
   tickets: TicketService;
@@ -14,4 +15,5 @@ export interface GlpiServices {
   importEntityRules: ImportEntityRuleService;
   organization: OrganizationService;
   directory: DirectoryService;
+  printers: PrinterService;
 }

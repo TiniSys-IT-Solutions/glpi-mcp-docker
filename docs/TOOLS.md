@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 140 tools currently registered by `src/index.ts` on
+This catalogue lists the 144 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -77,6 +77,9 @@ require a GLPI Legacy session and is available in every API mode.
 | `glpi_get_network_equipment` | Read | Read network equipment and optional network ports. |
 | `glpi_list_printers` | Read | List printers. |
 | `glpi_get_printer` | Read | Read a printer. |
+| `glpi_update_printer` | Idempotent write | Partially update a printer after reference and entity/location validation, then verify every requested field. |
+| `glpi_append_printer_comment` | Idempotent write | Append exact text without replacing existing content or adding it twice. |
+| `glpi_reassign_printers_from_import_entity_rules` | Confirmed idempotent write | Dry-run or apply entity/location assignments derived from active CIDR rules, preserving previous location labels in comments. |
 | `glpi_list_monitors` | Read | List monitors. |
 | `glpi_get_monitor` | Read | Read a monitor. |
 | `glpi_list_phones` | Read | List phones. |
@@ -85,6 +88,66 @@ require a GLPI Legacy session and is available in every API mode.
 | `glpi_get_ip_network` | Read | Read one GLPI `IPNetwork`. |
 | `glpi_create_ip_network` | Write | Declare a LAN from a name, CIDR, entity and optional gateway. |
 | `glpi_update_ip_network` | Non-destructive write | Partially update or rename a LAN and let GLPI recompute its implicit hierarchy. |
+
+### Printer reassignment
+
+`glpi_update_printer` maps durable MCP fields to native Legacy fields and sends
+only explicitly supplied values. A JSON `null` clears supported optional text;
+omission preserves the current value. References are read before the printer is
+written. A location must belong to the target entity, or be recursively
+available from one of its ancestor entities.
+
+| MCP field | Legacy `Printer` field |
+| --- | --- |
+| `entity_id` | `entities_id` |
+| `location_id` | `locations_id` |
+| `inventory_number` | `otherserial` |
+| `state_id` | `states_id` |
+| `manufacturer_id` | `manufacturers_id` |
+| `model_id` | `printermodels_id` |
+| `printer_type_id` | `printertypes_id` |
+| `network_id` | `networks_id` |
+| `assigned_user_id` | `users_id` |
+| `assigned_technician_id` | `users_id_tech` |
+| `contact_number` | `contact_num` |
+| `is_recursive` / `is_global` | `is_recursive` / `is_global` (`0` or `1`) |
+
+Run a safe plan first:
+
+```json
+{
+  "printer_ids": [12, 18, 27],
+  "dry_run": true,
+  "preserve_previous_location_in_comment": true,
+  "comment_prefix": "Ancien lieu GLPI : "
+}
+```
+
+The planner traverses `Printer -> NetworkPort -> NetworkName -> IPAddress`,
+deduplicates addresses, excludes known technical printer addresses and prefers
+one unambiguous `10.x.x.x` address. It then requires one active, single-CIDR
+`RuleImportEntity` rule with one non-conflicting entity action and one
+non-conflicting location action. Each result explains why it is ready, already
+correct, ambiguous or rejected.
+
+Only apply a reviewed plan with the exact confirmation:
+
+```json
+{
+  "printer_ids": [12, 18, 27],
+  "dry_run": false,
+  "preserve_previous_location_in_comment": true,
+  "comment_prefix": "Ancien lieu GLPI : ",
+  "confirmation": "I_HAVE_VERIFIED_THE_PRINTER_REASSIGNMENT_PLAN"
+}
+```
+
+Immediately before each write the printer is read again. A previous location is
+recorded using its complete name, without duplicating the line, and entity,
+location and comment are updated together. Failures are isolated per printer.
+High-Level mode returns a clear not-supported error because its printer PATCH
+contract has not been confirmed from the GLPI 11 Swagger. Hybrid routes these
+three tools explicitly to Legacy.
 
 ## Entity-assignment rules
 
@@ -101,6 +164,7 @@ the High-Level API. Stable Hybrid routes them explicitly to Legacy.
 | `glpi_list_import_entity_rule_actions` | Read | List assignment actions attached to one rule. |
 | `glpi_get_import_entity_rule_action` | Read | Read one action and validate its parent rule. |
 | `glpi_create_import_entity_subnet_rule` | Write | Atomically create a disabled IPv4 CIDR rule with entity and location assignments; rollback on partial failure. |
+| `glpi_add_import_entity_rule_criterion` | Idempotent write | Add one validated criterion after reading the rule and existing criteria; an exact match returns `already_exists: true` without another POST. |
 | `glpi_update_import_entity_rule` | Write | Partially update name, description, comment, ranking, recursion or match mode without modifying subtype, criteria, actions or activation. Reads before writing and verifies afterward. |
 | `glpi_set_import_entity_rule_enabled` | Confirmed write | Enable or disable a verified rule; requires the exact confirmation value. The operation is reversible and idempotent, so it is not advertised as destructive. |
 
@@ -109,6 +173,48 @@ CIDR, target entity, target location and ranking before calling the enable tool.
 High-Level writes use the official `RuleController` routes and schemas
 introduced in API 2.0. Hybrid continues to route both write tools explicitly to
 Legacy; there is no implicit fallback between APIs.
+
+The generic criterion tool accepts exactly the native keys declared by
+`RuleImportEntity::getCriterias()`:
+
+| Criterion | Meaning |
+| --- | --- |
+| `tag` | Inventory tag |
+| `domain` | Domain |
+| `subnet` | Subnet |
+| `ip` | IP address |
+| `name` | Equipment name |
+| `serial` | Serial number |
+| `itemtype` | GLPI item type |
+| `oscomment` | Operating-system comment |
+| `_source` | Import source |
+
+The numeric `condition` is a native GLPI `Rule::PATTERN_*` value:
+
+| Value | Stable meaning | Accepted criteria |
+| ---: | --- | --- |
+| `0` | is | all nine criteria |
+| `1` | is not | all nine criteria |
+| `2` | contains | all except `_source` |
+| `3` | does not contain | all except `_source` |
+| `4` | starts with | all except `_source` |
+| `5` | ends with | all except `_source` |
+| `6` | regular expression matches | all except `_source` |
+| `7` | regular expression does not match | all except `_source` |
+| `8` | exists | all except `_source` |
+| `9` | does not exist | all except `_source` |
+| `333` | is CIDR | `ip`, `subnet` only |
+| `334` | is not CIDR | `ip`, `subnet` only |
+
+This is the complete condition set exposed by GLPI 11 for
+`RuleImportEntity`. Global-search/empty (`10`, `30`), tree (`11`, `12`) and
+date (`31`–`34`) conditions belong to other criterion types and are rejected.
+For example, duplicate `subnet / 333 / 10.63.170.0/24` as
+`ip / 333 / 10.63.170.0/24`, or use `334` for “does not match CIDR”. The
+pattern is sent unchanged. The service validates criterion/condition
+compatibility and the subtype, prevents an exact
+criterion/condition/pattern duplicate, then verifies the created child and its
+parent rule.
 
 For partial rule updates, omitted fields remain unchanged. JSON `null` clears
 `description` or `comment`; `sub_type`, criteria, actions and `is_active` are

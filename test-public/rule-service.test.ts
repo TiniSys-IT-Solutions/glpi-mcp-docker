@@ -4,6 +4,112 @@ import { LegacyImportEntityRuleService } from '../src/api/legacy/rules.js';
 import { HighLevelImportEntityRuleService } from '../src/api/highlevel/rules.js';
 import { GlpiClient } from '../src/api/legacy/glpi-client.js';
 import { HighLevelClient } from '../src/api/highlevel/client.js';
+import { IMPORT_ENTITY_RULE_CRITERIA, allowedImportEntityRuleConditions } from '../src/core/rules/types.js';
+import { importEntityRuleCriterionCreateSchema } from '../src/core/rules/schemas.js';
+
+test('criterion schema accepts exactly the nine native RuleImportEntity criteria', () => {
+  for (const criterion of IMPORT_ENTITY_RULE_CRITERIA) {
+    assert.equal(importEntityRuleCriterionCreateSchema.parse({
+      rule_id: 95, criterion, condition: 0, pattern: 'value',
+    }).criterion, criterion);
+  }
+  assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: 'unknown', condition: 333, pattern: 'x' }));
+  assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 0, criterion: 'ip', condition: 333, pattern: 'x' }));
+  assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: 'ip', condition: -1, pattern: 'x' }));
+  assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: 'ip', condition: 333 }));
+  assert.equal(importEntityRuleCriterionCreateSchema.parse({
+    rule_id: 95, criterion: 'ip', condition: 333, pattern: '10.63.170.0/24',
+  }).pattern, '10.63.170.0/24');
+});
+
+test('criterion schema covers the complete GLPI 11 RuleImportEntity condition matrix', () => {
+  const common = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  for (const criterion of ['tag', 'domain', 'name', 'serial', 'itemtype', 'oscomment'] as const) {
+    assert.deepEqual(allowedImportEntityRuleConditions(criterion), common);
+    for (const condition of common) {
+      assert.doesNotThrow(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion, condition, pattern: 'value' }));
+    }
+  }
+  for (const criterion of ['ip', 'subnet'] as const) {
+    assert.deepEqual(allowedImportEntityRuleConditions(criterion), [...common, 333, 334]);
+    for (const condition of [...common, 333, 334]) {
+      assert.doesNotThrow(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion, condition, pattern: '10.63.170.0/24' }));
+    }
+  }
+  assert.deepEqual(allowedImportEntityRuleConditions('_source'), [0, 1]);
+  for (const condition of [0, 1]) {
+    assert.doesNotThrow(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: '_source', condition, pattern: 'NATIVE_INVENTORY' }));
+  }
+  for (const condition of [10, 11, 12, 30, 31, 32, 33, 34]) {
+    assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: 'ip', condition, pattern: 'value' }));
+  }
+  assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: 'tag', condition: 333, pattern: 'value' }));
+  assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: '_source', condition: 8, pattern: 'value' }));
+});
+
+test('Legacy criterion addition validates, writes native fields and verifies the child', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  const creates: unknown[] = [];
+  (client as any).getItem = async (itemtype: string, id: number) => itemtype === 'RuleImportEntity'
+    ? { id, sub_type: 'RuleImportEntity', match: 'OR' }
+    : { id, rules_id: 95, criteria: 'ip', condition: 333, pattern: '10.63.170.0/24' };
+  (client.http as any).request = async (path: string) => ({
+    data: path.endsWith('RuleCriteria')
+      ? [{ id: 1, rules_id: 95, criteria: 'subnet', condition: 333, pattern: '10.63.170.0/24' }]
+      : [],
+  });
+  (client as any).createItem = async (itemtype: string, payload: unknown) => {
+    creates.push({ itemtype, payload });
+    return { id: 2 };
+  };
+  const result = await new LegacyImportEntityRuleService(client).addCriterion(95, {
+    criterion: 'ip', condition: 333, pattern: '10.63.170.0/24',
+  }) as any;
+
+  assert.equal(result.created, true);
+  assert.equal(result.already_exists, false);
+  assert.equal(result.criterion.rules_id, 95);
+  assert.deepEqual(creates, [{
+    itemtype: 'RuleCriteria',
+    payload: { rules_id: 95, criteria: 'ip', condition: 333, pattern: '10.63.170.0/24' },
+  }]);
+});
+
+test('Legacy criterion addition is idempotent only for an exact triple', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let creates = 0;
+  let verifiedCondition = 333;
+  let verifiedPattern = '10.63.170.0/24';
+  (client as any).getItem = async (itemtype: string, id: number) => itemtype === 'RuleImportEntity'
+    ? { id, sub_type: 'RuleImportEntity' }
+    : { id, rules_id: 95, criteria: 'ip', condition: verifiedCondition, pattern: verifiedPattern };
+  (client.http as any).request = async () => ({ data: [
+    { id: 7, rules_id: 95, criteria: 'ip', condition: '333', pattern: '10.63.170.0/24' },
+  ] });
+  (client as any).createItem = async () => { creates++; return { id: 8 }; };
+  const service = new LegacyImportEntityRuleService(client);
+
+  const duplicate = await service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: '10.63.170.0/24' }) as any;
+  assert.equal(duplicate.already_exists, true);
+  assert.equal(creates, 0);
+
+  verifiedPattern = '10.63.171.0/24';
+  await service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: verifiedPattern });
+  assert.equal(creates, 1, 'a different pattern must not be treated as a duplicate');
+  verifiedCondition = 334;
+  verifiedPattern = '10.63.170.0/24';
+  await service.addCriterion(95, { criterion: 'ip', condition: verifiedCondition, pattern: '10.63.170.0/24' });
+  assert.equal(creates, 2, 'a different condition must not be treated as a duplicate');
+});
+
+test('Legacy criterion addition rejects missing and wrong-subtype rules and propagates GLPI errors', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  const service = new LegacyImportEntityRuleService(client);
+  (client as any).getItem = async () => { throw new Error('GLPI rule not found'); };
+  await assert.rejects(() => service.addCriterion(404, { criterion: 'ip', condition: 333, pattern: 'x' }), /not found/);
+  (client as any).getItem = async () => ({ id: 95, sub_type: 'RuleTicket' });
+  await assert.rejects(() => service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: 'x' }), /not a RuleImportEntity/);
+});
 
 test('Legacy rule detail combines RuleImportEntity with criteria and actions', async () => {
   const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
@@ -202,6 +308,34 @@ test('Legacy rule update is partial, clears text explicitly and preserves childr
   assert.equal(reads, 0);
 });
 
+test('complete mocked scenario changes AND to OR and adds matching subnet/IP criteria', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let match = 'AND';
+  const criteria: Array<Record<string, unknown>> = [
+    { id: 1, rules_id: 95, criteria: 'subnet', condition: 333, pattern: '10.63.170.0/24' },
+  ];
+  (client as any).getItem = async (itemtype: string, id: number) => itemtype === 'RuleCriteria'
+    ? criteria.find((item) => item.id === id)
+    : { id, sub_type: 'RuleImportEntity', match };
+  (client.http as any).request = async (path: string) => ({ data: path.endsWith('RuleCriteria') ? [...criteria] : [] });
+  (client as any).updateItem = async (_type: string, _id: number, payload: any) => { match = payload.match; };
+  (client as any).createItem = async (_type: string, payload: Record<string, unknown>) => {
+    const created = { id: 2, ...payload };
+    criteria.push(created);
+    return { id: 2 };
+  };
+  const service = new LegacyImportEntityRuleService(client);
+
+  await service.update(95, { match: 'OR' });
+  await service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: '10.63.170.0/24' });
+  const rule = await service.get(95) as any;
+  assert.equal(rule.match, 'OR');
+  assert.deepEqual(rule.criteria.map(({ criteria: key, condition, pattern }: any) => ({ key, condition, pattern })), [
+    { key: 'subnet', condition: 333, pattern: '10.63.170.0/24' },
+    { key: 'ip', condition: 333, pattern: '10.63.170.0/24' },
+  ]);
+});
+
 test('Legacy rule update reports a successful write separately from failed verification', async () => {
   const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
   let itemReads = 0;
@@ -277,6 +411,33 @@ test('High-Level subnet rule creation follows the official RuleController write 
       method: 'GET',
     },
   ]);
+});
+
+test('High-Level criterion addition reuses the confirmed Criteria route and verifies the result', async () => {
+  const requests: Array<{ url: string; method: string; body?: unknown }> = [];
+  const client = new HighLevelClient({
+    url: 'https://glpi.test', apiVersion: '2.3',
+    accessTokenProvider: { getAccessToken: async () => 'token' },
+    fetchImpl: async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      requests.push({ url, method, ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
+      if (method === 'POST') return new Response(JSON.stringify({ id: 2 }), { status: 200 });
+      if (url.endsWith('/Criteria?start=0&limit=50')) return new Response(JSON.stringify([]), { status: 200 });
+      if (url.endsWith('/Criteria/2')) return new Response(JSON.stringify({
+        id: 2, rules_id: 95, criteria: 'ip', condition: 333, pattern: '10.63.170.0/24',
+      }), { status: 200 });
+      return new Response(JSON.stringify({ id: 95, sub_type: 'RuleImportEntity', match: 'OR' }), { status: 200 });
+    },
+  });
+  const result = await new HighLevelImportEntityRuleService(client).addCriterion(95, {
+    criterion: 'ip', condition: 333, pattern: '10.63.170.0/24',
+  }) as any;
+  assert.equal(result.created, true);
+  assert.deepEqual(requests[2], {
+    url: 'https://glpi.test/api.php/v2.3/Rule/Collection/ImportEntity/Rule/95/Criteria',
+    method: 'POST', body: { criteria: 'ip', condition: 333, pattern: '10.63.170.0/24' },
+  });
 });
 
 test('High-Level activation uses PATCH with a native boolean', async () => {

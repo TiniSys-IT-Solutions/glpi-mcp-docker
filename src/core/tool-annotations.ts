@@ -21,6 +21,11 @@ export function toolAnnotations(name: string): ToolAnnotations {
   if (name === 'glpi_set_import_entity_rule_enabled' || /^glpi_(?:inventory_)?update_/.test(name)) {
     return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
   }
+  if (name === 'glpi_add_import_entity_rule_criterion' ||
+      name === 'glpi_append_printer_comment' ||
+      name === 'glpi_reassign_printers_from_import_entity_rules') {
+    return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  }
   if (/^glpi_(set_|assign_)/.test(name) || /^glpi_inventory_(enable_|disable_)/.test(name)) {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }

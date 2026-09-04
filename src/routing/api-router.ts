@@ -15,6 +15,8 @@ import { LegacyOrganizationService } from '../api/legacy/organization.js';
 import { HighLevelOrganizationService } from '../api/highlevel/organization.js';
 import { LegacyDirectoryService } from '../api/legacy/directory.js';
 import { HighLevelDirectoryService } from '../api/highlevel/directory.js';
+import { LegacyPrinterService } from '../api/legacy/printers.js';
+import { HighLevelPrinterService } from '../api/highlevel/printers.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
@@ -26,6 +28,7 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_list_import_entity_rule_actions: 'legacy',
   glpi_get_import_entity_rule_action: 'legacy',
   glpi_create_import_entity_subnet_rule: 'legacy',
+  glpi_add_import_entity_rule_criterion: 'legacy',
   glpi_update_import_entity_rule: 'legacy',
   glpi_set_import_entity_rule_enabled: 'legacy',
   glpi_list_tickets: 'legacy',
@@ -68,6 +71,9 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_get_network_equipment: 'legacy',
   glpi_list_printers: 'legacy',
   glpi_get_printer: 'legacy',
+  glpi_update_printer: 'legacy',
+  glpi_append_printer_comment: 'legacy',
+  glpi_reassign_printers_from_import_entity_rules: 'legacy',
   glpi_list_monitors: 'legacy',
   glpi_get_monitor: 'legacy',
   glpi_list_phones: 'legacy',
@@ -210,6 +216,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         importEntityRules: new HighLevelImportEntityRuleService(highlevel),
         organization: new HighLevelOrganizationService(highlevel),
         directory: new HighLevelDirectoryService(highlevel),
+        printers: new HighLevelPrinterService(),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -228,6 +235,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       importEntityRules: new LegacyImportEntityRuleService(client),
       organization: new LegacyOrganizationService(client),
       directory: new LegacyDirectoryService(client),
+      printers: new LegacyPrinterService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

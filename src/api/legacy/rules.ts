@@ -1,5 +1,5 @@
 import { ImportEntityRuleService } from '../../core/rules/service.js';
-import { assertCanonicalIPv4CIDR, CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from '../../core/rules/types.js';
+import { AddImportEntityRuleCriterionRequest, assertCanonicalIPv4CIDR, assertImportEntityRuleCondition, CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from '../../core/rules/types.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
 
 const PATTERN_CIDR = 333;
@@ -135,6 +135,33 @@ export class LegacyImportEntityRuleService implements ImportEntityRuleService {
     }
   }
 
+  async addCriterion(ruleId: number, input: AddImportEntityRuleCriterionRequest): Promise<unknown> {
+    assertImportEntityRuleCondition(input.criterion, input.condition);
+    const rule = await this.client.getItem<Record<string, unknown>>('RuleImportEntity', ruleId);
+    if (rule.sub_type !== 'RuleImportEntity') {
+      throw new Error(`Rule ${ruleId} is not a RuleImportEntity rule`);
+    }
+    const existingCriteria = await this.listCriteria(ruleId, {}) as Record<string, unknown>[];
+    const existing = existingCriteria.find((item) =>
+      item.criteria === input.criterion &&
+      Number(item.condition) === input.condition &&
+      item.pattern === input.pattern
+    );
+    if (existing) {
+      return { created: false, already_exists: true, rule, criterion: existing };
+    }
+
+    const created = await this.client.createItem('RuleCriteria', {
+      rules_id: ruleId,
+      criteria: input.criterion,
+      condition: input.condition,
+      pattern: input.pattern,
+    });
+    const criterion = await this.getCriterion(ruleId, created.id) as Record<string, unknown>;
+    this.assertCriterionMatches(criterion, input);
+    return { created: true, already_exists: false, rule: await this.get(ruleId), criterion };
+  }
+
   async setEnabled(ruleId: number, enabled: boolean): Promise<unknown> {
     await this.get(ruleId);
     await this.client.updateItem('RuleImportEntity', ruleId, { is_active: enabled ? 1 : 0 });
@@ -178,6 +205,16 @@ export class LegacyImportEntityRuleService implements ImportEntityRuleService {
       throw new Error(
         `RuleImportEntity ${ruleId} does not contain ${childType} ${childId}`
       );
+    }
+  }
+
+  private assertCriterionMatches(item: Record<string, unknown>, expected: AddImportEntityRuleCriterionRequest): void {
+    if (
+      item.criteria !== expected.criterion ||
+      Number(item.condition) !== expected.condition ||
+      item.pattern !== expected.pattern
+    ) {
+      throw new Error('Created RuleCriteria verification failed: GLPI returned different criterion fields');
     }
   }
 }
