@@ -24,7 +24,7 @@ the GLPI 11 High-Level API without disrupting the production endpoint.
 | High-Level read-only domains | Entity, Location, User and Group slices implemented and unit-tested | Migrate tickets, assets and network reads incrementally |
 | High-Level writes | ImportEntity, Entity and Location slices implemented and unit-tested | Validate OAuth writes against a non-production GLPI before promoting additional domains |
 | Per-user authentication | Planned | Bind an MCP session to one GLPI identity with auditable authorization context |
-| Production release | Prepared (`v0.3.5`; `v0.3.4` published) | Versioned image workflow, compatibility matrix and release procedure are present; host-level container smoke remains required |
+| Production release | Prepared (`v0.3.6`; `v0.3.5` published) | Versioned image workflow, compatibility matrix and release procedure are present; host-level container smoke remains required |
 
 ## Next validation slice
 
