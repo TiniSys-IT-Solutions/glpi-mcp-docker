@@ -54,3 +54,10 @@ test('printer update, comment append and controlled reassignment are idempotent 
     });
   }
 });
+
+test('native form and proofreading tools are read-only', () => {
+  for (const name of ['glpi_list_forms', 'glpi_get_form', 'glpi_list_form_categories', 'glpi_review_forms']) {
+    assert.equal(toolAnnotations(name).readOnlyHint, true);
+    assert.notEqual(toolAnnotations(name).destructiveHint, true);
+  }
+});

@@ -35,4 +35,4 @@ export interface ReassignPrintersRequest {
 export type PrinterReassignmentStatus =
   | 'ready' | 'already_correct' | 'ambiguous_ip' | 'no_matching_rule'
   | 'multiple_matching_rules' | 'rule_inactive' | 'invalid_rule_actions'
-  | 'invalid_target' | 'updated' | 'error';
+  | 'invalid_target' | 'concurrent_change' | 'updated' | 'error';

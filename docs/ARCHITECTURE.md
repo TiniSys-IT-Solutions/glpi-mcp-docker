@@ -113,7 +113,32 @@ MCP printer tools
 PrinterService
   +-- LegacyPrinterService    -> Printer and validated related objects
   `-- HighLevelPrinterService -> explicit not-supported pending Swagger
+
+MCP native-form tools
+  |
+FormService
+  +-- LegacyFormService    -> namespaced `Glpi\\Form\\*` itemtypes
+  `-- HighLevelFormService -> explicit not-supported pending Swagger
 ```
+
+The native-form adapter reconstructs the editor order by merging questions and
+rich-text comments within each section. It decodes JSON-backed options,
+conditions, validation data, destinations and access policies. Its proofreading
+view preserves original HTML, adds normalized plain text and records an exact
+object path for each string. Secret-like policy fields, including direct-access
+tokens, are recursively redacted.
+
+Legacy printer orchestration resolves expanded foreign keys through the shared
+`core/glpi-relations.ts` utility. It uses strict numeric values or typed GLPI
+relation links, so localized dropdown labels never enter ID comparisons.
+Equivalent matching CIDR rules are normalized to their destination pair and
+selected deterministically; conflicting destinations remain blocked.
+
+The same relation resolver verifies `RuleCriteria -> RuleImportEntity` parent
+links. Criterion creation performs a direct read and a parent-collection read;
+the collection is the safe fallback when expanded dropdowns or permissions
+prevent the direct verification. An inconclusive POST outcome is never retried
+automatically and is reported as `write_outcome_uncertain`.
 
 It exposes rule, criterion and action inspection plus idempotent criterion
 addition. Criterion writes validate the `RuleImportEntity` subtype, reject

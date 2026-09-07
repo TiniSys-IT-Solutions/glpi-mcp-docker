@@ -6,7 +6,7 @@ export interface ToolAnnotations {
 }
 
 export function toolAnnotations(name: string): ToolAnnotations {
-  if (/^glpi_(list_|get_|search|count$|tickets_stats)/.test(name) || /^glpi_inventory_(list|get)_/.test(name)) {
+  if (/^glpi_(list_|get_|review_|search|count$|tickets_stats)/.test(name) || /^glpi_inventory_(list|get)_/.test(name)) {
     return { readOnlyHint: true, openWorldHint: false };
   }
   if (/^glpi_delete_/.test(name)) {

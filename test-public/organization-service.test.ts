@@ -9,27 +9,27 @@ import { GlpiError } from '../src/api/legacy/http.js';
 import { entityCreateSchema, entityUpdateSchema, locationUpdateSchema } from '../src/core/organization/schemas.js';
 
 const locationInput = {
-  name: 'GB - Test', code: 'GB-T', alias: 'TEST', entityId: 11,
+  name: 'Example location', code: 'SITE-T', alias: 'TEST', entityId: 11,
   recursive: true, parentLocationId: 1, address: '1 rue du Test',
   postcode: '63000', town: 'Test', country: 'France',
   latitude: 45.5, longitude: 3.7, altitude: 420,
 };
 
 const entityInput = {
-  name: 'GB-T - Test', parentEntityId: 1, registrationNumber: 'GB-T',
-  ldapDn: 'ou=ambert,ou=genbio,dc=example,dc=test',
-  ldapFilter: '(&(objectClass=user)(company=BIOLYSS))', ldapDirectoryId: 4,
-  inventoryTag: 'BIOLYSS-GUERET',
+  name: 'SITE-T - Test', parentEntityId: 1, registrationNumber: 'SITE-T',
+  ldapDn: 'ou=site-a,ou=example,dc=example,dc=test',
+  ldapFilter: '(&(objectClass=user)(company=EXAMPLE))', ldapDirectoryId: 4,
+  inventoryTag: 'EXAMPLE-SITE-D',
   address: '1 rue du Test', postcode: '63000', town: 'Test', country: 'France',
   latitude: 45.5, longitude: 3.7, altitude: 420,
   website: 'https://example.test', phone: '0102030405', email: 'test@example.test',
 };
 
 test('Entity schemas preserve exact DN values and validate LDAP directory IDs', () => {
-  const exactDn = 'OU=LA-SOUTERRAINE,OU=Sites,OU=BIOLYSS,DC=inovie,DC=infra';
-  assert.equal(entityCreateSchema.parse({ name: 'BL-2', ldap_dn: exactDn }).ldap_dn, exactDn);
+  const exactDn = 'OU=SITE-E,OU=Sites,OU=EXAMPLE,DC=example,DC=infra';
+  assert.equal(entityCreateSchema.parse({ name: 'SITE-2', ldap_dn: exactDn }).ldap_dn, exactDn);
   assert.equal(entityUpdateSchema.parse({ id: 81, ldap_dn: exactDn }).ldap_dn, exactDn);
-  assert.throws(() => entityCreateSchema.parse({ name: 'BL-2', ldap_dn: '   ' }));
+  assert.throws(() => entityCreateSchema.parse({ name: 'SITE-2', ldap_dn: '   ' }));
   assert.throws(() => entityUpdateSchema.parse({ id: 81, ldap_directory_id: -1 }));
   assert.equal(entityUpdateSchema.parse({ id: 81, ldap_directory_id: 0 }).ldap_directory_id, 0);
   assert.equal(entityUpdateSchema.parse({ id: 81, ldap_dn: null }).ldap_dn, null);
@@ -37,7 +37,7 @@ test('Entity schemas preserve exact DN values and validate LDAP directory IDs', 
 
 test('Legacy organization mapper exposes enriched location fields', () => {
   assert.deepEqual(mapLegacyLocation(locationInput), {
-    name: 'GB - Test', code: 'GB-T', alias: 'TEST', entities_id: 11,
+    name: 'Example location', code: 'SITE-T', alias: 'TEST', entities_id: 11,
     is_recursive: 1, locations_id: 1, address: '1 rue du Test',
     postcode: '63000', town: 'Test', country: 'France',
     latitude: '45.5', longitude: '3.7', altitude: '420',
@@ -51,12 +51,12 @@ test('Legacy location update maps friendly ids, null clearing and only supplied 
     entities_id: 22, locations_id: 7, code: '', latitude: '', is_recursive: 0,
   });
   assert.deepEqual(mapLegacyLocationUpdate({ parentLocationId: null }), { locations_id: 0 });
-  assert.deepEqual(mapLegacyLocationUpdate({ town: 'Guéret' }), { town: 'Guéret' });
+  assert.deepEqual(mapLegacyLocationUpdate({ town: 'Exampleville' }), { town: 'Exampleville' });
 });
 
 test('location update schema rejects empty and invalid updates while preserving explicit null', () => {
   assert.throws(() => locationUpdateSchema.parse({ id: 12 }), /At least one location field/);
-  assert.throws(() => locationUpdateSchema.parse({ id: 0, town: 'Guéret' }));
+  assert.throws(() => locationUpdateSchema.parse({ id: 0, town: 'Exampleville' }));
   assert.throws(() => locationUpdateSchema.parse({ id: 12, latitude: 91 }));
   assert.throws(() => locationUpdateSchema.parse({ id: 12, unknown_field: true }));
   assert.equal(locationUpdateSchema.parse({ id: 12, comment: null }).comment, null);
@@ -69,21 +69,21 @@ test('Legacy location update reads first, sends a partial payload and verifies a
   (client as any).getLocation = async (id: number) => {
     calls.push(['GET', id]);
     reads++;
-    return { id, name: 'Site', town: reads === 1 ? 'Ancienne ville' : 'Guéret', country: 'France' };
+    return { id, name: 'Site', town: reads === 1 ? 'Ancienne ville' : 'Exampleville', country: 'France' };
   };
   (client as any).updateItem = async (itemtype: string, id: number, payload: unknown) => {
     calls.push(['PUT', itemtype, id, payload]);
   };
   const result = await new LegacyOrganizationService(client).updateLocation(12, {
-    entityId: 80, parentLocationId: 3, town: 'Guéret', comment: null,
+    entityId: 80, parentLocationId: 3, town: 'Exampleville', comment: null,
   });
 
   assert.deepEqual(calls, [
     ['GET', 12],
-    ['PUT', 'Location', 12, { entities_id: 80, locations_id: 3, town: 'Guéret', comment: '' }],
+    ['PUT', 'Location', 12, { entities_id: 80, locations_id: 3, town: 'Exampleville', comment: '' }],
     ['GET', 12],
   ]);
-  assert.deepEqual(result, { success: true, id: 12, name: 'Site', town: 'Guéret', country: 'France' });
+  assert.deepEqual(result, { success: true, id: 12, name: 'Site', town: 'Exampleville', country: 'France' });
 });
 
 test('High-Level location update fails clearly until its PATCH route is confirmed', async () => {
@@ -92,17 +92,17 @@ test('High-Level location update fails clearly until its PATCH route is confirme
     accessTokenProvider: { getAccessToken: async () => 'token' },
   });
   await assert.rejects(
-    () => new HighLevelOrganizationService(client).updateLocation(12, { town: 'Guéret' }),
+    () => new HighLevelOrganizationService(client).updateLocation(12, { town: 'Exampleville' }),
     /Not supported in GLPI_API_MODE=highlevel: glpi_update_location/,
   );
 });
 
 test('Legacy entity mapper translates friendly hierarchy and contact fields', () => {
   assert.deepEqual(mapLegacyEntity(entityInput), {
-    name: 'GB-T - Test', entities_id: 1, registration_number: 'GB-T',
-    ldap_dn: 'ou=ambert,ou=genbio,dc=example,dc=test',
-    entity_ldapfilter: '(&(objectClass=user)(company=BIOLYSS))', authldaps_id: 4,
-    tag: 'BIOLYSS-GUERET',
+    name: 'SITE-T - Test', entities_id: 1, registration_number: 'SITE-T',
+    ldap_dn: 'ou=site-a,ou=example,dc=example,dc=test',
+    entity_ldapfilter: '(&(objectClass=user)(company=EXAMPLE))', authldaps_id: 4,
+    tag: 'EXAMPLE-SITE-D',
     address: '1 rue du Test', postcode: '63000', town: 'Test', country: 'France',
     latitude: '45.5', longitude: '3.7', altitude: '420',
     website: 'https://example.test', phonenumber: '0102030405', email: 'test@example.test',
@@ -114,12 +114,12 @@ test('Legacy organization creation reads back the created resource', async () =>
   const writes: unknown[] = [];
   (client as any).createLocation = async (payload: unknown) => { writes.push(['Location', payload]); return { id: 12 }; };
   (client as any).createItem = async (itemtype: string, payload: unknown) => { writes.push([itemtype, payload]); return { id: 11 }; };
-  (client as any).getLocation = async (id: number) => ({ id, name: 'GB - Test' });
-  (client as any).getEntity = async (id: number) => ({ id, name: 'GB-T - Test' });
+  (client as any).getLocation = async (id: number) => ({ id, name: 'Example location' });
+  (client as any).getEntity = async (id: number) => ({ id, name: 'SITE-T - Test' });
   const service = new LegacyOrganizationService(client);
 
-  assert.deepEqual(await service.createLocation(locationInput), { success: true, id: 12, name: 'GB - Test' });
-  assert.deepEqual(await service.createEntity(entityInput), { success: true, id: 11, name: 'GB-T - Test' });
+  assert.deepEqual(await service.createLocation(locationInput), { success: true, id: 12, name: 'Example location' });
+  assert.deepEqual(await service.createEntity(entityInput), { success: true, id: 11, name: 'SITE-T - Test' });
   assert.equal(writes.length, 2);
 });
 
@@ -172,7 +172,7 @@ test('Legacy entity creation refreshes the same active context after stale-tree 
         body: '["ERROR_RIGHT_MISSING","Forbidden"]', url: 'https://glpi.test/apirest.php/Entity/91', method: 'GET',
       });
     }
-    return { id: 91, name: 'BL-12 - Test' };
+    return { id: 91, name: 'SITE-12 - Test' };
   };
   (client as any).getActiveEntities = async () => ({
     active_entity: { id: 0 }, active_entity_recursive: true,
@@ -180,7 +180,7 @@ test('Legacy entity creation refreshes the same active context after stale-tree 
   (client as any).changeActiveEntities = async (...args: unknown[]) => { contextChanges.push(args); };
 
   assert.deepEqual(await new LegacyOrganizationService(client).createEntity(entityInput), {
-    success: true, id: 91, name: 'BL-12 - Test',
+    success: true, id: 91, name: 'SITE-12 - Test',
   });
   assert.deepEqual(contextChanges, [[0, true]]);
   assert.equal(reads, 2);
@@ -252,10 +252,10 @@ test('Legacy entity creation still rejects when the POST itself fails', async ()
 test('Legacy entity update reads first and sends only the explicitly supplied DN', async () => {
   const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
   const calls: unknown[] = [];
-  const exactDn = 'OU=LA-SOUTERRAINE,OU=Sites,OU=BIOLYSS,DC=inovie,DC=infra';
+  const exactDn = 'OU=SITE-E,OU=Sites,OU=EXAMPLE,DC=example,DC=infra';
   (client as any).getEntity = async (id: number, options: unknown) => {
     calls.push(['GET', id, options]);
-    return { id, name: 'BL-2 - La Souterraine', ldap_dn: exactDn, entity_ldapfilter: '', authldaps_id: 4, tag: 'BL-2' };
+    return { id, name: 'SITE-2 - Site-E', ldap_dn: exactDn, entity_ldapfilter: '', authldaps_id: 4, tag: 'SITE-2' };
   };
   (client as any).updateItem = async (type: string, id: number, payload: unknown) => {
     calls.push(['PUT', type, id, payload]);
@@ -269,7 +269,7 @@ test('Legacy entity update reads first and sends only the explicitly supplied DN
   assert.equal((result as any).ldap_dn, exactDn);
   assert.equal((result as any).ldap_filter, '');
   assert.equal((result as any).ldap_directory_id, 4);
-  assert.equal((result as any).inventory_tag, 'BL-2');
+  assert.equal((result as any).inventory_tag, 'SITE-2');
 });
 
 test('Legacy entity update maps explicit LDAP clearing without touching other fields', () => {
@@ -283,7 +283,7 @@ test('Legacy entity update reports successful write separately when verification
   let writes = 0;
   (client as any).getEntity = async () => {
     reads++;
-    if (reads === 1) return { id: 81, name: 'BL-2' };
+    if (reads === 1) return { id: 81, name: 'SITE-2' };
     throw new GlpiError({
       status: 403, glpiCode: 'ERROR_RIGHT_MISSING', glpiMessage: 'Forbidden',
       body: '["ERROR_RIGHT_MISSING","Forbidden"]', url: 'https://glpi.test/apirest.php/Entity/81', method: 'GET',
@@ -291,7 +291,7 @@ test('Legacy entity update reports successful write separately when verification
   };
   (client as any).updateItem = async () => { writes++; return true; };
 
-  assert.deepEqual(await new LegacyOrganizationService(client).updateEntity(81, { ldapDn: 'OU=SITE,DC=inovie,DC=infra' }), {
+  assert.deepEqual(await new LegacyOrganizationService(client).updateEntity(81, { ldapDn: 'OU=SITE,DC=example,DC=infra' }), {
     success: true,
     id: 81,
     update_status: 'succeeded',
@@ -306,28 +306,28 @@ test('Legacy entity update reports successful write separately when verification
 test('Legacy entity reads expose stable LDAP aliases and keep native fields', async () => {
   const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
   (client as any).getEntities = async (options: unknown) => [{
-    id: 80, ldap_dn: 'OU=GUERET,DC=inovie,DC=infra', entity_ldapfilter: '(company=BIOLYSS)', authldaps_id: 4, tag: 'BL-1', options,
+    id: 80, ldap_dn: 'OU=SITE-D,DC=example,DC=infra', entity_ldapfilter: '(company=EXAMPLE)', authldaps_id: 4, tag: 'SITE-1', options,
   }];
   const [entity] = await new LegacyOrganizationService(client).listEntities({}) as any[];
-  assert.equal(entity.ldap_filter, '(company=BIOLYSS)');
+  assert.equal(entity.ldap_filter, '(company=EXAMPLE)');
   assert.equal(entity.ldap_directory_id, 4);
-  assert.equal(entity.inventory_tag, 'BL-1');
+  assert.equal(entity.inventory_tag, 'SITE-1');
   assert.equal(entity.authldaps_id, 4);
   assert.equal(entity.options.expand_dropdowns, false);
 });
 
 test('High-Level mappers use official dropdown relations and schema field names', () => {
   assert.deepEqual(mapHighLevelLocation(locationInput), {
-    name: 'GB - Test', code: 'GB-T', alias: 'TEST', entity: { id: 11 },
+    name: 'Example location', code: 'SITE-T', alias: 'TEST', entity: { id: 11 },
     is_recursive: true, parent: { id: 1 }, address: '1 rue du Test',
     postcode: '63000', town: 'Test', country: 'France',
     latitude: '45.5', longitude: '3.7', altitude: '420',
   });
   assert.deepEqual(mapHighLevelEntity(entityInput), {
-    name: 'GB-T - Test', parent: { id: 1 }, registration_number: 'GB-T',
-    ldap_dn: 'ou=ambert,ou=genbio,dc=example,dc=test',
-    entity_ldapfilter: '(&(objectClass=user)(company=BIOLYSS))', authldap: { id: 4 },
-    tag: 'BIOLYSS-GUERET',
+    name: 'SITE-T - Test', parent: { id: 1 }, registration_number: 'SITE-T',
+    ldap_dn: 'ou=site-a,ou=example,dc=example,dc=test',
+    entity_ldapfilter: '(&(objectClass=user)(company=EXAMPLE))', authldap: { id: 4 },
+    tag: 'EXAMPLE-SITE-D',
     address: '1 rue du Test', postcode: '63000', city: 'Test', country: 'France',
     latitude: '45.5', longitude: '3.7', altitude: '420',
     website: 'https://example.test', phone: '0102030405', email: 'test@example.test',
@@ -362,7 +362,7 @@ test('High-Level organization creation uses official Administration and Dropdown
 
 test('High-Level entity partial update uses PATCH, reads before and verifies after', async () => {
   const requests: Array<{ url: string; method: string; body?: unknown }> = [];
-  const exactDn = 'OU=LA-SOUTERRAINE,OU=Sites,OU=BIOLYSS,DC=inovie,DC=infra';
+  const exactDn = 'OU=SITE-E,OU=Sites,OU=EXAMPLE,DC=example,DC=infra';
   const client = new HighLevelClient({
     url: 'https://glpi.test', apiVersion: '2.3',
     accessTokenProvider: { getAccessToken: async () => 'token' },
@@ -371,7 +371,7 @@ test('High-Level entity partial update uses PATCH, reads before and verifies aft
         url: String(input), method: init?.method ?? 'GET',
         ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
       });
-      return new Response(JSON.stringify({ id: 81, ldap_dn: exactDn, authldap: { id: 4 }, tag: 'BL-2' }), { status: 200 });
+      return new Response(JSON.stringify({ id: 81, ldap_dn: exactDn, authldap: { id: 4 }, tag: 'SITE-2' }), { status: 200 });
     },
   });
 
@@ -380,7 +380,7 @@ test('High-Level entity partial update uses PATCH, reads before and verifies aft
   assert.deepEqual(requests.map((request) => request.method), ['GET', 'PATCH', 'GET']);
   assert.deepEqual(requests[1]?.body, { ldap_dn: exactDn });
   assert.equal((result as any).ldap_directory_id, 4);
-  assert.equal((result as any).inventory_tag, 'BL-2');
+  assert.equal((result as any).inventory_tag, 'SITE-2');
 });
 
 test('High-Level update maps explicit DN clearing', () => {
@@ -401,7 +401,7 @@ test('High-Level rejected LDAP field is explicit and is not silently dropped or 
   });
 
   await assert.rejects(
-    () => new HighLevelOrganizationService(client).updateEntity(81, { ldapDn: 'OU=SITE,DC=inovie,DC=infra' }),
+    () => new HighLevelOrganizationService(client).updateEntity(81, { ldapDn: 'OU=SITE,DC=example,DC=infra' }),
     (error: unknown) => error instanceof HighLevelApiError && error.status === 400 && /not supported/.test(error.detail)
   );
   assert.equal(calls, 2, 'read-before-write and rejected PATCH only; no verification GET');

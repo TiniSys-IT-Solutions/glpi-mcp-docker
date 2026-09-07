@@ -22,9 +22,10 @@ the GLPI 11 High-Level API without disrupting the production endpoint.
 | High-Level OAuth client | Implemented and unit-tested | Authorization Code, Password and Refresh requests are supported without secret leakage |
 | High-Level session read | Implemented and unit-tested | `glpi_get_session_info` calls `/api.php/v2.3/session` with a Bearer token |
 | High-Level read-only domains | Entity, Location, User and Group slices implemented and unit-tested | Migrate tickets, assets and network reads incrementally |
+| Native forms / service catalog | Legacy read and proofreading slice implemented and unit-tested | Confirm official High-Level routes before adding Preview support or safe partial writes |
 | High-Level writes | ImportEntity, Entity and Location slices implemented and unit-tested | Validate OAuth writes against a non-production GLPI before promoting additional domains |
 | Per-user authentication | Planned | Bind an MCP session to one GLPI identity with auditable authorization context |
-| Production release | Prepared (`v0.3.6`; `v0.3.5` published) | Versioned image workflow, compatibility matrix and release procedure are present; host-level container smoke remains required |
+| Production release | Prepared (`v0.3.7`; `v0.3.6` published) | Versioned image workflow, compatibility matrix and release procedure are present; host-level container smoke remains required |
 
 ## Next validation slice
 

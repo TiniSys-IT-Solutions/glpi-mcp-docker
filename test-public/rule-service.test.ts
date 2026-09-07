@@ -18,8 +18,8 @@ test('criterion schema accepts exactly the nine native RuleImportEntity criteria
   assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: 'ip', condition: -1, pattern: 'x' }));
   assert.throws(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion: 'ip', condition: 333 }));
   assert.equal(importEntityRuleCriterionCreateSchema.parse({
-    rule_id: 95, criterion: 'ip', condition: 333, pattern: '10.63.170.0/24',
-  }).pattern, '10.63.170.0/24');
+    rule_id: 95, criterion: 'ip', condition: 333, pattern: '192.0.2.0/24',
+  }).pattern, '192.0.2.0/24');
 });
 
 test('criterion schema covers the complete GLPI 11 RuleImportEntity condition matrix', () => {
@@ -33,7 +33,7 @@ test('criterion schema covers the complete GLPI 11 RuleImportEntity condition ma
   for (const criterion of ['ip', 'subnet'] as const) {
     assert.deepEqual(allowedImportEntityRuleConditions(criterion), [...common, 333, 334]);
     for (const condition of [...common, 333, 334]) {
-      assert.doesNotThrow(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion, condition, pattern: '10.63.170.0/24' }));
+      assert.doesNotThrow(() => importEntityRuleCriterionCreateSchema.parse({ rule_id: 95, criterion, condition, pattern: '192.0.2.0/24' }));
     }
   }
   assert.deepEqual(allowedImportEntityRuleConditions('_source'), [0, 1]);
@@ -50,55 +50,125 @@ test('criterion schema covers the complete GLPI 11 RuleImportEntity condition ma
 test('Legacy criterion addition validates, writes native fields and verifies the child', async () => {
   const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
   const creates: unknown[] = [];
+  let created = false;
   (client as any).getItem = async (itemtype: string, id: number) => itemtype === 'RuleImportEntity'
     ? { id, sub_type: 'RuleImportEntity', match: 'OR' }
-    : { id, rules_id: 95, criteria: 'ip', condition: 333, pattern: '10.63.170.0/24' };
+    : { id, rules_id: 'EXAMPLE – SITE-A – Subnet', criteria: 'ip', condition: 333, pattern: '192.0.2.0/24',
+        links: [{ rel: 'RuleImportEntity', href: 'http://example/api.php/v1/RuleImportEntity/95' }] };
   (client.http as any).request = async (path: string) => ({
     data: path.endsWith('RuleCriteria')
-      ? [{ id: 1, rules_id: 95, criteria: 'subnet', condition: 333, pattern: '10.63.170.0/24' }]
+      ? [{ id: 1, rules_id: 95, criteria: 'subnet', condition: 333, pattern: '192.0.2.0/24' },
+        ...(created ? [{ id: 2, rules_id: 'EXAMPLE – SITE-A – Subnet', criteria: 'ip', condition: 333, pattern: '192.0.2.0/24',
+          links: [{ rel: 'RuleImportEntity', href: 'http://example/api.php/v1/RuleImportEntity/95/' }] }] : [])]
       : [],
   });
   (client as any).createItem = async (itemtype: string, payload: unknown) => {
     creates.push({ itemtype, payload });
+    created = true;
     return { id: 2 };
   };
   const result = await new LegacyImportEntityRuleService(client).addCriterion(95, {
-    criterion: 'ip', condition: 333, pattern: '10.63.170.0/24',
+    criterion: 'ip', condition: 333, pattern: '192.0.2.0/24',
   }) as any;
 
   assert.equal(result.created, true);
   assert.equal(result.already_exists, false);
-  assert.equal(result.criterion.rules_id, 95);
+  assert.equal(result.rule_id, 95);
+  assert.equal(result.criterion_id, 2);
+  assert.equal(result.criterion, 'ip');
+  assert.equal(result.verified, true);
   assert.deepEqual(creates, [{
     itemtype: 'RuleCriteria',
-    payload: { rules_id: 95, criteria: 'ip', condition: 333, pattern: '10.63.170.0/24' },
+    payload: { rules_id: 95, criteria: 'ip', condition: 333, pattern: '192.0.2.0/24' },
   }]);
+});
+
+test('Legacy criterion verification falls back to the parent collection after direct GET failure', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let collectionReads = 0;
+  (client as any).getItem = async (type: string, id: number) => {
+    if (type === 'RuleImportEntity') return { id, sub_type: 'RuleImportEntity' };
+    throw new Error('direct criterion read forbidden');
+  };
+  (client.http as any).request = async () => ({ data: ++collectionReads === 1 ? [] : [{
+    id: 270, rules_id: 'EXAMPLE – SITE-A – Subnet', criteria: 'ip', condition: 333, pattern: '192.0.2.0/24',
+    links: [{ rel: 'RuleImportEntity', href: 'http://example/api.php/v1/RuleImportEntity/95' }],
+  }] });
+  (client as any).createItem = async () => ({ id: 270 });
+  const result = await new LegacyImportEntityRuleService(client).addCriterion(95, {
+    criterion: 'ip', condition: 333, pattern: '192.0.2.0/24',
+  }) as any;
+  assert.deepEqual({
+    created: result.created, already_exists: result.already_exists, rule_id: result.rule_id,
+    criterion_id: result.criterion_id, criterion: result.criterion, condition: result.condition,
+    pattern: result.pattern, verified: result.verified,
+  }, {
+    created: true, already_exists: false, rule_id: 95, criterion_id: 270,
+    criterion: 'ip', condition: 333, pattern: '192.0.2.0/24', verified: true,
+  });
+});
+
+test('Legacy criterion creation reports an uncertain write outcome without retrying POST', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let creates = 0;
+  (client as any).getItem = async (type: string, id: number) => {
+    if (type === 'RuleImportEntity') return { id, sub_type: 'RuleImportEntity' };
+    throw new Error('direct read failed');
+  };
+  (client.http as any).request = async () => ({ data: [] });
+  (client as any).createItem = async () => { creates++; return { id: 270 }; };
+  await assert.rejects(() => new LegacyImportEntityRuleService(client).addCriterion(95, {
+    criterion: 'ip', condition: 333, pattern: '192.0.2.0/24',
+  }), /write_outcome_uncertain.*do not retry the POST blindly/);
+  assert.equal(creates, 1);
+});
+
+test('Legacy rerun detects an exact expanded criterion and creates no duplicate', async () => {
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  let creates = 0;
+  (client as any).getItem = async (_type: string, id: number) => ({ id, sub_type: 'RuleImportEntity' });
+  (client.http as any).request = async () => ({ data: [{
+    id: 270, rules_id: 'EXAMPLE – SITE-A – Subnet', criteria: 'ip', condition: '333', pattern: '192.0.2.0/24',
+    links: [{ rel: 'RuleImportEntity', href: 'http://example/api.php/v1/RuleImportEntity/95/' }],
+  }] });
+  (client as any).createItem = async () => { creates++; return { id: 271 }; };
+  const result = await new LegacyImportEntityRuleService(client).addCriterion(95, {
+    criterion: 'ip', condition: 333, pattern: '192.0.2.0/24',
+  }) as any;
+  assert.equal(result.created, false);
+  assert.equal(result.already_exists, true);
+  assert.equal(result.criterion_id, 270);
+  assert.equal(result.verified, true);
+  assert.equal(creates, 0);
 });
 
 test('Legacy criterion addition is idempotent only for an exact triple', async () => {
   const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
   let creates = 0;
   let verifiedCondition = 333;
-  let verifiedPattern = '10.63.170.0/24';
+  let verifiedPattern = '192.0.2.0/24';
   (client as any).getItem = async (itemtype: string, id: number) => itemtype === 'RuleImportEntity'
     ? { id, sub_type: 'RuleImportEntity' }
     : { id, rules_id: 95, criteria: 'ip', condition: verifiedCondition, pattern: verifiedPattern };
-  (client.http as any).request = async () => ({ data: [
-    { id: 7, rules_id: 95, criteria: 'ip', condition: '333', pattern: '10.63.170.0/24' },
-  ] });
-  (client as any).createItem = async () => { creates++; return { id: 8 }; };
+  const collection: any[] = [{ id: 7, rules_id: 95, criteria: 'ip', condition: '333', pattern: '192.0.2.0/24' }];
+  (client.http as any).request = async () => ({ data: collection });
+  (client as any).createItem = async () => {
+    creates++;
+    collection.push({ id: 7 + creates, rules_id: 95, criteria: 'ip', condition: verifiedCondition, pattern: verifiedPattern });
+    return { id: 7 + creates };
+  };
   const service = new LegacyImportEntityRuleService(client);
 
-  const duplicate = await service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: '10.63.170.0/24' }) as any;
+  const duplicate = await service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: '192.0.2.0/24' }) as any;
   assert.equal(duplicate.already_exists, true);
   assert.equal(creates, 0);
 
-  verifiedPattern = '10.63.171.0/24';
+  verifiedPattern = '198.51.100.0/24';
   await service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: verifiedPattern });
   assert.equal(creates, 1, 'a different pattern must not be treated as a duplicate');
   verifiedCondition = 334;
-  verifiedPattern = '10.63.170.0/24';
-  await service.addCriterion(95, { criterion: 'ip', condition: verifiedCondition, pattern: '10.63.170.0/24' });
+  verifiedPattern = '192.0.2.0/24';
+  await service.addCriterion(95, { criterion: 'ip', condition: verifiedCondition, pattern: '192.0.2.0/24' });
   assert.equal(creates, 2, 'a different condition must not be treated as a duplicate');
 });
 
@@ -118,7 +188,7 @@ test('Legacy rule detail combines RuleImportEntity with criteria and actions', a
   (client as any).getItem = async (itemtype: string, id: number) => {
     assert.equal(itemtype, 'RuleImportEntity');
     assert.equal(id, 95);
-    return { id, name: 'GENBIO – AMBERT – Subnet' };
+    return { id, name: 'EXAMPLE – SITE-A – Subnet' };
   };
   (client.http as any).request = async (path: string) => {
     requestedPaths.push(path);
@@ -130,7 +200,7 @@ test('Legacy rule detail combines RuleImportEntity with criteria and actions', a
   const service = new LegacyImportEntityRuleService(client);
   assert.deepEqual(await service.get(95), {
     id: 95,
-    name: 'GENBIO – AMBERT – Subnet',
+    name: 'EXAMPLE – SITE-A – Subnet',
     criteria: [{ id: 10, rules_id: 95, criteria: 'subnet' }],
     actions: [{ id: 11, rules_id: 95, field: 'entities_id' }],
   });
@@ -191,7 +261,7 @@ test('Legacy subnet rule creation writes a disabled rule, CIDR criterion and two
     creates.push({ itemtype, payload });
     return { id: itemtype === 'RuleImportEntity' ? 101 : 200 + creates.length };
   };
-  (client as any).getItem = async () => ({ id: 101, name: 'GENBIO – TEST – Subnet', is_active: 0 });
+  (client as any).getItem = async () => ({ id: 101, name: 'EXAMPLE – TEST – Subnet', is_active: 0 });
   (client.http as any).request = async (path: string) => ({
     data: path.endsWith('RuleCriteria')
       ? [{ rules_id: 101, criteria: 'subnet', condition: 333, pattern: '192.0.2.0/24' }]
@@ -200,7 +270,7 @@ test('Legacy subnet rule creation writes a disabled rule, CIDR criterion and two
 
   const service = new LegacyImportEntityRuleService(client);
   const result = await service.createSubnetRule({
-    name: 'GENBIO – TEST – Subnet',
+    name: 'EXAMPLE – TEST – Subnet',
     cidr: '192.0.2.0/24',
     targetEntityId: 11,
     targetLocationId: 12,
@@ -213,7 +283,7 @@ test('Legacy subnet rule creation writes a disabled rule, CIDR criterion and two
     {
       itemtype: 'RuleImportEntity',
       payload: {
-        name: 'GENBIO – TEST – Subnet', sub_type: 'RuleImportEntity', entities_id: 0,
+        name: 'EXAMPLE – TEST – Subnet', sub_type: 'RuleImportEntity', entities_id: 0,
         match: 'AND', is_active: 0, is_recursive: 0, ranking: 2,
       },
     },
@@ -246,7 +316,7 @@ test('Legacy subnet rule creation rolls back the new rule when a child write fai
   const service = new LegacyImportEntityRuleService(client);
   await assert.rejects(
     () => service.createSubnetRule({
-      name: 'GENBIO – TEST – Subnet', cidr: '192.0.2.0/24',
+      name: 'EXAMPLE – TEST – Subnet', cidr: '192.0.2.0/24',
       targetEntityId: 11, targetLocationId: 12,
     }),
     /action failed/
@@ -312,7 +382,7 @@ test('complete mocked scenario changes AND to OR and adds matching subnet/IP cri
   const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
   let match = 'AND';
   const criteria: Array<Record<string, unknown>> = [
-    { id: 1, rules_id: 95, criteria: 'subnet', condition: 333, pattern: '10.63.170.0/24' },
+    { id: 1, rules_id: 95, criteria: 'subnet', condition: 333, pattern: '192.0.2.0/24' },
   ];
   (client as any).getItem = async (itemtype: string, id: number) => itemtype === 'RuleCriteria'
     ? criteria.find((item) => item.id === id)
@@ -327,12 +397,12 @@ test('complete mocked scenario changes AND to OR and adds matching subnet/IP cri
   const service = new LegacyImportEntityRuleService(client);
 
   await service.update(95, { match: 'OR' });
-  await service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: '10.63.170.0/24' });
+  await service.addCriterion(95, { criterion: 'ip', condition: 333, pattern: '192.0.2.0/24' });
   const rule = await service.get(95) as any;
   assert.equal(rule.match, 'OR');
   assert.deepEqual(rule.criteria.map(({ criteria: key, condition, pattern }: any) => ({ key, condition, pattern })), [
-    { key: 'subnet', condition: 333, pattern: '10.63.170.0/24' },
-    { key: 'ip', condition: 333, pattern: '10.63.170.0/24' },
+    { key: 'subnet', condition: 333, pattern: '192.0.2.0/24' },
+    { key: 'ip', condition: 333, pattern: '192.0.2.0/24' },
   ]);
 });
 
@@ -367,16 +437,16 @@ test('High-Level subnet rule creation follows the official RuleController write 
         ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
       });
       const response = init?.method === 'POST' && url.endsWith('/Rule')
-        ? { id: 101, name: 'GENBIO – TEST – Subnet' }
+        ? { id: 101, name: 'EXAMPLE – TEST – Subnet' }
         : url.endsWith('/Rule/101') && !init?.method
-          ? { id: 101, name: 'GENBIO – TEST – Subnet', is_active: false }
+          ? { id: 101, name: 'EXAMPLE – TEST – Subnet', is_active: false }
           : { id: 201 };
       return new Response(JSON.stringify(response), { status: 200 });
     },
   });
   const service = new HighLevelImportEntityRuleService(client);
   const result = await service.createSubnetRule({
-    name: 'GENBIO – TEST – Subnet', cidr: '192.0.2.0/24',
+    name: 'EXAMPLE – TEST – Subnet', cidr: '192.0.2.0/24',
     targetEntityId: 11, targetLocationId: 12, ranking: 2,
   }) as any;
 
@@ -387,7 +457,7 @@ test('High-Level subnet rule creation follows the official RuleController write 
       url: 'https://glpi.test/api.php/v2.3/Rule/Collection/ImportEntity/Rule',
       method: 'POST',
       body: {
-        name: 'GENBIO – TEST – Subnet', entity: { id: 0 }, is_recursive: false,
+        name: 'EXAMPLE – TEST – Subnet', entity: { id: 0 }, is_recursive: false,
         description: '', comment: '', is_active: false, match: 'AND', condition: 0, ranking: 2,
       },
     },
@@ -415,6 +485,7 @@ test('High-Level subnet rule creation follows the official RuleController write 
 
 test('High-Level criterion addition reuses the confirmed Criteria route and verifies the result', async () => {
   const requests: Array<{ url: string; method: string; body?: unknown }> = [];
+  let created = false;
   const client = new HighLevelClient({
     url: 'https://glpi.test', apiVersion: '2.3',
     accessTokenProvider: { getAccessToken: async () => 'token' },
@@ -422,21 +493,23 @@ test('High-Level criterion addition reuses the confirmed Criteria route and veri
       const url = String(input);
       const method = init?.method ?? 'GET';
       requests.push({ url, method, ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
-      if (method === 'POST') return new Response(JSON.stringify({ id: 2 }), { status: 200 });
-      if (url.endsWith('/Criteria?start=0&limit=50')) return new Response(JSON.stringify([]), { status: 200 });
+      if (method === 'POST') { created = true; return new Response(JSON.stringify({ id: 2 }), { status: 200 }); }
+      if (url.endsWith('/Criteria?start=0&limit=50')) return new Response(JSON.stringify(created ? [{
+        id: 2, rules_id: 95, criteria: 'ip', condition: 333, pattern: '192.0.2.0/24',
+      }] : []), { status: 200 });
       if (url.endsWith('/Criteria/2')) return new Response(JSON.stringify({
-        id: 2, rules_id: 95, criteria: 'ip', condition: 333, pattern: '10.63.170.0/24',
+        id: 2, rules_id: 95, criteria: 'ip', condition: 333, pattern: '192.0.2.0/24',
       }), { status: 200 });
       return new Response(JSON.stringify({ id: 95, sub_type: 'RuleImportEntity', match: 'OR' }), { status: 200 });
     },
   });
   const result = await new HighLevelImportEntityRuleService(client).addCriterion(95, {
-    criterion: 'ip', condition: 333, pattern: '10.63.170.0/24',
+    criterion: 'ip', condition: 333, pattern: '192.0.2.0/24',
   }) as any;
   assert.equal(result.created, true);
   assert.deepEqual(requests[2], {
     url: 'https://glpi.test/api.php/v2.3/Rule/Collection/ImportEntity/Rule/95/Criteria',
-    method: 'POST', body: { criteria: 'ip', condition: 333, pattern: '10.63.170.0/24' },
+    method: 'POST', body: { criteria: 'ip', condition: 333, pattern: '192.0.2.0/24' },
   });
 });
 
@@ -506,7 +579,7 @@ test('High-Level subnet rule creation deletes the partial rule when a child writ
   const service = new HighLevelImportEntityRuleService(client);
   await assert.rejects(
     () => service.createSubnetRule({
-      name: 'GENBIO – TEST – Subnet', cidr: '192.0.2.0/24',
+      name: 'EXAMPLE – TEST – Subnet', cidr: '192.0.2.0/24',
       targetEntityId: 11, targetLocationId: 12,
     }),
     /action failed/

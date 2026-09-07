@@ -50,6 +50,7 @@ import { readSafeUpload } from './security/upload.js';
 import { ToolAnnotations, toolAnnotations } from './core/tool-annotations.js';
 import { PrinterService } from './core/assets/service.js';
 import { appendPrinterCommentSchema, printerUpdateSchema, reassignPrintersSchema } from './core/assets/schemas.js';
+import { FormService } from './core/forms/service.js';
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -65,6 +66,20 @@ const listArgsSchema = z.object({
   criteria: z.array(z.unknown()).optional(),
   fetch_all: z.boolean().optional(),
 }).passthrough();
+
+const formListSchema = z.object({
+  start: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).max(500).optional(),
+  active_only: z.boolean().optional(),
+  include_drafts: z.boolean().optional(),
+});
+
+const formReviewSchema = z.object({
+  form_ids: z.array(z.number().int().min(1)).max(500).optional(),
+  active_only: z.boolean().optional(),
+  include_drafts: z.boolean().optional(),
+  limit: z.number().int().min(1).max(500).optional(),
+});
 
 const ticketReadSchema = z.object({
   id: z.number().int().min(1),
@@ -136,7 +151,7 @@ const importEntitySubnetRuleCreateSchema = z.object({
     } catch {
       return false;
     }
-  }, { message: 'Expected a canonical IPv4 CIDR, for example 10.63.170.0/24' }),
+  }, { message: 'Expected a canonical IPv4 CIDR, for example 192.0.2.0/24' }),
   target_entity_id: z.number().int().min(1),
   target_location_id: z.number().int().min(1),
   scope_entity_id: z.number().int().min(0).optional(),
@@ -303,6 +318,7 @@ let importEntityRuleService: ImportEntityRuleService;
 let organizationService: OrganizationService;
 let directoryService: DirectoryService;
 let printerService: PrinterService;
+let formService: FormService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -350,6 +366,13 @@ const PRINTER_SERVICE_TOOLS = new Set([
   'glpi_reassign_printers_from_import_entity_rules',
 ]);
 
+const FORM_SERVICE_TOOLS = new Set([
+  'glpi_list_forms',
+  'glpi_get_form',
+  'glpi_list_form_categories',
+  'glpi_review_forms',
+]);
+
 function isTicketServiceTool(toolName: string): boolean {
   return TICKET_SERVICE_TOOLS.has(toolName);
 }
@@ -360,6 +383,7 @@ function isBackendServiceTool(toolName: string): boolean {
     ORGANIZATION_SERVICE_TOOLS.has(toolName) ||
     DIRECTORY_READ_SERVICE_TOOLS.has(toolName) ||
     PRINTER_SERVICE_TOOLS.has(toolName) ||
+    FORM_SERVICE_TOOLS.has(toolName) ||
     toolName === 'glpi_get_session_info';
 }
 
@@ -368,6 +392,34 @@ function requireLegacyClient(toolName: string): GlpiClient {
     throw new McpError(ErrorCode.InvalidRequest, `Not supported in GLPI_API_MODE=highlevel: ${toolName}`);
   }
   return client;
+}
+
+async function safeLegacyPartialUpdate(
+  itemtype: string,
+  id: number,
+  updates: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (!Number.isInteger(id) || id <= 0) throw new McpError(ErrorCode.InvalidParams, `${itemtype} id must be a positive integer`);
+  if (Object.keys(updates).length === 0) throw new McpError(ErrorCode.InvalidParams, `${itemtype} update requires at least one field`);
+  const before = await client.getItem<Record<string, unknown>>(itemtype, id);
+  await client.updateItem(itemtype, id, updates);
+  try {
+    const after = await client.getItem<Record<string, unknown>>(itemtype, id);
+    for (const [field, expected] of Object.entries(updates)) {
+      const actual = after[field];
+      const matches = typeof expected === 'number' ? Number(actual) === expected
+        : expected === null || expected === '' ? actual === null || actual === ''
+        : actual === expected;
+      if (!matches) throw new Error(`${itemtype} ${id} verification failed for ${field}`);
+    }
+    return { success: true, id, update_status: 'succeeded', verification_status: 'verified', before, requested: updates, after };
+  } catch (error) {
+    return {
+      success: true, id, update_status: 'succeeded', verification_status: 'failed', before, requested: updates,
+      verification_error: error instanceof Error ? error.name : 'UnknownError',
+      verification_message: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -979,7 +1031,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: 'object',
         properties: {
           name: { type: 'string' },
-          cidr: { type: 'string', description: 'Canonical IPv4 network in CIDR notation, for example 10.63.170.0/24' },
+          cidr: { type: 'string', description: 'Canonical IPv4 network in CIDR notation, for example 192.0.2.0/24' },
           target_entity_id: { type: 'number' },
           target_location_id: { type: 'number' },
           scope_entity_id: { type: 'number', description: 'Rule scope entity; defaults to root entity 0' },
@@ -1005,7 +1057,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             enum: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 333, 334],
             description: 'Native GLPI condition: 0 is, 1 is not, 2 contains, 3 does not contain, 4 starts with, 5 ends with, 6 regex matches, 7 regex does not match, 8 exists, 9 does not exist, 333 is CIDR, 334 is not CIDR. CIDR conditions are restricted to ip/subnet; _source accepts only 0/1.',
           },
-          pattern: { type: 'string', minLength: 1, description: 'Pattern sent unchanged, for example 10.63.170.0/24' },
+          pattern: { type: 'string', minLength: 1, description: 'Pattern sent unchanged, for example 192.0.2.0/24' },
         },
         required: ['rule_id', 'criterion', 'condition', 'pattern'],
       },
@@ -1503,6 +1555,43 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'glpi_list_categories',
       description: 'List ticket categories.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
+    },
+    {
+      name: 'glpi_list_forms',
+      description: 'List native GLPI 11 forms. Drafts are excluded and active_only is true by default.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 500 },
+          active_only: { type: 'boolean', description: 'Default true.' },
+          include_drafts: { type: 'boolean', description: 'Default false.' },
+        },
+      },
+    },
+    {
+      name: 'glpi_get_form',
+      description: 'Read one complete native GLPI 11 form with ordered sections, questions, comments, conditions, validation data and selectable options.',
+      inputSchema: { type: 'object', properties: { id: { type: 'number', minimum: 1 } }, required: ['id'] },
+    },
+    {
+      name: 'glpi_list_form_categories',
+      description: 'List hierarchical GLPI 11 service-catalog categories, including rich description and illustration metadata.',
+      inputSchema: {
+        type: 'object', properties: { start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 500 } },
+      },
+    },
+    {
+      name: 'glpi_review_forms',
+      description: 'Build a read-only proofreading view of native forms. Returns every user-visible text with its exact form/section/question/comment/option path, original HTML when present, and normalized plain text.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          form_ids: { type: 'array', items: { type: 'number', minimum: 1 }, maxItems: 500 },
+          active_only: { type: 'boolean', description: 'Default true when form_ids is omitted.' },
+          include_drafts: { type: 'boolean', description: 'Default false when form_ids is omitted.' },
+          limit: { type: 'number', minimum: 1, maximum: 500, description: 'Maximum forms, default 100.' },
+        },
+      },
     },
     {
       name: 'glpi_list_entities',
@@ -2151,8 +2240,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ['name', 'content', 'status', 'urgency'].forEach((k) => {
           if (args[k] !== undefined) updates[k] = args[k];
         });
-        await client.updateProblem(id, updates as any);
-        return text({ success: true, id });
+        return text(await safeLegacyPartialUpdate('Problem', id, updates));
       }
 
       case 'glpi_list_changes': {
@@ -2190,8 +2278,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ['name', 'content', 'status'].forEach((k) => {
           if (args[k] !== undefined) updates[k] = args[k];
         });
-        await client.updateChange(id, updates as any);
-        return text({ success: true, id });
+        return text(await safeLegacyPartialUpdate('Change', id, updates));
       }
 
       // ==== ASSETS ====
@@ -2209,8 +2296,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_update_computer': {
         const id = args.id as number;
         const updates = { ...args }; delete (updates as any).id;
-        await client.updateComputer(id, updates as any);
-        return text({ success: true, id });
+        return text(await safeLegacyPartialUpdate('Computer', id, updates));
       }
       case 'glpi_delete_computer':
         await client.deleteComputer(args.id as number, args.force as boolean);
@@ -2482,8 +2568,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ['name', 'content', 'percent_done', 'real_start_date', 'real_end_date'].forEach((k) => {
           if (args[k] !== undefined) updates[k] = args[k];
         });
-        await client.updateProject(id, updates as any);
-        return text({ success: true, id });
+        return text(await safeLegacyPartialUpdate('Project', id, updates));
       }
 
       // ==== USERS / GROUPS ====
@@ -2531,6 +2616,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'glpi_list_categories':
         return text(await client.getCategories(parseListArgs(args)));
+      case 'glpi_list_forms': {
+        const input = formListSchema.parse(args);
+        return text(await formService.listForms({
+          start: input.start, limit: input.limit,
+          activeOnly: input.active_only === false ? false : true,
+          includeDrafts: input.include_drafts === true,
+        }));
+      }
+      case 'glpi_get_form': {
+        const { id } = z.object({ id: z.number().int().min(1) }).parse(args);
+        return text(await formService.getForm(id));
+      }
+      case 'glpi_list_form_categories': {
+        const input = formListSchema.parse(args);
+        return text(await formService.listCategories({ start: input.start, limit: input.limit }));
+      }
+      case 'glpi_review_forms': {
+        const input = formReviewSchema.parse(args);
+        return text(await formService.reviewForms({
+          formIds: input.form_ids,
+          activeOnly: input.active_only === false ? false : true,
+          includeDrafts: input.include_drafts === true,
+          limit: input.limit,
+        }));
+      }
       case 'glpi_list_entities':
         return text(await organizationService.listEntities(listArgsSchema.parse(args)));
       case 'glpi_get_entity': {
@@ -2863,6 +2973,7 @@ async function main() {
     organizationService = apiRouter.services.organization;
     directoryService = apiRouter.services.directory;
     printerService = apiRouter.services.printers;
+    formService = apiRouter.services.forms;
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 

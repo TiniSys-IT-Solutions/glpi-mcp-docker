@@ -1,6 +1,7 @@
 import { ImportEntityRuleService } from '../../core/rules/service.js';
 import { AddImportEntityRuleCriterionRequest, assertCanonicalIPv4CIDR, assertImportEntityRuleCondition, CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from '../../core/rules/types.js';
 import { HighLevelClient } from './client.js';
+import { resolveGlpiRelationId } from '../../core/glpi-relations.js';
 
 const COLLECTION_PATH = 'Rule/Collection/ImportEntity/Rule';
 const PATTERN_CIDR = 333;
@@ -138,13 +139,9 @@ export class HighLevelImportEntityRuleService implements ImportEntityRuleService
       throw new Error(`Rule ${ruleId} is not a RuleImportEntity rule`);
     }
     const existingCriteria = await this.listCriteria(ruleId, {}) as Record<string, unknown>[];
-    const existing = existingCriteria.find((item) =>
-      item.criteria === input.criterion &&
-      Number(item.condition) === input.condition &&
-      item.pattern === input.pattern
-    );
+    const existing = existingCriteria.find((item) => this.isExactCriterion(item, ruleId, input));
     if (existing) {
-      return { created: false, already_exists: true, rule, criterion: existing };
+      return this.criterionResult(false, true, ruleId, existing);
     }
 
     const created = await this.client.request(
@@ -156,16 +153,22 @@ export class HighLevelImportEntityRuleService implements ImportEntityRuleService
       })
     );
     const criterionId = createdId(created, 'ImportEntity criterion');
-    const criterion = await this.getCriterion(ruleId, criterionId) as Record<string, unknown>;
-    if (
-      Number(criterion.rules_id ?? ruleId) !== ruleId ||
-      criterion.criteria !== input.criterion ||
-      Number(criterion.condition) !== input.condition ||
-      criterion.pattern !== input.pattern
-    ) {
-      throw new Error('Created ImportEntity criterion verification failed: GLPI returned different fields');
+    let directError: unknown;
+    try {
+      const direct = await this.getCriterion(ruleId, criterionId) as Record<string, unknown>;
+      if (!this.isExactCriterion(direct, ruleId, input)) throw new Error('GLPI returned different criterion fields');
+    } catch (error) {
+      directError = error;
     }
-    return { created: true, already_exists: false, rule: await this.get(ruleId), criterion };
+    try {
+      const collection = await this.listCriteria(ruleId, {}) as Record<string, unknown>[];
+      const confirmed = collection.find((item) => Number(item.id) === criterionId && this.isExactCriterion(item, ruleId, input))
+        ?? collection.find((item) => this.isExactCriterion(item, ruleId, input));
+      if (confirmed) return this.criterionResult(true, false, ruleId, confirmed);
+    } catch (collectionError) {
+      throw this.writeOutcomeUncertain(criterionId, directError, collectionError);
+    }
+    throw this.writeOutcomeUncertain(criterionId, directError, new Error('created criterion is absent from the parent collection'));
   }
 
   async setEnabled(ruleId: number, enabled: boolean): Promise<unknown> {
@@ -190,5 +193,32 @@ export class HighLevelImportEntityRuleService implements ImportEntityRuleService
     } catch (error) {
       return verificationFailed(ruleId, 'update', error);
     }
+  }
+
+  private isExactCriterion(item: Record<string, unknown>, ruleId: number, expected: AddImportEntityRuleCriterionRequest): boolean {
+    let parent = ruleId;
+    if (item.rules_id !== undefined && item.rules_id !== null) {
+      try { parent = resolveGlpiRelationId(item, 'rules_id', 'RuleImportEntity'); } catch { return false; }
+    }
+    return parent === ruleId && item.criteria === expected.criterion &&
+      Number(item.condition) === expected.condition && item.pattern === expected.pattern;
+  }
+
+  private criterionResult(created: boolean, alreadyExists: boolean, ruleId: number, item: Record<string, unknown>) {
+    return {
+      created, already_exists: alreadyExists, rule_id: ruleId, criterion_id: Number(item.id),
+      criterion: item.criteria, condition: Number(item.condition), pattern: item.pattern,
+      verified: true, criterion_item: item,
+    };
+  }
+
+  private writeOutcomeUncertain(criterionId: number, directError: unknown, collectionError: unknown): Error {
+    const error = new Error(
+      `write_outcome_uncertain: ImportEntity criterion ${criterionId} POST returned an id, but verification was inconclusive; ` +
+      `do not retry the POST blindly. direct=${directError instanceof Error ? directError.message : String(directError ?? 'unavailable')}; ` +
+      `collection=${collectionError instanceof Error ? collectionError.message : String(collectionError)}`,
+    );
+    error.name = 'WriteOutcomeUncertainError';
+    return error;
   }
 }

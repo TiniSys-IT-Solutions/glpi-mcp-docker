@@ -1,6 +1,7 @@
 import { ImportEntityRuleService } from '../../core/rules/service.js';
 import { AddImportEntityRuleCriterionRequest, assertCanonicalIPv4CIDR, assertImportEntityRuleCondition, CreateImportEntitySubnetRuleRequest, RuleListRequest, UpdateImportEntityRuleRequest } from '../../core/rules/types.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
+import { resolveGlpiRelationId } from '../../core/glpi-relations.js';
 
 const PATTERN_CIDR = 333;
 
@@ -142,13 +143,9 @@ export class LegacyImportEntityRuleService implements ImportEntityRuleService {
       throw new Error(`Rule ${ruleId} is not a RuleImportEntity rule`);
     }
     const existingCriteria = await this.listCriteria(ruleId, {}) as Record<string, unknown>[];
-    const existing = existingCriteria.find((item) =>
-      item.criteria === input.criterion &&
-      Number(item.condition) === input.condition &&
-      item.pattern === input.pattern
-    );
+    const existing = this.findExactCriterion(existingCriteria, ruleId, input);
     if (existing) {
-      return { created: false, already_exists: true, rule, criterion: existing };
+      return this.criterionResult(false, true, ruleId, existing);
     }
 
     const created = await this.client.createItem('RuleCriteria', {
@@ -157,9 +154,23 @@ export class LegacyImportEntityRuleService implements ImportEntityRuleService {
       condition: input.condition,
       pattern: input.pattern,
     });
-    const criterion = await this.getCriterion(ruleId, created.id) as Record<string, unknown>;
-    this.assertCriterionMatches(criterion, input);
-    return { created: true, already_exists: false, rule: await this.get(ruleId), criterion };
+    let direct: Record<string, unknown> | undefined;
+    let directError: unknown;
+    try {
+      direct = await this.getCriterion(ruleId, created.id) as Record<string, unknown>;
+      this.assertCriterionMatches(direct, input);
+    } catch (error) {
+      directError = error;
+    }
+    try {
+      const collection = await this.listCriteria(ruleId, {}) as Record<string, unknown>[];
+      const confirmed = collection.find((item) => Number(item.id) === created.id &&
+        this.isExactCriterion(item, ruleId, input)) ?? this.findExactCriterion(collection, ruleId, input);
+      if (confirmed) return this.criterionResult(true, false, ruleId, confirmed);
+    } catch (collectionError) {
+      throw this.writeOutcomeUncertain(created.id, directError, collectionError);
+    }
+    throw this.writeOutcomeUncertain(created.id, directError, new Error('created criterion is absent from the parent collection'));
   }
 
   async setEnabled(ruleId: number, enabled: boolean): Promise<unknown> {
@@ -200,8 +211,13 @@ export class LegacyImportEntityRuleService implements ImportEntityRuleService {
     childType: string,
     childId: number
   ): void {
-    const linkedRuleId = Number(item.rules_id);
-    if (!Number.isInteger(linkedRuleId) || linkedRuleId !== ruleId) {
+    let linkedRuleId: number;
+    try {
+      linkedRuleId = resolveGlpiRelationId(item, 'rules_id', 'RuleImportEntity');
+    } catch (error) {
+      throw new Error(`Cannot verify parent of ${childType} ${childId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (linkedRuleId !== ruleId) {
       throw new Error(
         `RuleImportEntity ${ruleId} does not contain ${childType} ${childId}`
       );
@@ -216,5 +232,36 @@ export class LegacyImportEntityRuleService implements ImportEntityRuleService {
     ) {
       throw new Error('Created RuleCriteria verification failed: GLPI returned different criterion fields');
     }
+  }
+
+  private isExactCriterion(item: Record<string, unknown>, ruleId: number, expected: AddImportEntityRuleCriterionRequest): boolean {
+    try {
+      return resolveGlpiRelationId(item, 'rules_id', 'RuleImportEntity') === ruleId &&
+        item.criteria === expected.criterion && Number(item.condition) === expected.condition && item.pattern === expected.pattern;
+    } catch {
+      return false;
+    }
+  }
+
+  private findExactCriterion(items: Record<string, unknown>[], ruleId: number, expected: AddImportEntityRuleCriterionRequest) {
+    return items.find((item) => this.isExactCriterion(item, ruleId, expected));
+  }
+
+  private criterionResult(created: boolean, alreadyExists: boolean, ruleId: number, item: Record<string, unknown>) {
+    return {
+      created, already_exists: alreadyExists, rule_id: ruleId, criterion_id: Number(item.id),
+      criterion: item.criteria, condition: Number(item.condition), pattern: item.pattern,
+      verified: true, criterion_item: item,
+    };
+  }
+
+  private writeOutcomeUncertain(criterionId: number, directError: unknown, collectionError: unknown): Error {
+    const error = new Error(
+      `write_outcome_uncertain: RuleCriteria ${criterionId} POST returned an id, but verification was inconclusive; ` +
+      `do not retry the POST blindly. direct=${directError instanceof Error ? directError.message : String(directError ?? 'unavailable')}; ` +
+      `collection=${collectionError instanceof Error ? collectionError.message : String(collectionError)}`,
+    );
+    error.name = 'WriteOutcomeUncertainError';
+    return error;
   }
 }

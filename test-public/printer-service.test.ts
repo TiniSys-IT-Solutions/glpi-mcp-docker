@@ -5,6 +5,24 @@ import { HighLevelPrinterService } from '../src/api/highlevel/printers.js';
 import { appendPrinterCommentSchema, printerUpdateSchema, reassignPrintersSchema } from '../src/core/assets/schemas.js';
 import { cidrContainsIPv4, selectPrinterBusinessIP } from '../src/core/assets/printer-utils.js';
 import { GlpiClient } from '../src/api/legacy/glpi-client.js';
+import { GlpiRelationResolutionError, resolveGlpiRelationId } from '../src/core/glpi-relations.js';
+
+test('GLPI relation resolver accepts exact ids and relation links but never labels, partial numbers or NaN', () => {
+  assert.equal(resolveGlpiRelationId({ entities_id: 8 }, 'entities_id', 'Entity'), 8);
+  assert.equal(resolveGlpiRelationId({ entities_id: '8' }, 'entities_id', 'Entity'), 8);
+  for (const href of ['http://example/api.php/v1/Entity/8', 'http://example/api.php/v1/Entity/8/']) {
+    assert.equal(resolveGlpiRelationId({ entities_id: 'Root entity > EXAMPLE', links: [{ rel: 'Entity', href }] }, 'entities_id', 'Entity'), 8);
+  }
+  assert.equal(resolveGlpiRelationId({ locations_id: 'Expanded label', links: [
+    { rel: 'Location', href: 'http://example/api.php/v1/Location/94/' },
+  ] }, 'locations_id', 'Location'), 94);
+  assert.throws(() => resolveGlpiRelationId({ entities_id: '8abc' }, 'entities_id', 'Entity'), GlpiRelationResolutionError);
+  assert.throws(() => resolveGlpiRelationId({ entities_id: 'label', links: [{ rel: 'Entity', href: 'http://example/Entity/nope' }] }, 'entities_id', 'Entity'), /Invalid Entity relation URL/);
+  assert.throws(() => resolveGlpiRelationId({ entities_id: 'label' }, 'entities_id', 'Entity'), /Cannot resolve/);
+  for (const bad of [Number.NaN, Infinity, -1, 1.5]) {
+    assert.throws(() => resolveGlpiRelationId({ entities_id: bad }, 'entities_id', 'Entity'));
+  }
+});
 
 test('printer mapper converts every friendly field and preserves omitted fields', () => {
   assert.deepEqual(legacyPrinterUpdatePayload({
@@ -100,7 +118,7 @@ test('printer IP selection deduplicates, prefers 10/8 and excludes technical add
   assert.equal(cidrContainsIPv4('10.1.0.0/24', '10.1.2.3'), false);
 });
 
-function orchestrationClient(options: { active?: boolean; rules?: number; actions?: any[] } = {}) {
+function orchestrationClient(options: { active?: boolean; rules?: number; actions?: any[]; actionSets?: Record<number, any[]> } = {}) {
   const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
   let writes = 0;
   const printer: any = { id: 1, name: 'P1', entities_id: 0, locations_id: 4, comment: 'existing' };
@@ -115,13 +133,16 @@ function orchestrationClient(options: { active?: boolean; rules?: number; action
   };
   (client as any).updateItem = async (_type: string, _id: number, payload: any) => { writes++; Object.assign(printer, payload); };
   (client.http as any).request = async (path: string) => {
-    if (path.includes('/RuleCriteria')) return { data: [{ id: 1, criteria: 'subnet', condition: 333, pattern: '10.63.170.0/24' }] };
-    if (path.includes('/RuleAction')) return { data: options.actions ?? [
+    if (path.includes('/RuleCriteria')) return { data: [{ id: 1, criteria: 'subnet', condition: 333, pattern: '192.0.2.0/24' }] };
+    if (path.includes('/RuleAction')) {
+      const ruleId = Number(path.match(/RuleImportEntity\/(\d+)/)?.[1]);
+      return { data: options.actionSets?.[ruleId] ?? options.actions ?? [
       { field: 'entities_id', value: 2 }, { field: 'locations_id', value: 12 },
-    ] };
+      ] };
+    }
     if (path === 'Printer/1/NetworkPort') return { data: [{ id: 20 }] };
     if (path === 'NetworkPort/20/NetworkName') return { data: [{ id: 30 }] };
-    if (path === 'NetworkName/30/IPAddress') return { data: [{ name: '10.63.170.42' }, { name: '192.168.223.1' }] };
+    if (path === 'NetworkName/30/IPAddress') return { data: [{ name: '192.0.2.42' }, { name: '192.168.223.1' }] };
     return { data: [] };
   };
   return { client, writes: () => writes, printer };
@@ -137,11 +158,76 @@ test('printer reassignment dry-run matches CIDR without writing and reports inva
   assert.equal(good.writes(), 0);
 
   const overlap = orchestrationClient({ rules: 2 });
-  assert.equal((await new LegacyPrinterService(overlap.client).reassignFromImportEntityRules({ dryRun: true, preservePreviousLocationInComment: true, commentPrefix: 'old: ' }) as any).results[0].status, 'multiple_matching_rules');
+  const equivalent = await new LegacyPrinterService(overlap.client).reassignFromImportEntityRules({ dryRun: true, preservePreviousLocationInComment: true, commentPrefix: 'old: ' }) as any;
+  assert.equal(equivalent.results[0].status, 'ready');
+  assert.equal(equivalent.results[0].selected_rule_id, 90);
+  assert.deepEqual(equivalent.results[0].equivalent_rule_ids, [91]);
+  assert.deepEqual(equivalent.results[0].warnings, ['duplicate_equivalent_rules']);
+  const conflictingEntity = orchestrationClient({ rules: 2, actionSets: {
+    90: [{ field: 'entities_id', value: 2 }, { field: 'locations_id', value: 12 }],
+    91: [{ field: 'entities_id', value: 3 }, { field: 'locations_id', value: 12 }],
+  } });
+  assert.equal((await new LegacyPrinterService(conflictingEntity.client).reassignFromImportEntityRules({ dryRun: true, preservePreviousLocationInComment: true, commentPrefix: 'old: ' }) as any).results[0].status, 'multiple_matching_rules');
+  const conflictingLocation = orchestrationClient({ rules: 2, actionSets: {
+    90: [{ field: 'entities_id', value: 2 }, { field: 'locations_id', value: 12 }],
+    91: [{ field: 'entities_id', value: 2 }, { field: 'locations_id', value: 13 }],
+  } });
+  assert.equal((await new LegacyPrinterService(conflictingLocation.client).reassignFromImportEntityRules({ dryRun: true, preservePreviousLocationInComment: true, commentPrefix: 'old: ' }) as any).results[0].status, 'multiple_matching_rules');
   const inactive = orchestrationClient({ active: false });
   assert.equal((await new LegacyPrinterService(inactive.client).reassignFromImportEntityRules({ dryRun: true, preservePreviousLocationInComment: true, commentPrefix: 'old: ' }) as any).results[0].status, 'rule_inactive');
   const missingAction = orchestrationClient({ actions: [{ field: 'entities_id', value: 2 }] });
   assert.equal((await new LegacyPrinterService(missingAction.client).reassignFromImportEntityRules({ dryRun: true, preservePreviousLocationInComment: true, commentPrefix: 'old: ' }) as any).results[0].status, 'invalid_rule_actions');
+});
+
+test('expanded Location 94 entity link resolves to target entity 8 without NaN', async () => {
+  const mock = orchestrationClient({ actions: [{ field: 'entities_id', value: '8' }, { field: 'locations_id', value: '94' }] });
+  mock.printer.entities_id = 0;
+  mock.printer.locations_id = 0;
+  (mock.client as any).getItem = async (type: string, id: number) => {
+    if (type === 'Printer') return { ...mock.printer };
+    if (type === 'Location' && id === 94) return {
+      id: 94, entities_id: 'Root entity > EXAMPLE > SITE-7 - Site Central', is_recursive: 1, name: 'Batiment F',
+      links: [{ rel: 'Entity', href: 'http://example/api.php/v1/Entity/8' }],
+    };
+    if (type === 'Entity') return { id, entities_id: 0 };
+    return { id };
+  };
+  const report = await new LegacyPrinterService(mock.client).reassignFromImportEntityRules({
+    dryRun: true, preservePreviousLocationInComment: true, commentPrefix: 'Ancien lieu GLPI : ',
+  }) as any;
+  assert.equal(report.results[0].status, 'ready');
+  assert.equal(report.results[0].target_entity_id, 8);
+  assert.equal(report.results[0].target_location_id, 94);
+  assert.doesNotMatch(JSON.stringify(report), /NaN/);
+});
+
+test('equivalent production rules 99 and 148 select by ranking then id', async () => {
+  const mock = orchestrationClient({ rules: 2, actions: [
+    { field: 'entities_id', value: 4 }, { field: 'locations_id', value: 5 },
+  ] });
+  (mock.client as any).getItems = async (type: string) => type === 'Printer' ? [mock.printer] : [
+    { id: 148, name: 'EXAMPLE – SITE-B– Subnet', ranking: 2, is_active: 1 },
+    { id: 99, name: 'EXAMPLE – SITE-B – Subnet', ranking: 1, is_active: 1 },
+  ];
+  const originalGetItem = (mock.client as any).getItem;
+  (mock.client as any).getItem = async (type: string, id: number) => {
+    if (type === 'Location' && id === 5) return { id, entities_id: 4, is_recursive: 0 };
+    return originalGetItem(type, id);
+  };
+  const originalRequest = (mock.client.http as any).request;
+  (mock.client.http as any).request = async (path: string) => {
+    if (path.includes('/RuleCriteria')) return { data: [{ id: 1, criteria: 'subnet', condition: 333, pattern: '10.20.107.0/24' }] };
+    if (path === 'NetworkName/30/IPAddress') return { data: [{ name: '10.20.107.232' }] };
+    return originalRequest(path);
+  };
+  const report = await new LegacyPrinterService(mock.client).reassignFromImportEntityRules({
+    dryRun: true, preservePreviousLocationInComment: true, commentPrefix: 'old: ',
+  }) as any;
+  assert.equal(report.results[0].status, 'ready');
+  assert.equal(report.results[0].selected_rule_id, 99);
+  assert.deepEqual(report.results[0].equivalent_rule_ids, [148]);
+  assert.equal(report.results[0].target_entity_id, 4);
+  assert.equal(report.results[0].target_location_id, 5);
 });
 
 test('confirmed printer reassignment preserves old location comment and is relaunchable', async () => {
@@ -182,6 +268,27 @@ test('printer reassignment isolates one printer error and continues with the oth
   assert.equal(report.results[0].status, 'ready');
   assert.equal(report.results[1].status, 'error');
   assert.equal(report.errors, 1);
+  assert.equal(mock.writes(), 0);
+});
+
+test('live reassignment skips a printer changed concurrently after planning', async () => {
+  const mock = orchestrationClient();
+  let printerReads = 0;
+  const originalGetItem = (mock.client as any).getItem;
+  (mock.client as any).getItem = async (type: string, id: number) => {
+    if (type === 'Printer') {
+      printerReads++;
+      return printerReads === 1
+        ? { ...mock.printer, comment: 'changed concurrently' }
+        : { ...mock.printer };
+    }
+    return originalGetItem(type, id);
+  };
+  const report = await new LegacyPrinterService(mock.client).reassignFromImportEntityRules({
+    dryRun: false, preservePreviousLocationInComment: true, commentPrefix: 'old: ',
+    confirmation: 'I_HAVE_VERIFIED_THE_PRINTER_REASSIGNMENT_PLAN',
+  }) as any;
+  assert.equal(report.results[0].status, 'concurrent_change');
   assert.equal(mock.writes(), 0);
 });
 

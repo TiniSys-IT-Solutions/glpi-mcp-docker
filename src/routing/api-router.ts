@@ -17,10 +17,16 @@ import { LegacyDirectoryService } from '../api/legacy/directory.js';
 import { HighLevelDirectoryService } from '../api/highlevel/directory.js';
 import { LegacyPrinterService } from '../api/legacy/printers.js';
 import { HighLevelPrinterService } from '../api/highlevel/printers.js';
+import { LegacyFormService } from '../api/legacy/forms.js';
+import { HighLevelFormService } from '../api/highlevel/forms.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
 export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
+  glpi_list_forms: 'legacy',
+  glpi_get_form: 'legacy',
+  glpi_list_form_categories: 'legacy',
+  glpi_review_forms: 'legacy',
   glpi_list_import_entity_rules: 'legacy',
   glpi_get_import_entity_rule: 'legacy',
   glpi_list_import_entity_rule_criteria: 'legacy',
@@ -217,6 +223,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         organization: new HighLevelOrganizationService(highlevel),
         directory: new HighLevelDirectoryService(highlevel),
         printers: new HighLevelPrinterService(),
+        forms: new HighLevelFormService(),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -236,6 +243,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       organization: new LegacyOrganizationService(client),
       directory: new LegacyDirectoryService(client),
       printers: new LegacyPrinterService(client),
+      forms: new LegacyFormService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

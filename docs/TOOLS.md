@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 144 tools currently registered by `src/index.ts` on
+This catalogue lists the 148 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -16,6 +16,14 @@ Safety annotations are derived from tool names:
 `glpi_inventory_requeue_task` remains explicitly destructive because it cycles
 task state and schedules work. Confirmed rule activation is reversible and is
 explicitly classified as a non-destructive write.
+
+Legacy partial updates for problems, changes, computers and projects use a
+common read-before-write and post-write verification guard and reject empty
+updates. A verification failure is reported separately from a confirmed write.
+An update tool is not added solely because Legacy exposes a generic PUT: every
+business update requires a durable field contract, null/omission semantics,
+reference validation and explicit Legacy/High-Level/Hybrid routing. Domains
+that do not yet meet those conditions remain without an unsafe raw update tool.
 
 ## Server metadata
 
@@ -50,6 +58,21 @@ require a GLPI Legacy session and is available in every API mode.
 | `glpi_link_tickets` | Write | Create a relationship between tickets. |
 | `glpi_add_ticket_validation` | Write | Request ticket approval. |
 | `glpi_set_validation_status` | Write | Grant or refuse a validation. |
+
+## Native forms and service catalog (GLPI 11)
+
+These tools read the native GLPI 11 form model, not the retired Formcreator
+plugin. Hybrid routes them explicitly to Legacy. High-Level mode returns a
+clear not-supported error until equivalent routes are confirmed in the GLPI 11
+Swagger. No form write tool is exposed yet because editing blocks also affects
+ordering, conditional logic, translations and destination configuration.
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_list_forms` | Read | List native forms; active non-draft forms are returned by default. |
+| `glpi_get_form` | Read | Read a complete form with ordered sections, mixed question/comment blocks, conditions, validation data, selectable options, translations, destinations and redacted access policies. |
+| `glpi_list_form_categories` | Read | List hierarchical service-catalog categories with their rich description and illustration metadata. |
+| `glpi_review_forms` | Read | Produce a proofreading dataset: every visible text, its exact structural path, original HTML and normalized plain text. |
 | `glpi_upload_document` | Write | Upload a document, optionally linked directly to a ticket. |
 | `glpi_attach_document_to_ticket` | Write | Link an existing GLPI document to a ticket. |
 | `glpi_list_problems` | Read | List problems. |
@@ -130,6 +153,25 @@ one unambiguous `10.x.x.x` address. It then requires one active, single-CIDR
 non-conflicting location action. Each result explains why it is ready, already
 correct, ambiguous or rejected.
 
+Legacy responses may expand foreign keys into labels. The shared relation-ID
+resolver accepts only a non-negative integer, an entirely numeric string, or
+the terminal ID of the corresponding `links` relation (`Entity`, `Location`,
+and so on). It accepts an optional trailing slash, rejects partial conversions
+such as `8abc`, and never propagates `NaN`.
+
+If several active CIDR rules match, their normalized destination IDs are
+compared. Identical entity/location pairs are safe equivalents: the lowest
+`ranking`, then lowest rule ID is selected, other IDs appear in
+`equivalent_rule_ids`, and `warnings` contains
+`duplicate_equivalent_rules`. Conflicting destinations remain blocked as
+`multiple_matching_rules`; no rule is modified or disabled.
+
+Per-printer statuses include `ready`, `already_correct`, `ambiguous_ip`,
+`no_matching_rule`, `multiple_matching_rules`, `rule_inactive`,
+`invalid_rule_actions`, `invalid_target`, `concurrent_change`, `updated` and
+`error`. The global report counts ready/already-correct, ambiguous,
+invalid-target, no-match, skipped, errors and warnings.
+
 Only apply a reviewed plan with the exact confirmation:
 
 ```json
@@ -144,7 +186,10 @@ Only apply a reviewed plan with the exact confirmation:
 
 Immediately before each write the printer is read again. A previous location is
 recorded using its complete name, without duplicating the line, and entity,
-location and comment are updated together. Failures are isolated per printer.
+location and comment are updated together. If entity, location or comment has
+changed since planning, that printer is skipped as `concurrent_change`. A
+failed post-write verification becomes an explicit error and is never silently
+continued. Failures are isolated per printer.
 High-Level mode returns a clear not-supported error because its printer PATCH
 contract has not been confirmed from the GLPI 11 Swagger. Hybrid routes these
 three tools explicitly to Legacy.
@@ -209,12 +254,22 @@ The numeric `condition` is a native GLPI `Rule::PATTERN_*` value:
 This is the complete condition set exposed by GLPI 11 for
 `RuleImportEntity`. Global-search/empty (`10`, `30`), tree (`11`, `12`) and
 date (`31`–`34`) conditions belong to other criterion types and are rejected.
-For example, duplicate `subnet / 333 / 10.63.170.0/24` as
-`ip / 333 / 10.63.170.0/24`, or use `334` for “does not match CIDR”. The
+For example, duplicate `subnet / 333 / 192.0.2.0/24` as
+`ip / 333 / 192.0.2.0/24`, or use `334` for “does not match CIDR”. The
 pattern is sent unchanged. The service validates criterion/condition
 compatibility and the subtype, prevents an exact
 criterion/condition/pattern duplicate, then verifies the created child and its
 parent rule.
+
+Legacy dropdown expansion can replace `rules_id` with the rule label. Parent
+verification therefore resolves the exact numeric value or the terminal ID of
+the `RuleImportEntity` relation link; labels and partial numeric conversions are
+never compared. After a POST, both the direct child and the parent collection
+are checked. If direct reading fails but the exact tuple is present in the
+collection, creation remains verified. If neither path determines the outcome,
+the tool returns `write_outcome_uncertain` with the returned criterion ID and a
+clear instruction not to retry the POST blindly. A later normal call first
+performs the exact idempotence check and therefore detects an existing child.
 
 For partial rule updates, omitted fields remain unchanged. JSON `null` clears
 `description` or `comment`; `sub_type`, criteria, actions and `is_active` are
@@ -249,7 +304,7 @@ High-Level APIs. Entity LDAP and inventory fields map as follows:
 
 | MCP field | GLPI Legacy field | GLPI High-Level v2.3 field | Meaning |
 | --- | --- | --- | --- |
-| `ldap_dn` | `ldap_dn` | `ldap_dn` | DN/base DN representing the entity, for example `OU=LA-SOUTERRAINE,OU=Sites,OU=BIOLYSS,DC=inovie,DC=infra`. It is not a search filter. |
+| `ldap_dn` | `ldap_dn` | `ldap_dn` | DN/base DN representing the entity, for example `OU=SITE-E,OU=Sites,OU=EXAMPLE,DC=example,DC=infra`. It is not a search filter. |
 | `ldap_filter` | `entity_ldapfilter` | `entity_ldapfilter` | Optional LDAP user-search filter. |
 | `ldap_directory_id` | `authldaps_id` | `authldap: { id }` | Associated GLPI LDAP directory. `0` removes the entity-specific association; GLPI may then use its global default directory. |
 | `inventory_tag` | `tag` | `tag` | TAG sent by an inventory tool for entity assignment. |

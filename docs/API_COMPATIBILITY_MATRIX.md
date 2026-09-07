@@ -39,6 +39,7 @@ Status values:
 | Projects | OK | TODO | OK VIA LEGACY | Smoke read-only planned | ProjectTask/teams still need study. |
 | Contracts/suppliers | OK | TODO | OK VIA LEGACY | Inherited | Lower priority. |
 | Knowledge base | OK | TODO | OK VIA LEGACY | Inherited | Search options tested upstream. |
+| Native forms / service catalog | OK (read) | BLOCKED | OK VIA LEGACY | Structure, ordering, JSON decoding, proofreading and redaction tests | Reads forms/categories, sections, questions, comments, destinations and redacted access policies. High-Level routes are not guessed. |
 | Generic search/count | OK | TODO | OK VIA LEGACY | Search tests | `glpi_search_v2`, `glpi_count`. |
 | Session information | OK | PARTIAL | OK VIA LEGACY | Legacy adapter + High-Level OAuth/session tests | Preview calls `/api.php/v2.3/session`; Stable Hybrid remains explicitly routed to Legacy. |
 | High-Level client | N/A | PARTIAL | N/A | High-Level URL, OAuth, session + router tests | Base URL normalizes to `/api.php/v2.3`; authenticated session read is the first migrated call. |

@@ -159,7 +159,7 @@ test('POST is not retried after an ambiguous transient server error', async () =
 
   await assert.rejects(() => http.request('Entity', {
     method: 'POST',
-    json: { input: { name: 'BL-1 - Gueret', entities_id: 2 } },
+    json: { input: { name: 'SITE-1 - Site-D', entities_id: 2 } },
   }), (error: unknown) => error instanceof GlpiError && error.status === 503);
   assert.equal(attempts, 1, 'unsafe POST must not be replayed');
 });
@@ -185,7 +185,7 @@ test('POST is not retried after an ambiguous network error', async () => {
 
   await assert.rejects(() => http.request('Entity', {
     method: 'POST',
-    json: { input: { name: 'BL-1 - Gueret', entities_id: 2 } },
+    json: { input: { name: 'SITE-1 - Site-D', entities_id: 2 } },
   }), /fetch failed after possible commit/);
   assert.equal(attempts, 1, 'unsafe POST must not be replayed');
 });
@@ -270,7 +270,7 @@ test('createItem and verification GET reuse the same Legacy session and app toke
     userToken: 'u',
     appToken: 'app-token',
   });
-  const created = await client.createItem('Entity', { name: 'BL-1 - Gueret', entities_id: 2 });
+  const created = await client.createItem('Entity', { name: 'SITE-1 - Site-D', entities_id: 2 });
   await assert.rejects(() => client.getEntity(created.id), GlpiError);
 
   assert.deepEqual(authenticatedRequests, [

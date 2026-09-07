@@ -1,6 +1,7 @@
 import { PrinterService } from '../../core/assets/service.js';
 import { AppendPrinterCommentRequest, PrinterUpdateRequest, ReassignPrintersRequest } from '../../core/assets/types.js';
 import { cidrContainsIPv4, selectPrinterBusinessIP } from '../../core/assets/printer-utils.js';
+import { resolveGlpiRelationId } from '../../core/glpi-relations.js';
 import { GlpiClient } from './glpi-client.js';
 
 const REFERENCE_TYPES: Array<[keyof PrinterUpdateRequest, string]> = [
@@ -88,30 +89,47 @@ export class LegacyPrinterService implements PrinterService {
       ? await Promise.all(input.printerIds.map((id) => this.client.getItem<Record<string, unknown>>('Printer', id)))
       : await this.client.getItems<Record<string, unknown>>('Printer', { range: '0-9999' });
     const rules = await this.loadRules();
-    const results: Record<string, unknown>[] = [];
+    const plans: Record<string, unknown>[] = [];
     for (const printer of printers) {
       try {
-        const plan = await this.planPrinter(printer, rules, input);
-        if (!input.dryRun && plan.status === 'ready') {
-          const fresh = await this.client.getItem<Record<string, unknown>>('Printer', Number(printer.id));
-          const update: PrinterUpdateRequest = {
-            entityId: Number(plan.target_entity_id), locationId: Number(plan.target_location_id),
-          };
-          const previousLocation = Number(fresh.locations_id ?? 0);
-          if (input.preservePreviousLocationInComment && previousLocation > 0 && previousLocation !== update.locationId) {
-            const location = await this.client.getItem<Record<string, unknown>>('Location', previousLocation);
-            const label = String(location.completename ?? location.name ?? previousLocation);
-            const line = `${input.commentPrefix}${label}`;
-            const current = typeof fresh.comment === 'string' ? fresh.comment : '';
-            update.comment = current.includes(line) ? current : current.length === 0 ? line : `${current}\n${line}`;
-          }
-          const changed = await this.update(Number(printer.id), update) as Record<string, unknown>;
-          results.push({ ...plan, status: 'updated', verification: changed });
-        } else {
-          results.push(plan);
-        }
+        plans.push(await this.planPrinter(printer, rules, input));
       } catch (error) {
-        results.push({ id: printer.id, name: printer.name, status: 'error', error: error instanceof Error ? error.message : String(error) });
+        plans.push({ id: printer.id, name: printer.name, status: 'error', error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    const results: Record<string, unknown>[] = [];
+    for (const plan of plans) {
+      if (input.dryRun || plan.status !== 'ready') {
+        results.push(this.publicPlan(plan));
+        continue;
+      }
+      try {
+        const fresh = await this.client.getItem<Record<string, unknown>>('Printer', Number(plan.id));
+        const freshEntity = this.optionalRelationId(fresh, 'entities_id', 'Entity');
+        const freshLocation = this.optionalRelationId(fresh, 'locations_id', 'Location');
+        const freshComment = typeof fresh.comment === 'string' ? fresh.comment : '';
+        const snapshot = plan._snapshot as Record<string, unknown>;
+        if (freshEntity !== snapshot.entity_id || freshLocation !== snapshot.location_id || freshComment !== snapshot.comment) {
+          results.push(this.publicPlan({ ...plan, status: 'concurrent_change',
+            concurrent_state: { entity_id: freshEntity, location_id: freshLocation, comment: freshComment } }));
+          continue;
+        }
+        const update: PrinterUpdateRequest = {
+          entityId: Number(plan.target_entity_id), locationId: Number(plan.target_location_id),
+        };
+        if (typeof plan.comment_to_append === 'string') {
+          update.comment = freshComment.includes(plan.comment_to_append)
+            ? freshComment
+            : freshComment.length === 0 ? plan.comment_to_append : `${freshComment}\n${plan.comment_to_append}`;
+        }
+        const changed = await this.update(Number(plan.id), update) as Record<string, unknown>;
+        if (changed.verification_status !== 'verified') {
+          results.push(this.publicPlan({ ...plan, status: 'error', error: 'post-write verification failed', verification: changed }));
+          continue;
+        }
+        results.push(this.publicPlan({ ...plan, status: 'updated', verification: changed }));
+      } catch (error) {
+        results.push(this.publicPlan({ ...plan, status: 'error', error: error instanceof Error ? error.message : String(error) }));
       }
     }
     return {
@@ -120,8 +138,12 @@ export class LegacyPrinterService implements PrinterService {
       ready: results.filter((item) => item.status === 'ready').length,
       already_correct: results.filter((item) => item.status === 'already_correct').length,
       updated: results.filter((item) => item.status === 'updated').length,
+      ambiguous: results.filter((item) => ['ambiguous_ip', 'multiple_matching_rules'].includes(String(item.status))).length,
+      invalid_target: results.filter((item) => item.status === 'invalid_target').length,
+      no_matching_rule: results.filter((item) => item.status === 'no_matching_rule').length,
       skipped: results.filter((item) => !['ready', 'updated', 'already_correct', 'error'].includes(String(item.status))).length,
       errors: results.filter((item) => item.status === 'error').length,
+      warnings: results.reduce((count, item) => count + (Array.isArray(item.warnings) ? item.warnings.length : 0), 0),
       results,
     };
   }
@@ -133,14 +155,14 @@ export class LegacyPrinterService implements PrinterService {
         await this.client.getItem(itemtype, value);
       }
     }
-    const entityId = input.entityId ?? Number(before.entities_id ?? 0);
-    const locationId = input.locationId ?? Number(before.locations_id ?? 0);
+    const entityId = input.entityId ?? this.optionalRelationId(before, 'entities_id', 'Entity');
+    const locationId = input.locationId ?? this.optionalRelationId(before, 'locations_id', 'Location');
     if (locationId > 0) await this.assertLocationCompatible(locationId, entityId);
   }
 
   private async assertLocationCompatible(locationId: number, entityId: number): Promise<void> {
     const location = await this.client.getItem<Record<string, unknown>>('Location', locationId);
-    const locationEntity = Number(location.entities_id ?? 0);
+    const locationEntity = resolveGlpiRelationId(location, 'entities_id', 'Entity');
     if (locationEntity === entityId) return;
     if (!Boolean(Number(location.is_recursive ?? 0)) || !await this.isDescendantEntity(entityId, locationEntity)) {
       throw new Error(`Location ${locationId} belongs to entity ${locationEntity} and is not recursively available to entity ${entityId}`);
@@ -155,8 +177,7 @@ export class LegacyPrinterService implements PrinterService {
       if (current === 0) return ancestorId === 0;
       visited.add(current);
       const entity = await this.client.getItem<Record<string, unknown>>('Entity', current);
-      current = Number(entity.entities_id ?? -1);
-      if (current < 0) return false;
+      current = resolveGlpiRelationId(entity, 'entities_id', 'Entity');
     }
     return false;
   }
@@ -190,24 +211,40 @@ export class LegacyPrinterService implements PrinterService {
 
   private async planPrinter(printer: Record<string, unknown>, rules: Record<string, unknown>[], input: ReassignPrintersRequest): Promise<Record<string, unknown>> {
     const selected = selectPrinterBusinessIP(await this.printerIPs(Number(printer.id)));
-    const base = { id: printer.id, name: printer.name, current_entity_id: printer.entities_id, current_location_id: printer.locations_id };
+    const currentEntity = this.optionalRelationId(printer, 'entities_id', 'Entity');
+    const currentLocation = this.optionalRelationId(printer, 'locations_id', 'Location');
+    const currentComment = typeof printer.comment === 'string' ? printer.comment : '';
+    const base = { id: printer.id, name: printer.name, current_entity_id: currentEntity, current_location_id: currentLocation,
+      _snapshot: { entity_id: currentEntity, location_id: currentLocation, comment: currentComment } };
     if (selected.status !== 'ok') return { ...base, status: selected.status === 'ambiguous_ip' ? 'ambiguous_ip' : 'no_matching_rule', ip_candidates: selected.candidates };
     const matching = rules.filter((rule) => (rule.criteria as Record<string, unknown>[]).some((criterion) =>
       ['ip', 'subnet'].includes(String(criterion.criteria)) && Number(criterion.condition) === 333 &&
       cidrContainsIPv4(String(criterion.pattern), selected.ip)
     ));
     if (matching.length === 0) return { ...base, primary_ip: selected.ip, status: 'no_matching_rule' };
-    if (matching.length > 1) return { ...base, primary_ip: selected.ip, status: 'multiple_matching_rules', matching_rule_ids: matching.map((rule) => rule.id) };
-    const rule = matching[0];
-    if (!Boolean(Number(rule.is_active ?? 0))) return { ...base, primary_ip: selected.ip, rule_id: rule.id, status: 'rule_inactive' };
-    const criteria = rule.criteria as Record<string, unknown>[];
-    if (criteria.length !== 1) return { ...base, primary_ip: selected.ip, rule_id: rule.id, status: 'invalid_rule_actions', reason: 'rule has additional criteria' };
-    const actions = rule.actions as Record<string, unknown>[];
-    const entities = [...new Set(actions.filter((action) => action.field === 'entities_id').map((action) => Number(action.value)))];
-    const locations = [...new Set(actions.filter((action) => action.field === 'locations_id').map((action) => Number(action.value)))];
-    if (entities.length !== 1 || locations.length !== 1 || entities[0] < 0 || locations[0] <= 0) {
-      return { ...base, primary_ip: selected.ip, rule_id: rule.id, status: 'invalid_rule_actions' };
+    const active = matching.filter((rule) => Boolean(Number(rule.is_active ?? 0)));
+    if (active.length === 0) return { ...base, primary_ip: selected.ip, matching_rule_ids: matching.map((rule) => rule.id), status: 'rule_inactive' };
+    const destinations = active.map((rule) => this.ruleDestination(rule));
+    if (destinations.some((destination) => 'error' in destination)) {
+      return { ...base, primary_ip: selected.ip, matching_rule_ids: active.map((rule) => rule.id), status: 'invalid_rule_actions', destinations };
     }
+    const normalized = destinations as Array<{ rule: Record<string, unknown>; entityId: number; locationId: number }>;
+    const destinationKeys = new Set(normalized.map((destination) => `${destination.entityId}:${destination.locationId}`));
+    if (destinationKeys.size > 1) {
+      return { ...base, primary_ip: selected.ip, status: 'multiple_matching_rules',
+        matching_rule_ids: active.map((rule) => rule.id), destinations: normalized.map((destination) => ({
+          rule_id: destination.rule.id, entity_id: destination.entityId, location_id: destination.locationId,
+        })) };
+    }
+    normalized.sort((left, right) => Number(left.rule.ranking ?? Number.MAX_SAFE_INTEGER) - Number(right.rule.ranking ?? Number.MAX_SAFE_INTEGER)
+      || Number(left.rule.id) - Number(right.rule.id));
+    const chosen = normalized[0];
+    const rule = chosen.rule;
+    const entities = [chosen.entityId];
+    const locations = [chosen.locationId];
+    const equivalentRuleIds = normalized.slice(1).map((destination) => Number(destination.rule.id));
+    const warnings = equivalentRuleIds.length > 0 ? ['duplicate_equivalent_rules'] : [];
+    const criteria = rule.criteria as Record<string, unknown>[];
     try {
       await this.client.getItem('Entity', entities[0]);
       await this.assertLocationCompatible(locations[0], entities[0]);
@@ -216,11 +253,45 @@ export class LegacyPrinterService implements PrinterService {
     }
     const criterion = criteria[0];
     let comment: string | undefined;
-    if (input.preservePreviousLocationInComment && Number(printer.locations_id ?? 0) > 0 && Number(printer.locations_id) !== locations[0]) {
-      const oldLocation = await this.client.getItem<Record<string, unknown>>('Location', Number(printer.locations_id));
-      comment = `${input.commentPrefix}${String(oldLocation.completename ?? oldLocation.name ?? printer.locations_id)}`;
+    let previousLocationName: string | undefined;
+    if (input.preservePreviousLocationInComment && currentLocation > 0 && currentLocation !== locations[0]) {
+      const oldLocation = await this.client.getItem<Record<string, unknown>>('Location', currentLocation);
+      previousLocationName = String(oldLocation.completename ?? oldLocation.name ?? currentLocation);
+      comment = `${input.commentPrefix}${previousLocationName}`;
     }
-    const status = Number(printer.entities_id) === entities[0] && Number(printer.locations_id) === locations[0] ? 'already_correct' : 'ready';
-    return { ...base, primary_ip: selected.ip, rule_id: rule.id, rule_name: rule.name, cidr: criterion.pattern, target_entity_id: entities[0], target_location_id: locations[0], comment_to_append: comment, status };
+    const status = currentEntity === entities[0] && currentLocation === locations[0] ? 'already_correct' : 'ready';
+    return { ...base, primary_ip: selected.ip, selected_rule_id: rule.id, matching_rule_ids: active.map((item) => item.id),
+      equivalent_rule_ids: equivalentRuleIds, warnings, rule_name: rule.name, cidr: criterion.pattern,
+      target_entity_id: entities[0], target_location_id: locations[0], previous_location_name: previousLocationName,
+      comment_to_append: comment, status };
+  }
+
+  private ruleDestination(rule: Record<string, unknown>):
+    { rule: Record<string, unknown>; entityId: number; locationId: number } | { rule_id: unknown; error: string } {
+    const criteria = rule.criteria as Record<string, unknown>[];
+    if (criteria.length !== 1) return { rule_id: rule.id, error: 'rule has additional criteria' };
+    try {
+      const actions = rule.actions as Record<string, unknown>[];
+      const entities = [...new Set(actions.filter((action) => action.field === 'entities_id')
+        .map((action) => resolveGlpiRelationId(action, 'value', 'Entity')))];
+      const locations = [...new Set(actions.filter((action) => action.field === 'locations_id')
+        .map((action) => resolveGlpiRelationId(action, 'value', 'Location')))];
+      if (entities.length !== 1 || locations.length !== 1 || locations[0] <= 0) {
+        return { rule_id: rule.id, error: 'missing or contradictory entity/location actions' };
+      }
+      return { rule, entityId: entities[0], locationId: locations[0] };
+    } catch (error) {
+      return { rule_id: rule.id, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  private optionalRelationId(item: Record<string, unknown>, field: string, relation: string): number {
+    if (item[field] === undefined || item[field] === null || item[field] === '') return 0;
+    return resolveGlpiRelationId(item, field, relation);
+  }
+
+  private publicPlan(plan: Record<string, unknown>): Record<string, unknown> {
+    const { _snapshot, ...result } = plan;
+    return result;
   }
 }

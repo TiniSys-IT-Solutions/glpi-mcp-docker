@@ -125,4 +125,8 @@ test('hybrid matrix covers every registered MCP tool and contains no phantom too
   }
 
   assert.deepEqual(Object.keys(HYBRID_TOOL_BACKENDS).sort(), [...new Set(active)].sort());
+  const catalogue = readFileSync(new URL('../docs/TOOLS.md', import.meta.url), 'utf8');
+  for (const tool of new Set(active)) {
+    assert.ok(catalogue.includes(`\`${tool}\``), `${tool} must be documented in docs/TOOLS.md`);
+  }
 });
