@@ -1,7 +1,7 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **148 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **165 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
@@ -11,7 +11,7 @@ Ce projet est une intégration indépendante et non un produit officiel GLPI.
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 148 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 165 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |
@@ -19,7 +19,7 @@ Ce projet est une intégration indépendante et non un produit officiel GLPI.
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.3.8
+## État de la version 0.3.9
 
 | Composant | État |
 | --- | --- |
@@ -34,7 +34,7 @@ de l'échec éventuel de sa relecture. Les entités prennent aussi en charge le 
 LDAP, le filtre LDAP, l'annuaire associé, le TAG d'inventaire et les mises à
 jour partielles avec lecture avant/après écriture.
 
-La version 0.3.8 inclut les améliorations fonctionnelles préparées depuis 0.3.3,
+La version 0.3.9 inclut les améliorations fonctionnelles préparées depuis 0.3.3,
 corrige leur construction dans l'image Docker et ajoute la mise à jour partielle
 sécurisée des lieux. Elle rend les mises à jour partielles non destructives utilisables
 avec une politique d'approbation stricte, rafraîchit sans nouvel élargissement
@@ -47,15 +47,18 @@ Elle ajoute aussi l'ajout générique et idempotent de critères aux règles
 Les imprimantes disposent désormais d'une mise à jour partielle vérifiée, d'un
 ajout idempotent au commentaire et d'une réaffectation sécurisée par règles CIDR
 avec dry-run obligatoire par défaut.
-La 0.3.8 fiabilise les réponses Legacy avec listes déroulantes développées :
+La 0.3.9 fiabilise les réponses Legacy avec listes déroulantes développées :
 les relations sont résolues depuis leurs liens numériques, les règles CIDR
 équivalentes sont regroupées sans ambiguïté et la vérification d'un critère créé
 ne produit plus de faux échec lorsque `rules_id` contient un libellé.
 Elle ajoute enfin la lecture structurée des formulaires natifs GLPI 11 et une
 vue dédiée à la relecture orthographique du catalogue de services. Les secrets
 des politiques d'accès sont systématiquement masqués.
-La 0.3.8 corrige aussi le contexte de construction Docker afin que le test de
+La 0.3.9 corrige aussi le contexte de construction Docker afin que le test de
 conformité du catalogue puisse lire `docs/TOOLS.md` pendant la construction.
+Elle ajoute l'audit d'intégrité des lieux, leur historique, la résolution sans
+création implicite, les suppressions contrôlées et la réaffectation sécurisée
+des matériels par lots avec vérification des identifiants bruts.
 
 ## Démarrage rapide
 
@@ -86,7 +89,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.8
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.9
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3
 ```
 
@@ -123,7 +126,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.3.8**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.3.9**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité
