@@ -7,6 +7,7 @@ import { OrganizationService } from './organization/service.js';
 import { DirectoryService } from './directory/service.js';
 import { PrinterService } from './assets/service.js';
 import { FormService } from './forms/service.js';
+import { LocationIntegrityService } from './location-integrity/service.js';
 
 export interface GlpiServices {
   tickets: TicketService;
@@ -18,4 +19,5 @@ export interface GlpiServices {
   directory: DirectoryService;
   printers: PrinterService;
   forms: FormService;
+  locationIntegrity: LocationIntegrityService;
 }

@@ -114,6 +114,9 @@ test('hybrid matrix covers every registered MCP tool and contains no phantom too
   for (const asset of ['computers', 'softwares', 'network_equipments', 'printers', 'monitors', 'phones']) {
     active.push(`glpi_list_${asset}`, `glpi_get_${asset.replace(/s$/, '')}`);
   }
+  for (const asset of ['monitor', 'network_equipment', 'phone', 'peripheral', 'appliance']) {
+    active.push(`glpi_update_${asset}`);
+  }
   for (const [plural, singular] of [
     ['credentials', 'credential'], ['tasks', 'task'], ['task_jobs', 'task_job'],
     ['task_job_states', 'task_job_state'], ['timeslots', 'timeslot'], ['collects', 'collect'],

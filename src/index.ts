@@ -51,6 +51,9 @@ import { ToolAnnotations, toolAnnotations } from './core/tool-annotations.js';
 import { PrinterService } from './core/assets/service.js';
 import { appendPrinterCommentSchema, printerUpdateSchema, reassignPrintersSchema } from './core/assets/schemas.js';
 import { FormService } from './core/forms/service.js';
+import { LocationIntegrityService } from './core/location-integrity/service.js';
+import { assetLocationUpdateSchema, deleteLocationSchema, deleteLocationsSchema, locationMappingSchema } from './core/location-integrity/schemas.js';
+import { LocationAssetType } from './core/location-integrity/types.js';
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -319,6 +322,7 @@ let organizationService: OrganizationService;
 let directoryService: DirectoryService;
 let printerService: PrinterService;
 let formService: FormService;
+let locationIntegrityService: LocationIntegrityService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -373,6 +377,15 @@ const FORM_SERVICE_TOOLS = new Set([
   'glpi_review_forms',
 ]);
 
+const LOCATION_INTEGRITY_TOOLS = new Set([
+  'glpi_list_item_history', 'glpi_list_location_history', 'glpi_audit_locations',
+  'glpi_resolve_location', 'glpi_find_location_duplicates', 'glpi_delete_location',
+  'glpi_delete_unused_locations', 'glpi_update_monitor', 'glpi_update_network_equipment',
+  'glpi_update_phone', 'glpi_update_peripheral', 'glpi_update_appliance',
+  'glpi_reassign_assets_from_location_mapping', 'glpi_list_ldap_directories',
+  'glpi_get_ldap_location_mapping', 'glpi_list_automatic_actions', 'glpi_list_cron_executions',
+]);
+
 function isTicketServiceTool(toolName: string): boolean {
   return TICKET_SERVICE_TOOLS.has(toolName);
 }
@@ -384,6 +397,7 @@ function isBackendServiceTool(toolName: string): boolean {
     DIRECTORY_READ_SERVICE_TOOLS.has(toolName) ||
     PRINTER_SERVICE_TOOLS.has(toolName) ||
     FORM_SERVICE_TOOLS.has(toolName) ||
+    LOCATION_INTEGRITY_TOOLS.has(toolName) ||
     toolName === 'glpi_get_session_info';
 }
 
@@ -945,12 +959,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'glpi_update_computer',
-      description: 'Update a computer.',
+      description: 'Partially update a computer using raw-ID verification and validated entity/location compatibility. It never creates a Location.',
       inputSchema: {
-        type: 'object',
+        type: 'object', additionalProperties: false,
         properties: {
-          id: { type: 'number' }, name: { type: 'string' }, serial: { type: 'string' },
-          comment: { type: 'string' }, locations_id: { type: 'number' }, states_id: { type: 'number' },
+          id: { type: 'number', minimum: 1 }, name: { type: 'string', minLength: 1 }, serial: { type: ['string', 'null'] },
+          inventory_number: { type: ['string', 'null'] }, comment: { type: ['string', 'null'] },
+          location_id: { type: 'number', minimum: 0 }, entity_id: { type: 'number', minimum: 0 },
+          state_id: { type: 'number', minimum: 0 }, manufacturer_id: { type: 'number', minimum: 0 },
+          model_id: { type: 'number', minimum: 0 }, type_id: { type: 'number', minimum: 0 },
+          assigned_user_id: { type: 'number', minimum: 0 }, assigned_technician_id: { type: 'number', minimum: 0 },
+          contact: { type: ['string', 'null'] }, contact_number: { type: ['string', 'null'] }, is_recursive: { type: 'boolean' },
+          correlation_id: { type: 'string', format: 'uuid' },
         },
         required: ['id'],
       },
@@ -1649,6 +1669,74 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'glpi_list_item_history', description: 'Read and normalize GLPI Log history for one item or a filtered period without relying on Log search options.',
+      inputSchema: { type: 'object', properties: {
+        itemtype: { type: 'string' }, item_id: { type: 'number', minimum: 1 },
+        date_from: { type: 'string' }, date_to: { type: 'string' }, user_id: { type: 'number', minimum: 0 },
+        start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000 }, fetch_all: { type: 'boolean' },
+      } },
+    },
+    {
+      name: 'glpi_list_location_history', description: 'Read normalized GLPI history for one Location.',
+      inputSchema: { type: 'object', properties: { location_id: { type: 'number', minimum: 1 }, date_from: { type: 'string' }, date_to: { type: 'string' }, user_id: { type: 'number', minimum: 0 }, start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000 }, fetch_all: { type: 'boolean' } }, required: ['location_id'] },
+    },
+    {
+      name: 'glpi_audit_locations', description: 'Read-only audit for numeric names, normalized duplicates and duplicate complete paths. It only proposes findings and never modifies data.',
+      inputSchema: { type: 'object', properties: { entity_id: { type: 'number', minimum: 0 }, created_from: { type: 'string' }, created_to: { type: 'string' }, min_location_id: { type: 'number', minimum: 1 }, include_references: { type: 'boolean' }, normalize_names: { type: 'boolean' }, limit: { type: 'number', minimum: 1, maximum: 10000 }, fetch_all: { type: 'boolean' } } },
+    },
+    {
+      name: 'glpi_find_location_duplicates', description: 'Read-only alias focused on normalized and complete-name Location duplicates.',
+      inputSchema: { type: 'object', properties: { entity_id: { type: 'number', minimum: 0 }, min_location_id: { type: 'number', minimum: 1 } } },
+    },
+    {
+      name: 'glpi_resolve_location', description: 'Resolve an existing Location by normalized name or complete name, entity and parent. Returns resolved, not_found or ambiguous and never creates a Location.',
+      inputSchema: { type: 'object', properties: { name: { type: 'string', minLength: 1 }, entity_id: { type: 'number', minimum: 0 }, parent_location_id: { type: 'number', minimum: 0 } }, required: ['name'] },
+    },
+    {
+      name: 'glpi_delete_location', description: 'Safely plan or delete one unused Location. Dry-run defaults to true; any child, reference or incomplete reference scan blocks deletion.',
+      inputSchema: { type: 'object', properties: { location_id: { type: 'number', minimum: 1 }, dry_run: { type: 'boolean', default: true }, purge: { type: 'boolean', default: false }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_LOCATION_DELETION'] } }, required: ['location_id'] },
+    },
+    {
+      name: 'glpi_delete_unused_locations', description: 'Safely plan or delete an explicit list of unused Locations. No implicit ID-range selection.',
+      inputSchema: { type: 'object', properties: { location_ids: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'number', minimum: 1 } }, dry_run: { type: 'boolean', default: true }, purge: { type: 'boolean', default: false }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_LOCATION_DELETION'] } }, required: ['location_ids'] },
+    },
+    ...(['monitor', 'network_equipment', 'phone', 'peripheral', 'appliance'] as const).map((asset) => ({
+      name: `glpi_update_${asset}`,
+      description: `Partially update a ${asset.replace('_', ' ')} using raw-ID verification and validated entity/location compatibility. It never creates a Location.`,
+      inputSchema: { type: 'object', properties: {
+        id: { type: 'number', minimum: 1 }, location_id: { type: 'number', minimum: 0 }, entity_id: { type: 'number', minimum: 0 },
+        name: { type: 'string', minLength: 1 }, serial: { type: ['string', 'null'] }, inventory_number: { type: ['string', 'null'] },
+        comment: { type: ['string', 'null'] }, state_id: { type: 'number', minimum: 0 }, manufacturer_id: { type: 'number', minimum: 0 },
+        model_id: { type: 'number', minimum: 0 }, type_id: { type: 'number', minimum: 0 }, assigned_user_id: { type: 'number', minimum: 0 },
+        assigned_technician_id: { type: 'number', minimum: 0 }, contact: { type: ['string', 'null'] }, contact_number: { type: ['string', 'null'] }, is_recursive: { type: 'boolean' },
+        correlation_id: { type: 'string', format: 'uuid' },
+      }, required: ['id'] },
+    })),
+    {
+      name: 'glpi_reassign_assets_from_location_mapping', description: 'Reassign explicit asset types using an explicit old-to-new Location mapping. Validates every destination before writes, defaults to dry-run and never creates or deletes Locations.',
+      inputSchema: { type: 'object', properties: {
+        mapping: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'object', properties: { old_location_id: { type: 'number', minimum: 1 }, new_location_id: { type: 'number', minimum: 1 } }, required: ['old_location_id', 'new_location_id'], additionalProperties: false } },
+        itemtypes: { type: 'array', minItems: 1, items: { type: 'string', enum: ['Computer', 'Monitor', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral', 'Appliance'] } },
+        dry_run: { type: 'boolean', default: true }, batch_size: { type: 'number', minimum: 1, maximum: 500, default: 50 }, continue_on_error: { type: 'boolean', default: false }, correlation_id: { type: 'string', format: 'uuid' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_LOCATION_MAPPING'] },
+      }, required: ['mapping', 'itemtypes'] },
+    },
+    {
+      name: 'glpi_list_ldap_directories', description: 'List configured LDAP directories with password fields redacted.',
+      inputSchema: { type: 'object', properties: { start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000 } } },
+    },
+    {
+      name: 'glpi_get_ldap_location_mapping', description: 'Read one LDAP directory and expose its configured location-related attribute mapping without secrets.',
+      inputSchema: { type: 'object', properties: { ldap_directory_id: { type: 'number', minimum: 1 } }, required: ['ldap_directory_id'] },
+    },
+    {
+      name: 'glpi_list_automatic_actions', description: 'List GLPI automatic actions and their scheduling/execution metadata.',
+      inputSchema: { type: 'object', properties: { start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000 } } },
+    },
+    {
+      name: 'glpi_list_cron_executions', description: 'Read history entries associated with automatic actions for cron/LDAP/Inventory correlation.',
+      inputSchema: { type: 'object', properties: { date_from: { type: 'string' }, date_to: { type: 'string' }, start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000 }, fetch_all: { type: 'boolean' } } },
+    },
+    {
       name: 'glpi_list_documents',
       description: 'List documents.',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
@@ -2294,9 +2382,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_create_computer':
         return text({ success: true, ...(await client.createComputer(args)) });
       case 'glpi_update_computer': {
-        const id = args.id as number;
-        const updates = { ...args }; delete (updates as any).id;
-        return text(await safeLegacyPartialUpdate('Computer', id, updates));
+        const input = assetLocationUpdateSchema.parse(args);
+        return text(await locationIntegrityService.updateAsset({
+          itemtype: 'Computer', id: input.id, locationId: input.location_id, entityId: input.entity_id,
+          name: input.name, serial: input.serial, inventoryNumber: input.inventory_number, comment: input.comment,
+          stateId: input.state_id, manufacturerId: input.manufacturer_id, modelId: input.model_id, typeId: input.type_id,
+          assignedUserId: input.assigned_user_id, assignedTechnicianId: input.assigned_technician_id,
+          contact: input.contact, contactNumber: input.contact_number, recursive: input.is_recursive,
+          correlationId: input.correlation_id,
+        }));
       }
       case 'glpi_delete_computer':
         await client.deleteComputer(args.id as number, args.force as boolean);
@@ -2554,6 +2648,73 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           comment: input.comment,
           recursive: input.is_recursive,
         }));
+      }
+
+      case 'glpi_list_item_history':
+        return text(await locationIntegrityService.listItemHistory(z.object({
+          itemtype: z.string().min(1).optional(), item_id: z.number().int().min(1).optional(),
+          date_from: z.string().optional(), date_to: z.string().optional(), user_id: z.number().int().min(0).optional(),
+          start: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(10000).optional(), fetch_all: z.boolean().optional(),
+        }).strict().parse(args)));
+      case 'glpi_list_location_history': {
+        const input = z.object({ location_id: z.number().int().min(1), date_from: z.string().optional(), date_to: z.string().optional(), user_id: z.number().int().min(0).optional(), start: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(10000).optional(), fetch_all: z.boolean().optional() }).strict().parse(args);
+        return text(await locationIntegrityService.listItemHistory({ ...input, itemtype: 'Location', item_id: input.location_id }));
+      }
+      case 'glpi_audit_locations':
+      case 'glpi_find_location_duplicates':
+        return text(await locationIntegrityService.auditLocations(z.object({ entity_id: z.number().int().min(0).optional(), created_from: z.string().optional(), created_to: z.string().optional(), min_location_id: z.number().int().min(1).optional(), include_references: z.boolean().optional(), normalize_names: z.boolean().optional(), limit: z.number().int().min(1).max(10000).optional(), fetch_all: z.boolean().optional() }).strict().parse(args)));
+      case 'glpi_resolve_location': {
+        const input = z.object({ name: z.string().trim().min(1), entity_id: z.number().int().min(0).optional(), parent_location_id: z.number().int().min(0).optional() }).strict().parse(args);
+        return text(await locationIntegrityService.resolveLocation({ name: input.name, entityId: input.entity_id, parentLocationId: input.parent_location_id }));
+      }
+      case 'glpi_delete_location': {
+        const input = deleteLocationSchema.parse(args);
+        return text(await locationIntegrityService.deleteLocation({ locationId: input.location_id, dryRun: input.dry_run, purge: input.purge, confirmation: input.confirmation }));
+      }
+      case 'glpi_delete_unused_locations': {
+        const input = deleteLocationsSchema.parse(args);
+        return text(await locationIntegrityService.deleteUnusedLocations({ locationIds: input.location_ids, dryRun: input.dry_run, purge: input.purge, confirmation: input.confirmation }));
+      }
+      case 'glpi_update_monitor':
+      case 'glpi_update_network_equipment':
+      case 'glpi_update_phone':
+      case 'glpi_update_peripheral':
+      case 'glpi_update_appliance': {
+        const input = assetLocationUpdateSchema.parse(args);
+        const itemtypes: Record<string, LocationAssetType> = {
+          glpi_update_monitor: 'Monitor', glpi_update_network_equipment: 'NetworkEquipment', glpi_update_phone: 'Phone',
+          glpi_update_peripheral: 'Peripheral', glpi_update_appliance: 'Appliance',
+        };
+        return text(await locationIntegrityService.updateAsset({
+          itemtype: itemtypes[name], id: input.id, locationId: input.location_id, entityId: input.entity_id,
+          name: input.name, serial: input.serial, inventoryNumber: input.inventory_number, comment: input.comment,
+          stateId: input.state_id, manufacturerId: input.manufacturer_id, modelId: input.model_id, typeId: input.type_id,
+          assignedUserId: input.assigned_user_id, assignedTechnicianId: input.assigned_technician_id,
+          contact: input.contact, contactNumber: input.contact_number, recursive: input.is_recursive,
+        }));
+      }
+      case 'glpi_reassign_assets_from_location_mapping': {
+        const input = locationMappingSchema.parse(args);
+        return text(await locationIntegrityService.reassignAssets({
+          mapping: input.mapping.map((entry) => ({ oldLocationId: entry.old_location_id, newLocationId: entry.new_location_id })),
+          itemtypes: input.itemtypes, dryRun: input.dry_run, batchSize: input.batch_size,
+          continueOnError: input.continue_on_error, correlationId: input.correlation_id, confirmation: input.confirmation,
+        }));
+      }
+      case 'glpi_list_ldap_directories':
+        return text(await locationIntegrityService.listLdapDirectories(z.object({ start: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(10000).optional() }).strict().parse(args)));
+      case 'glpi_get_ldap_location_mapping': {
+        const { ldap_directory_id } = z.object({ ldap_directory_id: z.number().int().min(1) }).strict().parse(args);
+        const rows = await locationIntegrityService.listLdapDirectories({ start: 0, limit: 10000 }) as Record<string, unknown>[];
+        const directory = rows.find((row) => Number(row.id) === ldap_directory_id);
+        if (!directory) throw new Error(`LDAP directory ${ldap_directory_id} not found`);
+        return text({ ldap_directory_id, name: directory.name, location_attribute: directory.location_field ?? directory.location_attribute ?? null, directory });
+      }
+      case 'glpi_list_automatic_actions':
+        return text(await locationIntegrityService.listAutomaticActions(z.object({ start: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(10000).optional() }).strict().parse(args)));
+      case 'glpi_list_cron_executions': {
+        const input = z.object({ date_from: z.string().optional(), date_to: z.string().optional(), start: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(10000).optional(), fetch_all: z.boolean().optional() }).strict().parse(args);
+        return text(await locationIntegrityService.listItemHistory({ ...input, itemtype: 'CronTask' }));
       }
 
       case 'glpi_list_projects':
@@ -2974,6 +3135,7 @@ async function main() {
     directoryService = apiRouter.services.directory;
     printerService = apiRouter.services.printers;
     formService = apiRouter.services.forms;
+    locationIntegrityService = apiRouter.services.locationIntegrity;
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 

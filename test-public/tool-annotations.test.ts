@@ -61,3 +61,13 @@ test('native form and proofreading tools are read-only', () => {
     assert.notEqual(toolAnnotations(name).destructiveHint, true);
   }
 });
+
+test('Location audits are read-only while deletion remains destructive', () => {
+  for (const name of ['glpi_list_item_history', 'glpi_list_location_history', 'glpi_audit_locations', 'glpi_find_location_duplicates', 'glpi_resolve_location', 'glpi_list_ldap_directories', 'glpi_get_ldap_location_mapping', 'glpi_list_automatic_actions', 'glpi_list_cron_executions']) {
+    assert.equal(toolAnnotations(name).readOnlyHint, true);
+    assert.notEqual(toolAnnotations(name).destructiveHint, true);
+  }
+  for (const name of ['glpi_delete_location', 'glpi_delete_unused_locations']) {
+    assert.equal(toolAnnotations(name).destructiveHint, true);
+  }
+});

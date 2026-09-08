@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 148 tools currently registered by `src/index.ts` on
+This catalogue lists the 165 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -73,6 +73,33 @@ ordering, conditional logic, translations and destination configuration.
 | `glpi_get_form` | Read | Read a complete form with ordered sections, mixed question/comment blocks, conditions, validation data, selectable options, translations, destinations and redacted access policies. |
 | `glpi_list_form_categories` | Read | List hierarchical service-catalog categories with their rich description and illustration metadata. |
 | `glpi_review_forms` | Read | Produce a proofreading dataset: every visible text, its exact structural path, original HTML and normalized plain text. |
+
+## Location integrity, history and controlled asset reassignment
+
+These tools use raw foreign-key IDs for verification. A location label is never
+treated as an ID and no reassignment tool creates a Location implicitly.
+Deletion and batch reassignment default to dry-run. Hybrid routes this vertical
+explicitly to Legacy; High-Level fails clearly pending confirmed Swagger routes.
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_list_item_history` | Read | Read and normalize raw `Log` rows by item, dates and actor without relying on unavailable Log search options. |
+| `glpi_list_location_history` | Read | Read normalized history for one Location. |
+| `glpi_audit_locations` | Read | Detect numeric names, names matching another ID, normalized duplicates and duplicate complete paths without modifying data. |
+| `glpi_find_location_duplicates` | Read | Focus the Location audit on duplicate candidates. |
+| `glpi_resolve_location` | Read | Resolve an existing location by normalized name/complete name, entity and parent; return `resolved`, `not_found` or `ambiguous`. |
+| `glpi_delete_location` | Destructive | Dry-run and safely delete one explicit unused Location; references, children and incomplete scans block deletion. |
+| `glpi_delete_unused_locations` | Destructive | Validate an explicit Location list completely before the first deletion; no implicit range selection. |
+| `glpi_update_monitor` | Write | Partially update a monitor with validated entity/location and raw-ID post-verification. |
+| `glpi_update_network_equipment` | Write | Partially update network equipment with validated entity/location and raw-ID post-verification. |
+| `glpi_update_phone` | Write | Partially update a phone with validated entity/location and raw-ID post-verification. |
+| `glpi_update_peripheral` | Write | Partially update a peripheral with validated entity/location and raw-ID post-verification. |
+| `glpi_update_appliance` | Write | Partially update an appliance with validated entity/location and raw-ID post-verification. |
+| `glpi_reassign_assets_from_location_mapping` | Write | Plan or apply an explicit mapping across selected asset types; all destinations are validated before writes. |
+| `glpi_list_ldap_directories` | Read | List LDAP directory metadata with password fields redacted. |
+| `glpi_get_ldap_location_mapping` | Read | Read the location-related attribute mapping of one LDAP directory. |
+| `glpi_list_automatic_actions` | Read | List automatic actions and scheduling/execution metadata. |
+| `glpi_list_cron_executions` | Read | Read normalized `CronTask` history for time-window correlation. |
 | `glpi_upload_document` | Write | Upload a document, optionally linked directly to a ticket. |
 | `glpi_attach_document_to_ticket` | Write | Link an existing GLPI document to a ticket. |
 | `glpi_list_problems` | Read | List problems. |
@@ -441,5 +468,6 @@ The following are deliberately not presented as active tools:
 
 - VLAN management and `IPNetwork`/VLAN relationships;
 - High-Level API domains not marked implemented in the compatibility matrix;
+- GLPI Inventory import-configuration writes until an official, versioned API contract confirms the item type and writable fields;
 - per-user OAuth authentication;
 - generic destructive operations outside explicitly registered tools.

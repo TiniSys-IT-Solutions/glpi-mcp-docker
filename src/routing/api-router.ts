@@ -19,6 +19,8 @@ import { LegacyPrinterService } from '../api/legacy/printers.js';
 import { HighLevelPrinterService } from '../api/highlevel/printers.js';
 import { LegacyFormService } from '../api/legacy/forms.js';
 import { HighLevelFormService } from '../api/highlevel/forms.js';
+import { LegacyLocationIntegrityService } from '../api/legacy/location-integrity.js';
+import { HighLevelLocationIntegrityService } from '../api/highlevel/location-integrity.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
@@ -27,6 +29,23 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_get_form: 'legacy',
   glpi_list_form_categories: 'legacy',
   glpi_review_forms: 'legacy',
+  glpi_list_item_history: 'legacy',
+  glpi_list_location_history: 'legacy',
+  glpi_audit_locations: 'legacy',
+  glpi_resolve_location: 'legacy',
+  glpi_find_location_duplicates: 'legacy',
+  glpi_delete_location: 'legacy',
+  glpi_delete_unused_locations: 'legacy',
+  glpi_update_monitor: 'legacy',
+  glpi_update_network_equipment: 'legacy',
+  glpi_update_phone: 'legacy',
+  glpi_update_peripheral: 'legacy',
+  glpi_update_appliance: 'legacy',
+  glpi_reassign_assets_from_location_mapping: 'legacy',
+  glpi_list_ldap_directories: 'legacy',
+  glpi_get_ldap_location_mapping: 'legacy',
+  glpi_list_automatic_actions: 'legacy',
+  glpi_list_cron_executions: 'legacy',
   glpi_list_import_entity_rules: 'legacy',
   glpi_get_import_entity_rule: 'legacy',
   glpi_list_import_entity_rule_criteria: 'legacy',
@@ -224,6 +243,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         directory: new HighLevelDirectoryService(highlevel),
         printers: new HighLevelPrinterService(),
         forms: new HighLevelFormService(),
+        locationIntegrity: new HighLevelLocationIntegrityService(),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -244,6 +264,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       directory: new LegacyDirectoryService(client),
       printers: new LegacyPrinterService(client),
       forms: new LegacyFormService(client),
+      locationIntegrity: new LegacyLocationIntegrityService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

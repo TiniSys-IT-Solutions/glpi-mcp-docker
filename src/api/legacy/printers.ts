@@ -47,15 +47,16 @@ export class LegacyPrinterService implements PrinterService {
   async update(id: number, input: PrinterUpdateRequest): Promise<unknown> {
     const payload = legacyPrinterUpdatePayload(input);
     if (Object.keys(payload).length === 0) throw new Error('At least one printer field must be provided');
-    const before = await this.client.getItem<Record<string, unknown>>('Printer', id);
+    const before = await this.client.getItem<Record<string, unknown>>('Printer', id, { expand_dropdowns: false });
+    const beforeDisplay = await this.client.getItem<Record<string, unknown>>('Printer', id);
     await this.validateReferences(input, before);
     await this.client.updateItem('Printer', id, payload);
     let after: Record<string, unknown>;
     try {
-      after = await this.client.getItem<Record<string, unknown>>('Printer', id);
+      after = await this.client.getItem<Record<string, unknown>>('Printer', id, { expand_dropdowns: false });
     } catch (error) {
       return {
-        success: true, id, update_status: 'succeeded', verification_status: 'failed', before,
+        success: true, id, update_status: 'succeeded', verification_status: 'failed', before, before_raw: before, before_display: beforeDisplay,
         requested: input, verification_error: error instanceof Error ? error.name : 'UnknownError',
         verification_message: error instanceof Error ? error.message : String(error),
       };
@@ -65,7 +66,8 @@ export class LegacyPrinterService implements PrinterService {
         throw new Error(`Printer ${id} verification failed for ${field}: expected ${String(expected)}, got ${String(after[field])}`);
       }
     }
-    return { success: true, id, update_status: 'succeeded', verification_status: 'verified', before, requested: input, after };
+    const afterDisplay = await this.client.getItem<Record<string, unknown>>('Printer', id);
+    return { success: true, id, update_status: 'succeeded', verification_status: 'verified', before, after, before_raw: before, after_raw: after, before_display: beforeDisplay, after_display: afterDisplay, requested: input };
   }
 
   async appendComment(printerId: number, input: AppendPrinterCommentRequest): Promise<unknown> {

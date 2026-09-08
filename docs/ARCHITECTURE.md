@@ -119,7 +119,18 @@ MCP native-form tools
 FormService
   +-- LegacyFormService    -> namespaced `Glpi\\Form\\*` itemtypes
   `-- HighLevelFormService -> explicit not-supported pending Swagger
+
+MCP location-integrity tools
+  |
+LocationIntegrityService
+  +-- LegacyLocationIntegrityService -> raw FK verification, audit and guarded writes
+  `-- HighLevelLocationIntegrityService -> explicit not-supported pending Swagger
 ```
+
+Location-integrity writes resolve and compare raw identifiers with
+`expand_dropdowns=false`; expanded values are presentation-only. Reassignment
+never calls Location creation. Deletion scans known referencing domains and
+fails closed if any reference scan is incomplete.
 
 The native-form adapter reconstructs the editor order by merging questions and
 rich-text comments within each section. It decodes JSON-backed options,
