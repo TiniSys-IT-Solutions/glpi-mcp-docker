@@ -6,7 +6,8 @@ export interface ToolAnnotations {
 }
 
 export function toolAnnotations(name: string): ToolAnnotations {
-  if (name === 'glpi_addressing_preview_ip_network_sync') {
+  if (name === 'glpi_addressing_list_ranges' || name === 'glpi_addressing_get_range' ||
+      name === 'glpi_addressing_preview_ip_network_sync') {
     return { readOnlyHint: true, openWorldHint: false };
   }
   if (name === 'glpi_addressing_apply_ip_network_sync') {

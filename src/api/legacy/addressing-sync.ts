@@ -1,9 +1,10 @@
 import { GlpiClient } from './glpi-client.js';
-import { AddressingSyncService, buildAddressingPlan } from '../../core/addressing-sync/service.js';
+import { AddressingSyncService, buildAddressingPlan, ipv4CidrRange } from '../../core/addressing-sync/service.js';
 import {
   AddressingApplyRequest, AddressingListRequest, AddressingPreviewRequest,
-  AddressingRangeRecord, IPNetworkRecord,
+  AddressingRangeRecord, IPNetworkRecord, LegacyIPNetworkRestRecord,
 } from '../../core/addressing-sync/types.js';
+import { isIP } from 'node:net';
 
 // GLPI 11 plugins use namespaced class itemtypes. Older plugin releases used
 // the pre-namespace form. Both are probed explicitly through the official REST
@@ -24,11 +25,58 @@ const REQUIRED_REST_FIELDS = [
 // cannot be required from listSearchOptions; they are verified on REST rows.
 const REQUIRED_SEARCH_FIELDS = ['id', 'name', 'comment', 'use_ping', 'begin_ip', 'end_ip'];
 const REQUIRED_RELATION_TABLES = ['glpi_networks', 'glpi_locations', 'glpi_fqdns', 'glpi_vlans', 'glpi_entities'];
+const REST_PAGE_SIZE = 1000;
+const MAX_ADDRESSING_RANGES = 100000;
 
 function num(value: unknown): number { const n = Number(value ?? 0); return Number.isFinite(n) ? n : 0; }
 function markerId(comment: unknown): number | undefined {
   const match = typeof comment === 'string' ? comment.match(/\[mcp-ipnetwork-sync:v1 ipnetwork_id=(\d+)\]/) : undefined;
   return match ? Number(match[1]) : undefined;
+}
+
+function netmaskToPrefix(netmask: string): number | undefined {
+  if (isIP(netmask) !== 4) return undefined;
+  const bits = netmask.split('.').map((part) => Number(part).toString(2).padStart(8, '0')).join('');
+  if (!/^1*0*$/.test(bits)) return undefined;
+  return bits.indexOf('0') === -1 ? 32 : bits.indexOf('0');
+}
+
+function canonicalIpv4Cidr(value: string): string | undefined {
+  const parts = value.split('/').map((part) => part.trim());
+  if (parts.length !== 2) return undefined;
+  const suffix = parts[1];
+  const prefix = suffix.includes('.') ? netmaskToPrefix(suffix) : Number(suffix);
+  if (prefix === undefined || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) return undefined;
+  try { return ipv4CidrRange(`${parts[0]}/${prefix}`, 'full_cidr').canonical_cidr; }
+  catch { return undefined; }
+}
+
+export function normalizeLegacyIPNetwork(raw: LegacyIPNetworkRestRecord): IPNetworkRecord {
+  const base = {
+    id: Number(raw.id), name: String(raw.name ?? raw.completename ?? ''), entities_id: num(raw.entities_id),
+    is_recursive: raw.is_recursive, addressable: raw.addressable, comment: typeof raw.comment === 'string' ? raw.comment : undefined,
+    date_mod: typeof raw.date_mod === 'string' ? raw.date_mod : undefined,
+  };
+  const explicit = typeof raw.network === 'string' && raw.network.trim() ? raw.network.trim() : undefined;
+  const address = typeof raw.address === 'string' && raw.address.trim() ? raw.address.trim() : undefined;
+  const netmask = typeof raw.netmask === 'string' && raw.netmask.trim() ? raw.netmask.trim() : undefined;
+
+  const explicitVersion = explicit ? (explicit.includes(':') ? 6 : isIP(explicit.split('/')[0].trim())) : 0;
+  const addressVersion = address ? isIP(address) : 0;
+  if (explicitVersion && addressVersion && explicitVersion !== addressVersion) {
+    return { ...base, normalization_error: 'ambiguous_ip_network_definition' };
+  }
+  if (explicit?.includes(':') || address?.includes(':')) return { ...base, cidr: explicit ?? address, };
+  const explicitCanonical = explicit ? canonicalIpv4Cidr(explicit) : undefined;
+  if (explicit && !explicitCanonical) return { ...base, normalization_error: 'invalid_ipv4_address' };
+  if (!address && !netmask) return explicitCanonical ? { ...base, cidr: explicitCanonical } : { ...base, normalization_error: 'missing_address_or_netmask' };
+  if (!address || !netmask) return explicitCanonical ? { ...base, cidr: explicitCanonical } : { ...base, normalization_error: 'missing_address_or_netmask' };
+  if (isIP(address) !== 4) return { ...base, normalization_error: 'invalid_ipv4_address' };
+  const prefix = netmaskToPrefix(netmask);
+  if (prefix === undefined) return { ...base, normalization_error: 'invalid_ipv4_netmask' };
+  const derived = canonicalIpv4Cidr(`${address}/${prefix}`)!;
+  if (explicitCanonical && explicitCanonical !== derived) return { ...base, normalization_error: 'ambiguous_ip_network_definition' };
+  return { ...base, cidr: explicitCanonical ?? derived };
 }
 
 export class LegacyAddressingSyncService implements AddressingSyncService {
@@ -67,8 +115,8 @@ export class LegacyAddressingSyncService implements AddressingSyncService {
       const addressing = plugins.find((plugin) =>
         String(plugin.directory ?? plugin.name ?? '').toLowerCase() === 'addressing'
       );
-      if (String(addressing?.version ?? '') === '3.2.11') return;
-      throw new Error('Addressing write refused: no REST range can prove the complete schema and the installed plugin could not be confirmed as source-audited version 3.2.11');
+      if (String(addressing?.version ?? '') === '3.2.11' && num(addressing?.state) === 1) return;
+      throw new Error('Addressing write refused: no REST range can prove the complete schema and the installed plugin could not be confirmed as active source-audited version 3.2.11');
     }
     const missing = REQUIRED_REST_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(sample, field));
     if (missing.length) {
@@ -76,15 +124,23 @@ export class LegacyAddressingSyncService implements AddressingSyncService {
     }
   }
 
-  private async allRanges(includeDeleted = true): Promise<AddressingRangeRecord[]> {
+  private async pagedRanges(isDeleted: boolean): Promise<AddressingRangeRecord[]> {
     const itemtype = await this.itemtype();
-    const active = await this.client.getItems<AddressingRangeRecord>(itemtype, {
-      range: '0-9999', is_deleted: false, expand_dropdowns: false,
-    });
+    const rows: AddressingRangeRecord[] = [];
+    for (let start = 0; start < MAX_ADDRESSING_RANGES; start += REST_PAGE_SIZE) {
+      const page = await this.client.getItems<AddressingRangeRecord>(itemtype, {
+        range: `${start}-${start + REST_PAGE_SIZE - 1}`, is_deleted: isDeleted, expand_dropdowns: false,
+      });
+      rows.push(...page);
+      if (page.length < REST_PAGE_SIZE) return rows;
+    }
+    throw new Error(`Addressing range scan exceeded safety limit ${MAX_ADDRESSING_RANGES}; refusing an incomplete plan`);
+  }
+
+  private async allRanges(includeDeleted = true): Promise<AddressingRangeRecord[]> {
+    const active = await this.pagedRanges(false);
     if (!includeDeleted) return active;
-    const deleted = await this.client.getItems<AddressingRangeRecord>(itemtype, {
-      range: '0-9999', is_deleted: true, expand_dropdowns: false,
-    });
+    const deleted = await this.pagedRanges(true);
     return [...active, ...deleted.filter((row) => !active.some((item) => item.id === row.id))];
   }
 
@@ -117,13 +173,42 @@ export class LegacyAddressingSyncService implements AddressingSyncService {
       comment: row.comment ?? '', is_deleted: !!num(row.is_deleted) };
   }
 
+  private async verifyWrite(itemtype: string, id: number, payload: Record<string, unknown>) {
+    try {
+      const row = await this.client.getItem<AddressingRangeRecord>(itemtype, id, { expand_dropdowns: false });
+      const mismatches = Object.entries(payload).filter(([field, expected]) => {
+        const actual = row[field];
+        if (typeof expected === 'boolean') return Boolean(num(actual)) !== expected;
+        if (typeof expected === 'number') return num(actual) !== expected;
+        return String(actual ?? '') !== String(expected ?? '');
+      }).map(([field]) => field);
+      return mismatches.length
+        ? { verification_status: 'failed', verification_error: `Mismatched fields: ${mismatches.join(', ')}` }
+        : { verification_status: 'verified', range: this.friendly(row) };
+    } catch (error) {
+      return { verification_status: 'failed', verification_error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   async preview(input: AddressingPreviewRequest) {
     const itemtype = await this.itemtype();
-    const options = input.ip_network_ids
-      ? { range: '0-9999', expand_dropdowns: false }
-      : { range: `${input.start ?? 0}-${(input.start ?? 0) + (input.limit ?? 100) - 1}`, expand_dropdowns: false };
-    let sources = await this.client.getItems<IPNetworkRecord>('IPNetwork', options);
+    let rawSources: LegacyIPNetworkRestRecord[];
+    if (input.ip_network_ids) {
+      rawSources = await Promise.all(input.ip_network_ids.map((id) =>
+        this.client.getItem<LegacyIPNetworkRestRecord>('IPNetwork', id, { expand_dropdowns: false })
+      ));
+      const returned = new Set(rawSources.map((source) => Number(source.id)));
+      const missing = input.ip_network_ids.filter((id) => !returned.has(id));
+      if (missing.length) throw new Error(`Explicit IPNetwork selection was incomplete; missing ids: ${missing.join(', ')}`);
+    } else {
+      const options = { range: `${input.start ?? 0}-${(input.start ?? 0) + (input.limit ?? 100) - 1}`, expand_dropdowns: false };
+      rawSources = await this.client.getItems<LegacyIPNetworkRestRecord>('IPNetwork', options);
+    }
+    let sources = rawSources.map(normalizeLegacyIPNetwork);
     if (input.entity_id !== undefined) sources = sources.filter((row) => num(row.entities_id) === input.entity_id);
+    if (input.ip_network_ids && sources.length !== input.ip_network_ids.length) {
+      throw new Error('Explicit IPNetwork selection contains ids outside the requested entity scope');
+    }
     const ranges = await this.allRanges(true);
     return buildAddressingPlan({ itemtype, sources, ranges, request: input });
   }
@@ -156,10 +241,12 @@ export class LegacyAddressingSyncService implements AddressingSyncService {
         }
         if (item.action === 'create') {
           const created = await this.client.createItem(current.itemtype, payload);
-          results.push({ ip_network_id: item.ip_network_id, action: 'created', range_id: created.id });
+          results.push({ ip_network_id: item.ip_network_id, action: 'created', range_id: created.id,
+            ...await this.verifyWrite(current.itemtype, created.id, payload) });
         } else {
           await this.client.updateItem(current.itemtype, item.existing_range!.id, payload);
-          results.push({ ip_network_id: item.ip_network_id, action: 'updated', range_id: item.existing_range!.id });
+          results.push({ ip_network_id: item.ip_network_id, action: 'updated', range_id: item.existing_range!.id,
+            ...await this.verifyWrite(current.itemtype, item.existing_range!.id, payload) });
         }
       } catch (error) {
         results.push({ ip_network_id: item.ip_network_id, action: 'error', error: error instanceof Error ? error.message : String(error) });

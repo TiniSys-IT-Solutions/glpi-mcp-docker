@@ -87,6 +87,17 @@ identify a target. `/0`–`/30` usable-host mode excludes network/broadcast,
 Arithmetic uses `bigint`. More than 65,536 CIDR addresses is skipped without
 splitting. IPv6 is skipped as `plugin_ipv4_only`.
 
+Legacy REST commonly returns native `IPNetwork` definitions as `address` plus
+an IPv4 `netmask`, without a `network` CIDR field. The Legacy adapter validates
+both values, requires a contiguous mask, derives a canonical CIDR, and rejects
+missing, malformed, or contradictory representations. When explicit
+`network` is present, both numeric CIDR (`10.1.107.0/24`) and GLPI's display
+form (`10.1.107.0 / 255.255.255.0`) are normalized before comparison. When explicit
+`ip_network_ids` are supplied, every object is fetched directly by id; no
+selected id depends on the bounded list pagination. The former
+`include_recursive` option was removed because it had no valid implemented
+semantics and is now rejected by strict input validation.
+
 Run `glpi_addressing_preview_ip_network_sync`, review every action/proof/warning,
 then call `glpi_addressing_apply_ip_network_sync` with identical options, explicit
 ids, its 64-hex fingerprint, and `I_HAVE_VERIFIED_THE_ADDRESSING_SYNC`. Apply
@@ -104,7 +115,24 @@ For Addressing 3.2.11, `rawSearchOptions()` exposes only the searchable subset
 dropdowns). The MCP detects that exact signature. Before applying a write it
 also requires a readable REST row containing every persisted range field. On
 an empty installation, the first creation is allowed only when GLPI's `Plugin`
-REST resource confirms the source-audited Addressing version `3.2.11`.
+REST resource confirms the source-audited Addressing version `3.2.11` with
+active state `1`. Existing Addressing ranges are read in bounded pages up to a
+documented safety ceiling; exceeding it rejects the plan rather than silently
+missing a marker, exact match, or duplicate.
+
+Location, generic Network, VLAN and FQDN remain zero when neither an explicit
+override nor a proven existing-range value exists. Preview reports an individual
+warning for each unresolved relation; it never fabricates or creates related
+objects. Addressing 3.2.11 accepts zero for these optional foreign keys.
+
+Apply performs all read/schema/staleness checks before the first write, but the
+Legacy REST API offers no multi-object transaction. A batch can therefore be
+partially applied if a later create/update fails. Results are returned per
+IPNetwork and retries remain idempotent because successful rows carry the MCP
+marker; operators must review every result before retrying.
+Every successful POST/PUT is read back. The result distinguishes the accepted
+write from its `verified` or `failed` post-write verification; a failed readback
+does not cause an unsafe replay of the write.
 
 Preview example:
 

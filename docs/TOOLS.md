@@ -37,6 +37,15 @@ that do not yet meet those conditions remain without an unsafe raw update tool.
 
 `adopt_exact_matches` defaults to false. `update_inferred_metadata` defaults to
 false. Apply must repeat the preview selection and options.
+Explicit IPNetwork ids are fetched individually and all must resolve. Legacy
+`address + netmask` is normalized to canonical CIDR; invalid or contradictory
+definitions are skipped explicitly, including GLPI's `address / dotted-mask`
+display form. Addressing targets are paginated and an incomplete safety-capped
+scan is rejected. `include_recursive` is not accepted because
+no recursive entity traversal is implemented. Unresolved Location, Network,
+VLAN and FQDN relations remain zero with warnings. Multi-row writes are not
+transactional; apply reports each success or failure and safe retries are
+idempotent through the synchronization marker.
 
 ## Server metadata
 

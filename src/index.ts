@@ -1147,8 +1147,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'glpi_addressing_preview_ip_network_sync',
       description: 'Read-only preview required before synchronizing GLPI IPNetwork objects to Addressing plugin ranges.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {
-        ip_network_ids: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'number', minimum: 1 } }, entity_id: { type: 'number', minimum: 0 },
-        include_recursive: { type: 'boolean' }, only_addressable: { type: 'boolean', default: true }, range_policy: { type: 'string', enum: ['usable_hosts', 'full_cidr'], default: 'usable_hosts' },
+        ip_network_ids: { type: 'array', minItems: 1, maxItems: 1000, uniqueItems: true, items: { type: 'number', minimum: 1 } }, entity_id: { type: 'number', minimum: 0 },
+        only_addressable: { type: 'boolean', default: true }, range_policy: { type: 'string', enum: ['usable_hosts', 'full_cidr'], default: 'usable_hosts' },
         match_location: { type: 'boolean', default: true }, match_network: { type: 'boolean', default: true }, match_vlan: { type: 'boolean', default: true }, match_fqdn: { type: 'boolean', default: true },
         adopt_exact_matches: { type: 'boolean', default: false }, defaults: { type: 'object' }, overrides_by_ip_network_id: { type: 'object' },
         start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 1000 },
@@ -1158,9 +1158,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'glpi_addressing_apply_ip_network_sync',
       description: 'Apply a previously verified Addressing sync preview. Never deletes ranges or launches ping/cron.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {
-        ip_network_ids: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'number', minimum: 1 } }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+        ip_network_ids: { type: 'array', minItems: 1, maxItems: 1000, uniqueItems: true, items: { type: 'number', minimum: 1 } }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
         confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ADDRESSING_SYNC'] }, allow_create: { type: 'boolean', default: true }, allow_update: { type: 'boolean', default: true },
-        update_inferred_metadata: { type: 'boolean', default: false }, entity_id: { type: 'number', minimum: 0 }, include_recursive: { type: 'boolean' }, only_addressable: { type: 'boolean' },
+        update_inferred_metadata: { type: 'boolean', default: false }, entity_id: { type: 'number', minimum: 0 }, only_addressable: { type: 'boolean' },
         range_policy: { type: 'string', enum: ['usable_hosts', 'full_cidr'] }, match_location: { type: 'boolean' }, match_network: { type: 'boolean' }, match_vlan: { type: 'boolean' }, match_fqdn: { type: 'boolean' },
         adopt_exact_matches: { type: 'boolean' }, defaults: { type: 'object' }, overrides_by_ip_network_id: { type: 'object' }, start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 1000 },
       }, required: ['ip_network_ids', 'preview_fingerprint', 'confirmation'] },

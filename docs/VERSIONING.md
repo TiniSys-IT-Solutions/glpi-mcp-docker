@@ -8,7 +8,7 @@ This file is the authoritative release procedure for this repository.
 | --- | --- |
 | `main` | Current production source and source of Docker `latest`. |
 | `0.3.x` | Current MCP application and Docker release line. |
-| `v0.3.0`, `v0.3.1`, `v0.3.2`, `v0.3.3`, `v0.3.4`, `v0.3.5`, `v0.3.6`, `v0.3.7`, `v0.3.8`, `v0.3.9`, ... | Immutable annotated release tags. |
+| `v0.3.0`, `v0.3.1`, `v0.3.2`, `v0.3.3`, `v0.3.4`, `v0.3.5`, `v0.3.6`, `v0.3.7`, `v0.3.8`, `v0.3.9`, `v0.3.10`, ... | Immutable annotated release tags. |
 | `v1-legacy` | Archived original Docker wrapper. |
 | `v2` | Historical migration branch retained for traceability. |
 
@@ -21,8 +21,8 @@ the build stage omitted the `Dockerfile` required by the identity test; its tag
 remains immutable. The `v0.3.7` source tag also remains immutable: its Docker
 build failed because the documentation conformity test ran before `docs/` was
 copied into the build stage. The corrected Docker build was released as
-`v0.3.8`. The location-integrity, history and controlled asset-reassignment
-release currently prepared is `v0.3.9`.
+`v0.3.8`. The Addressing IPNetwork normalization and guarded first-sync release
+currently prepared is `v0.3.10`.
 
 ## Version sources
 
@@ -64,10 +64,10 @@ npm test
 npm run build
 git diff --check
 git add Dockerfile README.md docs package.json package-lock.json src/build-info.ts
-git commit -m "chore(release): prepare version 0.3.9"
-git tag -a v0.3.9 -m "Release glpi-mcp-docker v0.3.9"
+git commit -m "chore(release): prepare version 0.3.10"
+git tag -a v0.3.10 -m "Release glpi-mcp-docker v0.3.10"
 git push origin main
-git push origin v0.3.9
+git push origin v0.3.10
 ```
 
 Do not use `git push --tags`: it may publish unrelated local tags.
@@ -77,7 +77,7 @@ Do not use `git push --tags`: it may publish unrelated local tags.
 GitHub Actions publishes:
 
 - `latest` and a commit-SHA tag after a push to `main`;
-- `0.3.9`, `0.3` and a commit-SHA tag after a push of `v0.3.9`.
+- `0.3.10`, `0.3` and a commit-SHA tag after a push of `v0.3.10`.
 
 Release tags are immutable. If a released version is faulty, fix it in a new
 patch version rather than moving its tag.

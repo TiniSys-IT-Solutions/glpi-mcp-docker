@@ -33,7 +33,6 @@ export interface AddressingListRequest {
 export interface AddressingPreviewRequest {
   ip_network_ids?: number[];
   entity_id?: number;
-  include_recursive?: boolean;
   only_addressable?: boolean;
   range_policy?: RangePolicy;
   match_location?: boolean;
@@ -56,15 +55,31 @@ export interface AddressingApplyRequest extends AddressingPreviewRequest {
   update_inferred_metadata?: boolean;
 }
 
-export interface IPNetworkRecord {
+export interface LegacyIPNetworkRestRecord {
   id: number;
-  name: string;
-  network: string;
+  name?: string;
+  completename?: string;
+  network?: string;
+  address?: string;
+  netmask?: string;
   entities_id?: number;
   is_recursive?: number | boolean;
   addressable?: number | boolean;
   comment?: string;
   date_mod?: string;
+  [key: string]: unknown;
+}
+
+export interface IPNetworkRecord {
+  id: number;
+  name: string;
+  cidr?: string;
+  entities_id?: number;
+  is_recursive?: number | boolean;
+  addressable?: number | boolean;
+  comment?: string;
+  date_mod?: string;
+  normalization_error?: 'missing_address_or_netmask' | 'invalid_ipv4_address' | 'invalid_ipv4_netmask' | 'ambiguous_ip_network_definition';
 }
 
 export interface AddressingRangeRecord {

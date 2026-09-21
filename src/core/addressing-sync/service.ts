@@ -113,8 +113,12 @@ export function buildAddressingPlan(input: BuildPlanInput): AddressingPreviewRes
       items.push({ ...base, action: 'skip', reason: 'ip_network_not_addressable', state_fingerprint: stableFingerprint(source) });
       continue;
     }
+    if (source.normalization_error) {
+      items.push({ ...base, action: 'skip', reason: source.normalization_error, state_fingerprint: stableFingerprint(source) });
+      continue;
+    }
     let calculated;
-    try { calculated = ipv4CidrRange(source.network, policy); }
+    try { calculated = ipv4CidrRange(source.cidr ?? '', policy); }
     catch (error) {
       const reason = error instanceof Error && error.message === 'plugin_ipv4_only' ? 'plugin_ipv4_only' : 'invalid_cidr';
       items.push({ ...base, action: 'skip', reason, state_fingerprint: stableFingerprint(source) });

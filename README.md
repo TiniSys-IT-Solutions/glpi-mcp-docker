@@ -23,7 +23,7 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.3.9
+## État de la version 0.3.10
 
 | Composant | État |
 | --- | --- |
@@ -37,6 +37,10 @@ La création d'une entité ou d'un lieu distingue désormais l'écriture réussi
 de l'échec éventuel de sa relecture. Les entités prennent aussi en charge le DN
 LDAP, le filtre LDAP, l'annuaire associé, le TAG d'inventaire et les mises à
 jour partielles avec lecture avant/après écriture.
+
+La version 0.3.10 corrige la synchronisation Addressing lorsque Legacy REST
+retourne un `IPNetwork` sous forme `address + netmask`, sécurise les sélections
+explicites et leurs annotations read-only, et prépare le premier aperçu SALINS.
 
 La version 0.3.9 inclut les améliorations fonctionnelles préparées depuis 0.3.3,
 corrige leur construction dans l'image Docker et ajoute la mise à jour partielle
@@ -93,7 +97,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.9
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.10
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3
 ```
 
@@ -130,7 +134,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.3.9**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.3.10**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité
