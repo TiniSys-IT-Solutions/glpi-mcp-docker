@@ -1,0 +1,62 @@
+diff --git a/src/Glpi/Inventory/MainAsset/Unmanaged.php b/src/Glpi/Inventory/MainAsset/Unmanaged.php
+index bc0fe6b..5b85546 100644
+--- a/src/Glpi/Inventory/MainAsset/Unmanaged.php
++++ b/src/Glpi/Inventory/MainAsset/Unmanaged.php
+@@ -156,6 +156,8 @@ class Unmanaged extends MainAsset
+ 
+         // append data from RuleImportEntity
+         foreach ($this->ruleentity_data as $attribute => $value) {
++            $known_key = md5($attribute . $value);
++            $this->known_links[$known_key] = $value;
+             $val->{$attribute} = $value;
+         }
+         // append data from RuleLocation
+diff --git a/tests/functional/Glpi/Inventory/Assets/UnmanagedTest.php b/tests/functional/Glpi/Inventory/Assets/UnmanagedTest.php
+index 8f2ecac..1d622bf 100644
+--- a/tests/functional/Glpi/Inventory/Assets/UnmanagedTest.php
++++ b/tests/functional/Glpi/Inventory/Assets/UnmanagedTest.php
+@@ -162,6 +162,13 @@ class UnmanagedTest extends AbstractInventoryAsset
+         ]);
+         $this->assertGreaterThan(0, $entities_id_b);
+ 
++        $location = new \Location();
++        $locations_id = $location->add([
++            'name'        => 'Location B',
++            'entities_id' => $entities_id_b,
++        ]);
++        $this->assertGreaterThan(0, $locations_id);
++
+         // Add a rule for get entity tag (1)
+         $rule = new \Rule();
+         $input = [
+@@ -202,6 +209,14 @@ class UnmanagedTest extends AbstractInventoryAsset
+         ];
+         $this->assertGreaterThan(0, $ruleaction->add($input));
+ 
++        $input = [
++            'rules_id'    => $rule1_id,
++            'action_type' => 'assign',
++            'field'       => 'locations_id',
++            'value'       => $locations_id,
++        ];
++        $this->assertGreaterThan(0, $ruleaction->add($input));
++
+         $unmanaged = new \Unmanaged();
+ 
+         //disable Unmanaged import
+@@ -243,6 +258,15 @@ class UnmanagedTest extends AbstractInventoryAsset
+         //check entity
+         $this->assertEquals($entities_id_b, $unmanaged->fields['entities_id']);
+ 
++        // Check that the location assigned by RuleImportEntity is reused.
++        $this->assertEquals($locations_id, $unmanaged->fields['locations_id']);
++
++        // A new location named after the numerical ID must not be created.
++        $this->assertFalse($location->getFromDbByCrit([
++            'name'        => (string) $locations_id,
++            'entities_id' => $entities_id_b,
++        ]));
++
+         //check for one NetworkPort
+         $np = new \NetworkPort();
+         $nps = $np->find(["itemtype" => \Unmanaged::class, "items_id" => $unmanaged->fields['id'], "mac" => "4c:cc:6a:02:13:a9"]);

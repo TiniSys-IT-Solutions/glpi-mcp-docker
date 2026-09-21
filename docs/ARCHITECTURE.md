@@ -20,6 +20,15 @@ Useful parts kept:
 
 ## Runtime Flow
 
+Addressing synchronization follows
+`MCP -> AddressingSyncService -> LegacyAddressingSyncService`; its deterministic
+planner is independent of `GlpiClient`. Hybrid explicitly selects Legacy.
+High-Level returns not-supported because no official plugin route is confirmed.
+
+The Legacy adapter probes `listSearchOptions` for the GLPI 11 itemtype
+`GlpiPlugin\\Addressing\\Addressing`, then the historical
+`PluginAddressingAddressing`. It requires every known REST field before writing.
+
 ```text
 AI client
   |
@@ -125,12 +134,22 @@ MCP location-integrity tools
 LocationIntegrityService
   +-- LegacyLocationIntegrityService -> raw FK verification, audit and guarded writes
   `-- HighLevelLocationIntegrityService -> explicit not-supported pending Swagger
+
+MCP unmanaged reconciliation tools
+  |
+UnmanagedReconciliationService
+  +-- LegacyUnmanagedReconciliationService -> explainable read-only matching audit
+  `-- HighLevelUnmanagedReconciliationService -> explicit not-supported pending Swagger
 ```
 
 Location-integrity writes resolve and compare raw identifiers with
 `expand_dropdowns=false`; expanded values are presentation-only. Reassignment
 never calls Location creation. Deletion scans known referencing domains and
 fails closed if any reference scan is incomplete.
+
+Unmanaged reconciliation never emulates a merge with delete-plus-create. Until
+a confirmed GLPI 11 contract exists, its guarded apply entry point returns
+`not_supported` without issuing an API write.
 
 The native-form adapter reconstructs the editor order by merging questions and
 rich-text comments within each section. It decodes JSON-backed options,

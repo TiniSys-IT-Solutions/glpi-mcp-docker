@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 165 tools currently registered by `src/index.ts` on
+This catalogue lists the 167 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -24,6 +24,19 @@ An update tool is not added solely because Legacy exposes a generic PUT: every
 business update requires a durable field contract, null/omission semantics,
 reference validation and explicit Legacy/High-Level/Hybrid routing. Domains
 that do not yet meet those conditions remain without an unsafe raw update tool.
+
+## IP Addressing synchronization
+
+- `glpi_addressing_list_ranges` lists plugin ranges and relationship ids.
+- `glpi_addressing_get_range` returns one complete range and its raw REST fields.
+- `glpi_addressing_preview_ip_network_sync` produces a deterministic read-only
+  create/update/unchanged/skip/conflict plan and fingerprint.
+- `glpi_addressing_apply_ip_network_sync` requires that fingerprint and the exact
+  phrase `I_HAVE_VERIFIED_THE_ADDRESSING_SYNC`. It is idempotent, continues after
+  per-range failures, never deletes a range, and never launches ping or cron.
+
+`adopt_exact_matches` defaults to false. `update_inferred_metadata` defaults to
+false. Apply must repeat the preview selection and options.
 
 ## Server metadata
 
@@ -100,6 +113,39 @@ explicitly to Legacy; High-Level fails clearly pending confirmed Swagger routes.
 | `glpi_get_ldap_location_mapping` | Read | Read the location-related attribute mapping of one LDAP directory. |
 | `glpi_list_automatic_actions` | Read | List automatic actions and scheduling/execution metadata. |
 | `glpi_list_cron_executions` | Read | Read normalized `CronTask` history for time-window correlation. |
+
+## Unmanaged discovery reconciliation
+
+`glpi_audit_unmanaged_assets` compares GLPI Inventory `Unmanaged` discoveries
+with selected managed asset types. It is strictly read-only. Values are
+normalized only in memory: MAC separators/case, valid IPv4/IPv6, FQDN trailing
+dots and short host names, serial whitespace and empty/generic values.
+
+The score is deliberately explainable. A valid exact serial contributes 70,
+a non-generic exact MAC 65, IP 30, exact name 30, short-name/FQDN 25, matching
+entity 10, location 8, and manufacturer/model 4 each. Contradictory serial,
+MAC or entity values are reported explicitly and penalized. IP alone can never
+produce an `exact_match`. Equal top candidates are `ambiguous`; weak discoveries
+and probable duplicate `Unmanaged` rows are reported separately.
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_audit_unmanaged_assets` | Read | Return summary, verdicts, candidates, evidence, conflicts, proposed manual action and completeness metadata. It performs no mutation. |
+| `glpi_apply_unmanaged_asset_reconciliation` | Destructive guard | Validate an explicit action list and confirmation, then currently return `not_supported` without writing because no generic GLPI 11 reconciliation contract has been confirmed. |
+
+Discovery means a network observation; `Unmanaged` is GLPI's persisted
+unmanaged object; an import refusal is a rule/import decision; a managed asset
+is a typed inventory object such as a Computer or Printer. These states must not
+be treated as interchangeable. Before cleanup, run a bounded audit by entity,
+review conflicts and ambiguous candidates, validate SNMP coverage, export the
+result, then prepare only explicit actions. Never delete discoveries merely
+because an IP resembles a managed asset.
+
+Example:
+
+```json
+{"entity_id": 2, "recursive": true, "minimum_confidence": "medium", "limit": 200}
+```
 | `glpi_upload_document` | Write | Upload a document, optionally linked directly to a ticket. |
 | `glpi_attach_document_to_ticket` | Write | Link an existing GLPI document to a ticket. |
 | `glpi_list_problems` | Read | List problems. |

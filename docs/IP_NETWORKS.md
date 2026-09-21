@@ -73,5 +73,43 @@ creation.
 
 ## Primary references
 
+## Synchronizing IPNetwork to IP Addressing
+
+`IPNetwork` is the native source definition. Addressing ranges live separately
+in `glpi_plugin_addressing_addressings`; their `networks_id` refers to generic
+GLPI `Network`, not `IPNetwork`. There is no native relation, so the MCP preserves
+human comments and appends `[mcp-ipnetwork-sync:v1 ipnetwork_id=<ID>]`.
+
+Matching uses that marker first, then a unique exact entity plus canonical-range
+match. Unmarked matches require `adopt_exact_matches: true`; names alone never
+identify a target. `/0`–`/30` usable-host mode excludes network/broadcast,
+`/31` retains both addresses, `/32` retains one, and `full_cidr` retains all.
+Arithmetic uses `bigint`. More than 65,536 CIDR addresses is skipped without
+splitting. IPv6 is skipped as `plugin_ipv4_only`.
+
+Run `glpi_addressing_preview_ip_network_sync`, review every action/proof/warning,
+then call `glpi_addressing_apply_ip_network_sync` with identical options, explicit
+ids, its 64-hex fingerprint, and `I_HAVE_VERIFIED_THE_ADDRESSING_SYNC`. Apply
+re-reads both sides and rejects stale state. It never deletes, revives trashed
+ranges, creates Network/VLAN/FQDN records, or starts ping/cron. `use_ping` defaults
+to false; existing options remain unchanged unless explicitly supplied.
+
+Overrides and exact-range relationships are supported now. The pure dominant
+evidence policy requires at least two devices and a unique 80% majority. Runtime
+collection from equipment ports, site rules, names, VLANs and FQDN suffixes is
+deliberately pending validation of the target instance's REST-visible model.
+
+Preview example:
+
+```json
+{"ip_network_ids":[42],"range_policy":"usable_hosts","overrides_by_ip_network_id":{"42":{"location_id":8,"vlan_id":12}},"defaults":{"use_ping":false}}
+```
+
+Apply repeats that payload and adds:
+
+```json
+{"preview_fingerprint":"<64-hex fingerprint>","confirmation":"I_HAVE_VERIFIED_THE_ADDRESSING_SYNC","allow_create":true,"allow_update":true}
+```
+
 - [GLPI user documentation: Internet dropdowns](https://help.glpi-project.org/documentation/modules/configuration/dropdowns/internet)
 - [GLPI 10 `IPNetwork` implementation](https://github.com/glpi-project/glpi/blob/10.0/bugfixes/src/IPNetwork.php)

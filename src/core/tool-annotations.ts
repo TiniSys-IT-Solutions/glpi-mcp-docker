@@ -6,6 +6,12 @@ export interface ToolAnnotations {
 }
 
 export function toolAnnotations(name: string): ToolAnnotations {
+  if (name === 'glpi_addressing_preview_ip_network_sync') {
+    return { readOnlyHint: true, openWorldHint: false };
+  }
+  if (name === 'glpi_addressing_apply_ip_network_sync') {
+    return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  }
   if (/^glpi_(list_|get_|review_|audit_|find_|resolve_|search|count$|tickets_stats)/.test(name) || /^glpi_inventory_(list|get)_/.test(name)) {
     return { readOnlyHint: true, openWorldHint: false };
   }
@@ -26,6 +32,9 @@ export function toolAnnotations(name: string): ToolAnnotations {
       name === 'glpi_reassign_printers_from_import_entity_rules' ||
       name === 'glpi_reassign_assets_from_location_mapping') {
     return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  }
+  if (name === 'glpi_apply_unmanaged_asset_reconciliation') {
+    return { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
   }
   if (/^glpi_(set_|assign_)/.test(name) || /^glpi_inventory_(enable_|disable_)/.test(name)) {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };

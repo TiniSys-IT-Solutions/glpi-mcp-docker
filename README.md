@@ -1,17 +1,21 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **165 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **167 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
 Ce projet est une intégration indépendante et non un produit officiel GLPI.
 
+La synchronisation optionnelle `IPNetwork` vers les plages IPv4 du plugin
+officiel IP Addressing passe exclusivement par l'API REST GLPI : prévisualisation
+obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL direct.
+
 ## Documentation
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 165 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 167 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |

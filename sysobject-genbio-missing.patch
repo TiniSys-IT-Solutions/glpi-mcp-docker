@@ -1,0 +1,14 @@
+--- sysobject.ids.orig
++++ sysobject.ids
+@@
+ 20998.11.4.1.1	Honeywell	PRINTER	PD45S
++20998.11.3.1.1	Honeywell	PRINTER	PD45
++20998.4.3.1.1	Honeywell	PRINTER	PC23d
++4935.1000.100.100.300	Mitel	NETWORKING	TA7102
++11268.1.7	Mitel	NETWORKING	MiVoice 5000
++1963.1.2.1	Intermec	PRINTER	EasyCoder PF2i
++1963.1.2.2	Intermec	PRINTER	EasyCoder PF4i
++1963.1.2.3	Intermec	PRINTER	EasyCoder PM4i
++311.1.1.3.3	Microsoft	COMPUTER	Windows CE
++318.1.3.27	APC	POWER	Smart-UPS SRT 6000
++8691.2.7	Moxa	NETWORKING	NPort 5110 series

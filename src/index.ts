@@ -53,6 +53,11 @@ import { appendPrinterCommentSchema, printerUpdateSchema, reassignPrintersSchema
 import { FormService } from './core/forms/service.js';
 import { LocationIntegrityService } from './core/location-integrity/service.js';
 import { assetLocationUpdateSchema, deleteLocationSchema, deleteLocationsSchema, locationMappingSchema } from './core/location-integrity/schemas.js';
+import { unmanagedApplySchema, unmanagedAuditSchema } from './core/unmanaged-reconciliation/schemas.js';
+import { ManagedAssetType } from './core/unmanaged-reconciliation/types.js';
+import { UnmanagedReconciliationService } from './core/unmanaged-reconciliation/service.js';
+import { AddressingSyncService } from './core/addressing-sync/service.js';
+import { addressingApplySchema, addressingListSchema, addressingPreviewSchema } from './core/addressing-sync/schemas.js';
 import { LocationAssetType } from './core/location-integrity/types.js';
 
 // ---------------------------------------------------------------------------
@@ -323,6 +328,8 @@ let directoryService: DirectoryService;
 let printerService: PrinterService;
 let formService: FormService;
 let locationIntegrityService: LocationIntegrityService;
+let unmanagedReconciliationService: UnmanagedReconciliationService;
+let addressingSyncService: AddressingSyncService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -385,6 +392,13 @@ const LOCATION_INTEGRITY_TOOLS = new Set([
   'glpi_reassign_assets_from_location_mapping', 'glpi_list_ldap_directories',
   'glpi_get_ldap_location_mapping', 'glpi_list_automatic_actions', 'glpi_list_cron_executions',
 ]);
+const UNMANAGED_RECONCILIATION_TOOLS = new Set([
+  'glpi_audit_unmanaged_assets', 'glpi_apply_unmanaged_asset_reconciliation',
+]);
+const ADDRESSING_SYNC_TOOLS = new Set([
+  'glpi_addressing_list_ranges', 'glpi_addressing_get_range',
+  'glpi_addressing_preview_ip_network_sync', 'glpi_addressing_apply_ip_network_sync',
+]);
 
 function isTicketServiceTool(toolName: string): boolean {
   return TICKET_SERVICE_TOOLS.has(toolName);
@@ -398,6 +412,8 @@ function isBackendServiceTool(toolName: string): boolean {
     PRINTER_SERVICE_TOOLS.has(toolName) ||
     FORM_SERVICE_TOOLS.has(toolName) ||
     LOCATION_INTEGRITY_TOOLS.has(toolName) ||
+    UNMANAGED_RECONCILIATION_TOOLS.has(toolName) ||
+    ADDRESSING_SYNC_TOOLS.has(toolName) ||
     toolName === 'glpi_get_session_info';
 }
 
@@ -1115,6 +1131,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
     // ============== IP NETWORKS ==============
     {
+      name: 'glpi_addressing_list_ranges',
+      description: 'List IPv4 ranges exposed by the GLPI IP Addressing plugin, with friendly relationship names and optional filters.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        entity_id: { type: 'number', minimum: 0 }, location_id: { type: 'number', minimum: 0 }, network_id: { type: 'number', minimum: 0 },
+        vlan_id: { type: 'number', minimum: 0 }, ip_network_id: { type: 'number', minimum: 1 }, include_deleted: { type: 'boolean' },
+        start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 1000 },
+      } },
+    },
+    {
+      name: 'glpi_addressing_get_range', description: 'Get a complete Addressing plugin range and its known options.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { range_id: { type: 'number', minimum: 1 } }, required: ['range_id'] },
+    },
+    {
+      name: 'glpi_addressing_preview_ip_network_sync',
+      description: 'Read-only preview required before synchronizing GLPI IPNetwork objects to Addressing plugin ranges.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        ip_network_ids: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'number', minimum: 1 } }, entity_id: { type: 'number', minimum: 0 },
+        include_recursive: { type: 'boolean' }, only_addressable: { type: 'boolean', default: true }, range_policy: { type: 'string', enum: ['usable_hosts', 'full_cidr'], default: 'usable_hosts' },
+        match_location: { type: 'boolean', default: true }, match_network: { type: 'boolean', default: true }, match_vlan: { type: 'boolean', default: true }, match_fqdn: { type: 'boolean', default: true },
+        adopt_exact_matches: { type: 'boolean', default: false }, defaults: { type: 'object' }, overrides_by_ip_network_id: { type: 'object' },
+        start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 1000 },
+      } },
+    },
+    {
+      name: 'glpi_addressing_apply_ip_network_sync',
+      description: 'Apply a previously verified Addressing sync preview. Never deletes ranges or launches ping/cron.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        ip_network_ids: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'number', minimum: 1 } }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+        confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ADDRESSING_SYNC'] }, allow_create: { type: 'boolean', default: true }, allow_update: { type: 'boolean', default: true },
+        update_inferred_metadata: { type: 'boolean', default: false }, entity_id: { type: 'number', minimum: 0 }, include_recursive: { type: 'boolean' }, only_addressable: { type: 'boolean' },
+        range_policy: { type: 'string', enum: ['usable_hosts', 'full_cidr'] }, match_location: { type: 'boolean' }, match_network: { type: 'boolean' }, match_vlan: { type: 'boolean' }, match_fqdn: { type: 'boolean' },
+        adopt_exact_matches: { type: 'boolean' }, defaults: { type: 'object' }, overrides_by_ip_network_id: { type: 'object' }, start: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 1000 },
+      }, required: ['ip_network_ids', 'preview_fingerprint', 'confirmation'] },
+    },
+    {
       name: 'glpi_list_ip_networks',
       description: 'List declared IPv4 and IPv6 LANs (GLPI IPNetwork objects).',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
@@ -1667,6 +1718,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ['id'],
       },
+    },
+    {
+      name: 'glpi_audit_unmanaged_assets',
+      description: 'Read-only, explainable reconciliation audit between GLPI Inventory Unmanaged discoveries and existing managed assets. It never links, converts, creates, merges or deletes objects.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        entity_id: { type: 'number', minimum: 0 }, recursive: { type: 'boolean', default: false },
+        unmanaged_ids: { type: 'array', minItems: 1, maxItems: 5000, items: { type: 'number', minimum: 1 } },
+        created_from: { type: 'string' }, modified_from: { type: 'string' }, limit: { type: 'number', minimum: 1, maximum: 10000, default: 100 },
+        fetch_all: { type: 'boolean', default: false }, max_rows: { type: 'number', minimum: 1, maximum: 50000, default: 10000 },
+        include_computers: { type: 'boolean', default: true }, include_printers: { type: 'boolean', default: true },
+        include_network_equipment: { type: 'boolean', default: true }, include_phones: { type: 'boolean', default: true },
+        include_peripherals: { type: 'boolean', default: false }, minimum_confidence: { type: 'string', enum: ['low', 'medium', 'high'], default: 'low' },
+        include_unmatched: { type: 'boolean', default: true },
+      } },
+    },
+    {
+      name: 'glpi_apply_unmanaged_asset_reconciliation',
+      description: 'Guarded reconciliation entry point. Currently returns not_supported without writing because no generic GLPI 11 Unmanaged merge/link contract is confirmed.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        actions: { type: 'array', minItems: 1, maxItems: 500, items: { type: 'object', additionalProperties: false, properties: {
+          unmanaged_id: { type: 'number', minimum: 1 }, action: { type: 'string', enum: ['link_to_existing_asset', 'convert_to_computer', 'convert_to_printer', 'convert_to_network_equipment', 'convert_to_phone', 'keep_unmanaged', 'ignore_future_discovery', 'delete_duplicate_unmanaged', 'manual_review'] },
+          destination_itemtype: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, destination_id: { type: 'number', minimum: 1 },
+        }, required: ['unmanaged_id', 'action'] } }, dry_run: { type: 'boolean', default: true },
+        confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_UNMANAGED_RECONCILIATION'] }, correlation_id: { type: 'string', format: 'uuid' },
+      }, required: ['actions'] },
     },
     {
       name: 'glpi_list_item_history', description: 'Read and normalize GLPI Log history for one item or a filtered period without relying on Log search options.',
@@ -2450,6 +2526,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text(await client.getPhone(args.id as number));
 
       // ==== IP NETWORKS ====
+      case 'glpi_addressing_list_ranges':
+        return text(await addressingSyncService.list(addressingListSchema.parse(args)));
+      case 'glpi_addressing_get_range': {
+        const { range_id } = z.object({ range_id: z.number().int().min(1) }).strict().parse(args);
+        return text(await addressingSyncService.get(range_id));
+      }
+      case 'glpi_addressing_preview_ip_network_sync':
+        return text(await addressingSyncService.preview(addressingPreviewSchema.parse(args)));
+      case 'glpi_addressing_apply_ip_network_sync':
+        return text(await addressingSyncService.apply(addressingApplySchema.parse(args)));
       case 'glpi_list_ip_networks': {
         const validated = listArgsSchema.parse(args);
         return text(await ipNetworkService.list(validated));
@@ -2650,6 +2736,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }));
       }
 
+      case 'glpi_audit_unmanaged_assets': {
+        const input = unmanagedAuditSchema.parse(args);
+        const assetTypes: ManagedAssetType[] = [];
+        if (input.include_computers) assetTypes.push('Computer');
+        if (input.include_printers) assetTypes.push('Printer');
+        if (input.include_network_equipment) assetTypes.push('NetworkEquipment');
+        if (input.include_phones) assetTypes.push('Phone');
+        if (input.include_peripherals) assetTypes.push('Peripheral');
+        return text(await unmanagedReconciliationService.audit({ entityId: input.entity_id, recursive: input.recursive,
+          unmanagedIds: input.unmanaged_ids, createdFrom: input.created_from, modifiedFrom: input.modified_from,
+          limit: input.limit, fetchAll: input.fetch_all, maxRows: input.max_rows, assetTypes,
+          minimumConfidence: input.minimum_confidence, includeUnmatched: input.include_unmatched }));
+      }
+      case 'glpi_apply_unmanaged_asset_reconciliation': {
+        const input = unmanagedApplySchema.parse(args);
+        return text(await unmanagedReconciliationService.apply({ actions: input.actions.map((action) => ({
+          unmanagedId: action.unmanaged_id, action: action.action, destinationItemtype: action.destination_itemtype,
+          destinationId: action.destination_id })), dryRun: input.dry_run, confirmation: input.confirmation,
+          correlationId: input.correlation_id }));
+      }
       case 'glpi_list_item_history':
         return text(await locationIntegrityService.listItemHistory(z.object({
           itemtype: z.string().min(1).optional(), item_id: z.number().int().min(1).optional(),
@@ -3136,6 +3242,8 @@ async function main() {
     printerService = apiRouter.services.printers;
     formService = apiRouter.services.forms;
     locationIntegrityService = apiRouter.services.locationIntegrity;
+    unmanagedReconciliationService = apiRouter.services.unmanagedReconciliation;
+    addressingSyncService = apiRouter.services.addressingSync;
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 

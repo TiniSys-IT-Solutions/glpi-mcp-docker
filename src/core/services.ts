@@ -8,6 +8,8 @@ import { DirectoryService } from './directory/service.js';
 import { PrinterService } from './assets/service.js';
 import { FormService } from './forms/service.js';
 import { LocationIntegrityService } from './location-integrity/service.js';
+import { UnmanagedReconciliationService } from './unmanaged-reconciliation/service.js';
+import { AddressingSyncService } from './addressing-sync/service.js';
 
 export interface GlpiServices {
   tickets: TicketService;
@@ -20,4 +22,6 @@ export interface GlpiServices {
   printers: PrinterService;
   forms: FormService;
   locationIntegrity: LocationIntegrityService;
+  unmanagedReconciliation: UnmanagedReconciliationService;
+  addressingSync: AddressingSyncService;
 }

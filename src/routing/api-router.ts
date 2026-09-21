@@ -21,10 +21,20 @@ import { LegacyFormService } from '../api/legacy/forms.js';
 import { HighLevelFormService } from '../api/highlevel/forms.js';
 import { LegacyLocationIntegrityService } from '../api/legacy/location-integrity.js';
 import { HighLevelLocationIntegrityService } from '../api/highlevel/location-integrity.js';
+import { LegacyUnmanagedReconciliationService } from '../api/legacy/unmanaged-reconciliation.js';
+import { HighLevelUnmanagedReconciliationService } from '../api/highlevel/unmanaged-reconciliation.js';
+import { LegacyAddressingSyncService } from '../api/legacy/addressing-sync.js';
+import { HighLevelAddressingSyncService } from '../api/highlevel/addressing-sync.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
 export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
+  glpi_addressing_list_ranges: 'legacy',
+  glpi_addressing_get_range: 'legacy',
+  glpi_addressing_preview_ip_network_sync: 'legacy',
+  glpi_addressing_apply_ip_network_sync: 'legacy',
+  glpi_audit_unmanaged_assets: 'legacy',
+  glpi_apply_unmanaged_asset_reconciliation: 'legacy',
   glpi_list_forms: 'legacy',
   glpi_get_form: 'legacy',
   glpi_list_form_categories: 'legacy',
@@ -244,6 +254,8 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         printers: new HighLevelPrinterService(),
         forms: new HighLevelFormService(),
         locationIntegrity: new HighLevelLocationIntegrityService(),
+        unmanagedReconciliation: new HighLevelUnmanagedReconciliationService(),
+        addressingSync: new HighLevelAddressingSyncService(),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -265,6 +277,8 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       printers: new LegacyPrinterService(client),
       forms: new LegacyFormService(client),
       locationIntegrity: new LegacyLocationIntegrityService(client),
+      unmanagedReconciliation: new LegacyUnmanagedReconciliationService(client),
+      addressingSync: new LegacyAddressingSyncService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

@@ -92,6 +92,8 @@ test('hybrid mode uses explicit compatibility matrix', () => {
   assert.equal(router.backendForTool('glpi_create_ip_network'), 'legacy');
   assert.equal(router.backendForTool('glpi_inventory_create_ip_range_from_cidr'), 'legacy');
   assert.equal(router.backendForTool('glpi_inventory_requeue_task'), 'legacy');
+  assert.equal(router.backendForTool('glpi_addressing_preview_ip_network_sync'), 'legacy');
+  assert.equal(router.backendForTool('glpi_addressing_apply_ip_network_sync'), 'legacy');
   assert.equal(router.backendForTool('glpi_get_import_entity_rule'), 'legacy');
   assert.equal(router.backendForTool('glpi_create_import_entity_subnet_rule'), 'legacy');
   assert.equal(router.backendForTool('glpi_set_import_entity_rule_enabled'), 'legacy');
@@ -105,6 +107,16 @@ test('hybrid mode uses explicit compatibility matrix', () => {
     () => router.backendForTool('unknown_future_tool'),
     /Not supported in GLPI_API_MODE=highlevel/
   );
+});
+
+test('Addressing service is explicit in Legacy, Hybrid and unsupported High-Level modes', async () => {
+  const legacy = createApiRouter(config('legacy'));
+  const hybrid = createApiRouter(config('hybrid'));
+  const highlevel = createApiRouter(config('highlevel'));
+  assert.ok(legacy.services.addressingSync);
+  assert.equal(hybrid.backendForTool('glpi_addressing_list_ranges'), 'legacy');
+  assert.equal(highlevel.backendForTool('glpi_addressing_list_ranges'), 'highlevel');
+  await assert.rejects(() => highlevel.services.addressingSync.list({}), /not supported/i);
 });
 
 test('hybrid matrix covers every registered MCP tool and contains no phantom tools', () => {
