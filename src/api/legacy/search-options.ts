@@ -49,7 +49,7 @@ export class SearchOptionsCache {
     if (cached && Date.now() - cached.fetchedAt < this.ttlMs) return cached;
 
     const { data } = await this.http.request<Record<string, unknown>>(
-      `listSearchOptions/${itemtype}`
+      `listSearchOptions/${encodeURIComponent(itemtype)}`
     );
 
     const catalogue = this.parse(itemtype, data);

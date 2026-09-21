@@ -166,7 +166,8 @@ export class GlpiHttp {
 
   /**
    * Unified GLPI request.
-   * - `path` is appended to `{baseUrl}/apirest.php/`. Do NOT URL-encode upfront.
+   * - `path` is appended to `{baseUrl}/apirest.php/`. Callers encode dynamic
+   *   path segments (not slash separators), notably namespaced plugin itemtypes.
    */
   async request<T = unknown>(
     path: string,

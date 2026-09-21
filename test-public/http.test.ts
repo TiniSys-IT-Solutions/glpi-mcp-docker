@@ -38,6 +38,26 @@ test('initSession with userToken stores session_token', async () => {
   assert.equal(http.session, 'sess-abc');
 });
 
+test('namespaced plugin itemtypes are encoded as one REST path segment', async () => {
+  const urls: string[] = [];
+  installFetch(async (url) => {
+    urls.push(url);
+    if (url.endsWith('/initSession')) {
+      return new Response(JSON.stringify({ session_token: 's' }), { status: 200 });
+    }
+    if (url.includes('/listSearchOptions/')) return new Response('{}', { status: 200 });
+    return new Response('[]', { status: 200 });
+  });
+
+  const client = new GlpiClient({ url: 'https://glpi.test', userToken: 'u' });
+  await client.getItems('GlpiPlugin\\Addressing\\Addressing');
+  await client.searchOptions.get('GlpiPlugin\\Addressing\\Addressing');
+
+  assert.ok(urls.some((url) => url.includes('/apirest.php/GlpiPlugin%5CAddressing%5CAddressing')));
+  assert.ok(urls.some((url) => url.includes('/listSearchOptions/GlpiPlugin%5CAddressing%5CAddressing')));
+  assert.ok(urls.every((url) => !url.includes('/GlpiPlugin/Addressing/Addressing')));
+});
+
 test('request() re-authenticates on 401 and retries once', async () => {
   let initCalls = 0;
   let requestCalls = 0;

@@ -28,6 +28,11 @@ High-Level returns not-supported because no official plugin route is confirmed.
 The Legacy adapter probes `listSearchOptions` for the GLPI 11 itemtype
 `GlpiPlugin\\Addressing\\Addressing`, then the historical
 `PluginAddressingAddressing`. It requires every known REST field before writing.
+Namespaced itemtypes are URL-encoded as a single path segment (`%5C` for `\`),
+otherwise standard URL parsing changes the PHP namespace into path separators.
+Detection follows Addressing 3.2.11's actual `rawSearchOptions()` subset; the
+complete persisted field set is checked on a REST row immediately before writes.
+If there is no row yet, GLPI must report the source-audited plugin version 3.2.11.
 
 ```text
 AI client

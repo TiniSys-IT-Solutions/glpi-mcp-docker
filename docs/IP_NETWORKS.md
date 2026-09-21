@@ -99,6 +99,13 @@ evidence policy requires at least two devices and a unique 80% majority. Runtime
 collection from equipment ports, site rules, names, VLANs and FQDN suffixes is
 deliberately pending validation of the target instance's REST-visible model.
 
+For Addressing 3.2.11, `rawSearchOptions()` exposes only the searchable subset
+(`id`, `name`, `comment`, `use_ping`, `begin_ip`, `end_ip` and relationship
+dropdowns). The MCP detects that exact signature. Before applying a write it
+also requires a readable REST row containing every persisted range field. On
+an empty installation, the first creation is allowed only when GLPI's `Plugin`
+REST resource confirms the source-audited Addressing version `3.2.11`.
+
 Preview example:
 
 ```json

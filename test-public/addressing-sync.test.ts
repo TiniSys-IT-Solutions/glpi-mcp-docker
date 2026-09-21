@@ -89,6 +89,26 @@ test('Addressing itemtype detection rejects an absent plugin and incomplete REST
   await assert.rejects(() => new LegacyAddressingSyncService(client).list({}), /absent, disabled, inaccessible, or REST schema unsupported/);
 });
 
+test('Addressing 3.2.11 itemtype detection accepts its real search-option subset', async () => {
+  const ownTable = 'glpi_plugin_addressing_addressings';
+  const options = [
+    ['id', ownTable], ['name', ownTable], ['comment', ownTable], ['use_ping', ownTable],
+    ['begin_ip', ownTable], ['end_ip', ownTable], ['name', 'glpi_networks'],
+    ['name', 'glpi_locations'], ['name', 'glpi_fqdns'], ['name', 'glpi_vlans'],
+    ['completename', 'glpi_entities'],
+  ].map(([field, table], id) => [id, { field, table }]);
+  const client = {
+    searchOptions: { get: async () => ({
+      byField: new Map(options.map(([, option]) => [option.field, option])),
+      byId: new Map(options),
+    }) },
+    getItems: async () => [],
+  } as any;
+  const result = await new LegacyAddressingSyncService(client).list({});
+  assert.equal(result.itemtype, 'GlpiPlugin\\Addressing\\Addressing');
+  assert.deepEqual(result.ranges, []);
+});
+
 test('Addressing tool annotations distinguish preview from guarded idempotent apply', () => {
   assert.deepEqual(toolAnnotations('glpi_addressing_preview_ip_network_sync'), { readOnlyHint: true, openWorldHint: false });
   assert.deepEqual(toolAnnotations('glpi_addressing_apply_ip_network_sync'), { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });

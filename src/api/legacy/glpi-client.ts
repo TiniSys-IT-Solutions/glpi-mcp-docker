@@ -462,14 +462,14 @@ export class GlpiClient {
         params.append(`searchText[${k}]`, v);
       }
     }
-    const { data } = await this.http.request<T[]>(itemtype, { query: params });
+    const { data } = await this.http.request<T[]>(encodeURIComponent(itemtype), { query: params });
     return data ?? [];
   }
 
   async getItem<T>(itemtype: string, id: number, options: GetOptions = {}): Promise<T> {
     // Default expand_dropdowns=true on detail views for human-readable output.
     const opts = { expand_dropdowns: true, ...options };
-    const { data } = await this.http.request<T>(`${itemtype}/${id}`, {
+    const { data } = await this.http.request<T>(`${encodeURIComponent(itemtype)}/${id}`, {
       query: this.toQuery(opts),
     });
     return data;
@@ -480,7 +480,7 @@ export class GlpiClient {
     payload: Record<string, unknown>
   ): Promise<{ id: number; message?: string }> {
     const { data } = await this.http.request<{ id: number; message?: string } | Array<{ id: number; message?: string }>>(
-      itemtype,
+      encodeURIComponent(itemtype),
       { method: 'POST', json: { input: payload } }
     );
     return Array.isArray(data) ? data[0] : data;
@@ -491,7 +491,7 @@ export class GlpiClient {
     id: number,
     payload: Record<string, unknown>
   ): Promise<boolean> {
-    await this.http.request(`${itemtype}/${id}`, {
+    await this.http.request(`${encodeURIComponent(itemtype)}/${id}`, {
       method: 'PUT',
       json: { input: payload },
     });
@@ -507,7 +507,7 @@ export class GlpiClient {
     const params = new URLSearchParams();
     if (force) params.append('force_purge', '1');
     if (!history) params.append('history', '0');
-    await this.http.request(`${itemtype}/${id}`, { method: 'DELETE', query: params });
+    await this.http.request(`${encodeURIComponent(itemtype)}/${id}`, { method: 'DELETE', query: params });
     return true;
   }
 

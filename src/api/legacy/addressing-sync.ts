@@ -13,11 +13,17 @@ export const ADDRESSING_ITEMTYPE_CANDIDATES = [
   'PluginAddressingAddressing',
 ] as const;
 
-const REQUIRED_FIELDS = [
+const REQUIRED_REST_FIELDS = [
   'id', 'entities_id', 'name', 'networks_id', 'locations_id', 'fqdns_id', 'vlans_id',
   'begin_ip', 'end_ip', 'alloted_ip', 'double_ip', 'free_ip', 'reserved_ip',
   'use_as_filter', 'use_ping', 'comment', 'is_deleted',
 ];
+
+// Addressing 3.2.11 rawSearchOptions() deliberately exposes only this subset of
+// its own columns. The report toggles (alloted_ip, free_ip, etc.) therefore
+// cannot be required from listSearchOptions; they are verified on REST rows.
+const REQUIRED_SEARCH_FIELDS = ['id', 'name', 'comment', 'use_ping', 'begin_ip', 'end_ip'];
+const REQUIRED_RELATION_TABLES = ['glpi_networks', 'glpi_locations', 'glpi_fqdns', 'glpi_vlans', 'glpi_entities'];
 
 function num(value: unknown): number { const n = Number(value ?? 0); return Number.isFinite(n) ? n : 0; }
 function markerId(comment: unknown): number | undefined {
@@ -36,9 +42,11 @@ export class LegacyAddressingSyncService implements AddressingSyncService {
     for (const candidate of ADDRESSING_ITEMTYPE_CANDIDATES) {
       try {
         const catalogue = await this.client.searchOptions.get(candidate);
-        const missing = REQUIRED_FIELDS.filter((field) => !catalogue.byField.has(field));
-        if (missing.length) {
-          failures.push(`${candidate}: missing REST fields ${missing.join(', ')}`);
+        const missingFields = REQUIRED_SEARCH_FIELDS.filter((field) => !catalogue.byField.has(field));
+        const tables = new Set([...catalogue.byId.values()].map((option) => option.table).filter(Boolean));
+        const missingTables = REQUIRED_RELATION_TABLES.filter((table) => !tables.has(table));
+        if (missingFields.length || missingTables.length) {
+          failures.push(`${candidate}: incompatible search options; missing fields ${missingFields.join(', ') || 'none'}; missing relation tables ${missingTables.join(', ') || 'none'}`);
           continue;
         }
         this.resolvedItemtype = candidate;
@@ -48,6 +56,24 @@ export class LegacyAddressingSyncService implements AddressingSyncService {
       }
     }
     throw new Error(`Addressing plugin absent, disabled, inaccessible, or REST schema unsupported. Probes: ${failures.join(' | ')}`);
+  }
+
+  private async assertWritableSchema(ranges: AddressingRangeRecord[]): Promise<void> {
+    const sample = ranges[0];
+    if (!sample) {
+      const plugins = await this.client.getItems<Record<string, unknown>>('Plugin', {
+        range: '0-9999', expand_dropdowns: false,
+      });
+      const addressing = plugins.find((plugin) =>
+        String(plugin.directory ?? plugin.name ?? '').toLowerCase() === 'addressing'
+      );
+      if (String(addressing?.version ?? '') === '3.2.11') return;
+      throw new Error('Addressing write refused: no REST range can prove the complete schema and the installed plugin could not be confirmed as source-audited version 3.2.11');
+    }
+    const missing = REQUIRED_REST_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(sample, field));
+    if (missing.length) {
+      throw new Error(`Addressing write refused: REST rows do not expose required fields: ${missing.join(', ')}`);
+    }
   }
 
   private async allRanges(includeDeleted = true): Promise<AddressingRangeRecord[]> {
@@ -106,6 +132,10 @@ export class LegacyAddressingSyncService implements AddressingSyncService {
     const { preview_fingerprint, confirmation: _confirmation, allow_create, allow_update, update_inferred_metadata, ...previewInput } = input;
     const current = await this.preview(previewInput);
     if (current.fingerprint !== preview_fingerprint) throw new Error('Preview is stale: source, target, selection, or options changed');
+    const currentRanges = await this.allRanges(true);
+    if (current.items.some((item) => item.action === 'create' || item.action === 'update')) {
+      await this.assertWritableSchema(currentRanges);
+    }
     const results: Array<Record<string, unknown>> = [];
     for (const item of current.items) {
       if (item.action === 'conflict' || item.action === 'skip' || item.action === 'unchanged') {
