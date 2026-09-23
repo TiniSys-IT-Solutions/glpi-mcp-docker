@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { LegacyAssetImportRuleService } from '../src/api/legacy/asset-import-rules.js';
 import { assetRuleRestoreApplySchema, assetRuleSnapshotSchema } from '../src/core/asset-import-rules/schemas.js';
 import { toolAnnotations } from '../src/core/tool-annotations.js';
+import { gzipSync } from 'node:zlib';
+import { decodeAssetRuleSnapshotGzip } from '../src/core/asset-import-rules/snapshot-codec.js';
 
 function clientFixture() {
   const rules = [{ id: 2, name: 'Printers', ranking: 20, is_active: 1, match: 'AND', sub_type: 'RuleImportAsset', entities_id: 0, is_recursive: 1 },
@@ -22,7 +24,7 @@ function clientFixture() {
   } as any };
 }
 
-const listInput = { includeCriteria: true, includeActions: true, fetchAll: true };
+const listInput = { includeCriteria: true, includeActions: true, fetchAll: true, start: 0, limit: 100 };
 
 test('RuleImportAsset audit is ordered, complete and preserves unknown native criteria', async () => {
   const fixture = clientFixture(); const result: any = await new LegacyAssetImportRuleService(fixture.client).list(listInput);
@@ -55,4 +57,14 @@ test('schemas and annotations enforce guarded restore behavior', () => {
   assert.throws(() => assetRuleRestoreApplySchema.parse({}));
   assert.equal(toolAnnotations('glpi_export_asset_import_rules').readOnlyHint, true);
   assert.equal(toolAnnotations('glpi_apply_restore_asset_import_rules').destructiveHint, true);
+});
+
+test('large snapshots can use bounded gzip/base64 without changing their fingerprint', async () => {
+  const service = new LegacyAssetImportRuleService(clientFixture().client);
+  const snapshot: any = await service.exportSnapshot(listInput);
+  const encoded = gzipSync(Buffer.from(JSON.stringify(snapshot))).toString('base64');
+  const decoded = decodeAssetRuleSnapshotGzip(encoded);
+  assert.equal(decoded.fingerprint, snapshot.fingerprint);
+  assert.deepEqual(decoded.rules, snapshot.rules);
+  assert.throws(() => decodeAssetRuleSnapshotGzip('not-base64!'), /valid base64/);
 });

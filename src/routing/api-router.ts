@@ -131,6 +131,7 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_resolve_location: 'legacy',
   glpi_find_location_duplicates: 'legacy',
   glpi_delete_location: 'legacy',
+  glpi_preview_delete_location: 'legacy',
   glpi_delete_unused_locations: 'legacy',
   glpi_update_monitor: 'legacy',
   glpi_update_network_equipment: 'legacy',

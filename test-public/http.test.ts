@@ -237,7 +237,7 @@ test('request aborts after timeoutMs', async () => {
     () => http.request('Computer'),
     (err: unknown) => {
       assert.ok(err instanceof Error);
-      assert.match(err.message, /timeout after 20ms/);
+      assert.match(err.message, /timed out after 20ms/);
       return true;
     }
   );
@@ -264,6 +264,20 @@ test('error body ["CODE","message"] is parsed into GlpiError', async () => {
       return true;
     }
   );
+});
+
+test('HTML errors expose neither upstream URL nor security tokens', async () => {
+  installFetch(async (url) => url.endsWith('/initSession')
+    ? new Response(JSON.stringify({ session_token: 's' }), { status: 200 })
+    : new Response('<html><input name="_glpi_csrf_token" value="private-value"> failure at https://internal.example/apirest.php</html>', { status: 500 }));
+  const http = new GlpiHttp({ url: 'https://internal.example', userToken: 'u', maxRetries: 0 });
+  await http.initSession();
+  await assert.rejects(() => http.request('Log'), (error: unknown) => {
+    assert.ok(error instanceof GlpiError);
+    assert.doesNotMatch(`${error.message} ${error.body} ${error.url}`, /private-value|internal\.example|<html>/i);
+    assert.match(error.url, /^\/apirest\.php\/Log$/);
+    return true;
+  });
 });
 
 test('createItem and verification GET reuse the same Legacy session and app token', async () => {

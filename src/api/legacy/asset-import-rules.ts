@@ -78,9 +78,9 @@ export class LegacyAssetImportRuleService implements AssetImportRuleService {
       const normalized = await this.normalizedRule(row, input.includeCriteria, input.includeActions);
       if (input.itemtypeFilter && !normalized.criteria.some((criterion) => criterion.criterion === 'itemtype' && text(criterion.pattern) === input.itemtypeFilter)) continue;
       rules.push(normalized);
-      if (!input.fetchAll && rules.length >= 100) break;
     }
-    return { rules, total: rules.length, complete: input.fetchAll, modifies_data: false };
+    const selected = input.fetchAll ? rules : rules.slice(input.start, input.start + input.limit);
+    return { rules: selected, total: rules.length, pagination: { start: input.fetchAll ? 0 : input.start, limit: input.fetchAll ? rules.length : input.limit, returned: selected.length }, complete: input.fetchAll || input.start + selected.length >= rules.length, modifies_data: false };
   }
 
   async get(id: number): Promise<unknown> {
@@ -89,7 +89,7 @@ export class LegacyAssetImportRuleService implements AssetImportRuleService {
   }
 
   async exportSnapshot(input: AssetImportRuleListRequest): Promise<unknown> {
-    const listed = await this.list({ ...input, includeCriteria: true, includeActions: true, fetchAll: true }) as { rules: Record<string, unknown>[] };
+    const listed = await this.list({ ...input, includeCriteria: true, includeActions: true, fetchAll: true, start: 0, limit: MAX_RULES }) as { rules: Record<string, unknown>[] };
     const body = { schema_version: 1 as const, source: { glpi_version: null, api_mode: 'legacy' as const }, rules: listed.rules };
     return { ...body, fingerprint: hash(body), captured_at: new Date().toISOString(), fingerprint_scope: 'all fields except captured_at and fingerprint', modifies_data: false };
   }
@@ -114,7 +114,7 @@ export class LegacyAssetImportRuleService implements AssetImportRuleService {
 
   async previewRestore(input: RestorePreviewRequest): Promise<unknown> {
     this.assertSnapshot(input.snapshot);
-    const current = await this.exportSnapshot({ includeCriteria: true, includeActions: true, fetchAll: true }) as AssetImportRuleSnapshot;
+    const current = await this.exportSnapshot({ includeCriteria: true, includeActions: true, fetchAll: true, start: 0, limit: MAX_RULES }) as AssetImportRuleSnapshot;
     const diff = await this.diffSnapshots(current, input.snapshot) as Record<string, unknown>;
     const blocked: string[] = [];
     if ((diff.added as unknown[]).length && !input.allowCreate) blocked.push('create_not_allowed');
@@ -133,14 +133,14 @@ export class LegacyAssetImportRuleService implements AssetImportRuleService {
   }
 
   async simulate(input: { unmanagedIds?: number[]; inventoryPayload?: Record<string, unknown>; snapshot?: AssetImportRuleSnapshot; stopAtFirstMatch: boolean }): Promise<unknown> {
-    const snapshot = input.snapshot ?? await this.exportSnapshot({ includeCriteria: true, includeActions: true, fetchAll: true }) as AssetImportRuleSnapshot;
+    const snapshot = input.snapshot ?? await this.exportSnapshot({ includeCriteria: true, includeActions: true, fetchAll: true, start: 0, limit: MAX_RULES }) as AssetImportRuleSnapshot;
     this.assertSnapshot(snapshot);
     return { status: 'not_supported', evaluated_snapshot_fingerprint: snapshot.fingerprint, requested_unmanaged_ids: input.unmanagedIds ?? [],
       explanation: 'GLPI RuleImportAsset evaluation semantics and plugin-enriched inventory payload are not fully exposed by the REST API; the MCP refuses to invent a result.', modifies_data: false };
   }
 
   async analyzeRisks(snapshot?: AssetImportRuleSnapshot): Promise<unknown> {
-    const source = snapshot ?? await this.exportSnapshot({ includeCriteria: true, includeActions: true, fetchAll: true }) as AssetImportRuleSnapshot;
+    const source = snapshot ?? await this.exportSnapshot({ includeCriteria: true, includeActions: true, fetchAll: true, start: 0, limit: MAX_RULES }) as AssetImportRuleSnapshot;
     this.assertSnapshot(source);
     const risks: Record<string, unknown>[] = [];
     const ranks = new Map<number, number[]>();

@@ -10,11 +10,22 @@ function stable(value: unknown): unknown {
   return value;
 }
 function fingerprint(value: unknown): string { return createHash('sha256').update(JSON.stringify(stable(value))).digest('hex'); }
-function safeFields(fields: Record<string, unknown>): Record<string, unknown> {
+const ITEMTYPE_FIELDS: Partial<Record<string, ReadonlySet<string>>> = {
+  DeviceMemory: new Set(['designation', 'manufacturers_id', 'devicememorytypes_id', 'frequence', 'size_default', 'comment']),
+};
+function safeFields(itemtype: string, fields: Record<string, unknown>): Record<string, unknown> {
   for (const key of Object.keys(fields)) if (FORBIDDEN_FIELD.test(key)) throw new Error(`Field ${key} is controlled by GLPI or secret and cannot be written through the generic catalog tool`);
+  const allowed = ITEMTYPE_FIELDS[itemtype];
+  if (allowed) for (const key of Object.keys(fields)) if (!allowed.has(key)) throw new Error(`Field ${key} is not a confirmed writable field for ${itemtype}`);
   return fields;
 }
-function equal(left: unknown, right: unknown): boolean { return JSON.stringify(stable(left)) === JSON.stringify(stable(right)); }
+function equal(left: unknown, right: unknown): boolean {
+  if ((typeof left === 'number' || typeof left === 'string') && (typeof right === 'number' || typeof right === 'string')) {
+    const leftNumber = Number(left); const rightNumber = Number(right);
+    if (String(left).trim() !== '' && String(right).trim() !== '' && Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber === rightNumber;
+  }
+  return JSON.stringify(stable(left)) === JSON.stringify(stable(right));
+}
 
 export class LegacyCatalogService implements CatalogService {
   constructor(private readonly client: GlpiClient) {}
@@ -32,7 +43,7 @@ export class LegacyCatalogService implements CatalogService {
     return { domain: input.domain, itemtype: input.itemtype, item: await this.client.getItem(input.itemtype, input.id, { expand_dropdowns: false }), modifies_data: false };
   }
   async create(input: CatalogSelection & { fields: Record<string, unknown>; correlationId: string }): Promise<unknown> {
-    const payload = safeFields(input.fields); const created = await this.client.createItem(input.itemtype, payload);
+    const payload = safeFields(input.itemtype, input.fields); const created = await this.client.createItem(input.itemtype, payload);
     try {
       const after = await this.client.getItem<Record<string, unknown>>(input.itemtype, created.id, { expand_dropdowns: false });
       this.verify(after, payload); return { success: true, operation: 'create', domain: input.domain, itemtype: input.itemtype, id: created.id, after, correlation_id: input.correlationId, verification_status: 'verified' };
@@ -41,11 +52,15 @@ export class LegacyCatalogService implements CatalogService {
     }
   }
   async update(input: CatalogSelection & { id: number; fields: Record<string, unknown>; correlationId: string }): Promise<unknown> {
-    const payload = safeFields(input.fields); const before = await this.client.getItem<Record<string, unknown>>(input.itemtype, input.id, { expand_dropdowns: false });
+    const payload = safeFields(input.itemtype, input.fields); const before = await this.client.getItem<Record<string, unknown>>(input.itemtype, input.id, { expand_dropdowns: false });
     await this.client.updateItem(input.itemtype, input.id, payload);
-    const after = await this.client.getItem<Record<string, unknown>>(input.itemtype, input.id, { expand_dropdowns: false });
-    this.verify(after, payload);
-    return { success: true, operation: 'update', domain: input.domain, itemtype: input.itemtype, id: input.id, before, after, correlation_id: input.correlationId, verification_status: 'verified' };
+    try {
+      const after = await this.client.getItem<Record<string, unknown>>(input.itemtype, input.id, { expand_dropdowns: false });
+      this.verify(after, payload);
+      return { success: true, operation: 'update', domain: input.domain, itemtype: input.itemtype, id: input.id, before, after, correlation_id: input.correlationId, write_status: 'succeeded', verification_status: 'verified' };
+    } catch (error) {
+      return { success: true, operation: 'update', domain: input.domain, itemtype: input.itemtype, id: input.id, before, correlation_id: input.correlationId, write_status: 'succeeded', verification_status: 'failed', verification_message: error instanceof Error ? error.message : String(error), retry_warning: 'do_not_retry_update_blindly' };
+    }
   }
   async previewDelete(input: CatalogSelection & { id: number; purge: boolean }): Promise<unknown> {
     const current = await this.client.getItem<Record<string, unknown>>(input.itemtype, input.id, { expand_dropdowns: false });

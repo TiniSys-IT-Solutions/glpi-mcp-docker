@@ -30,6 +30,16 @@ test('catalog create and update return verified state', async () => {
   assert.equal(updated.before.name, 'switch'); assert.equal(updated.after.name, 'switch-1');
 });
 
+test('DeviceMemory writes reject unknown columns and compare numeric GLPI strings semantically', async () => {
+  const mock = fixture();
+  (mock.client as any).createItem = async (type: string, payload: any) => { mock.writes.push(['create', type, payload]); return { id: 7 }; };
+  (mock.client as any).getItem = async () => ({ id: 7, designation: 'RAM', size_default: '1024', frequence: '1866' });
+  const service = new LegacyCatalogService(mock.client);
+  await assert.rejects(() => service.create({ domain: 'component', itemtype: 'DeviceMemory', fields: { size: 1024 }, correlationId: '123e4567-e89b-42d3-a456-426614174000' }), /not a confirmed writable field/);
+  const result: any = await service.create({ domain: 'component', itemtype: 'DeviceMemory', fields: { designation: 'RAM', size_default: 1024, frequence: 1866 }, correlationId: '123e4567-e89b-42d3-a456-426614174000' });
+  assert.equal(result.verification_status, 'verified');
+});
+
 test('catalog delete requires a fresh preview and blocks purge without complete references', async () => {
   const mock = fixture(); const service = new LegacyCatalogService(mock.client);
   const preview: any = await service.previewDelete({ domain: 'asset', itemtype: 'NetworkEquipment', id: 1, purge: false });

@@ -12,6 +12,7 @@ uploads/
 
 # Maintainer/customer-specific validation workspace. Never publish its data.
 /test/
+/audit-results/
 
 .DS_Store
 Thumbs.db

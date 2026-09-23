@@ -61,6 +61,7 @@ import { addressingApplySchema, addressingListSchema, addressingPreviewSchema } 
 import { LocationAssetType } from './core/location-integrity/types.js';
 import { AssetImportRuleService } from './core/asset-import-rules/service.js';
 import { assetRuleDiffSchema, assetRuleGetSchema, assetRuleListSchema, assetRuleRestoreApplySchema, assetRuleRestorePreviewSchema, assetRuleRiskSchema, assetRuleSimulationSchema } from './core/asset-import-rules/schemas.js';
+import { decodeAssetRuleSnapshotGzip } from './core/asset-import-rules/snapshot-codec.js';
 import { InventoryInsightsService } from './core/inventory-insights/service.js';
 import { assetNetworkIdentitySchema, discoveryClassifySchema, fortigateAuditSchema, provenanceSchema, rawPayloadSchema, taskIdSchema, taskPrepareOnceSchema, taskReprepareSchema, taskTimelineSchema } from './core/inventory-insights/schemas.js';
 import { CatalogService } from './core/catalog/service.js';
@@ -177,7 +178,7 @@ const importEntitySubnetRuleCreateSchema = z.object({
       return false;
     }
   }, { message: 'Expected a canonical IPv4 CIDR, for example 192.0.2.0/24' }),
-  target_entity_id: z.number().int().min(1),
+  target_entity_id: z.number().int().min(0),
   target_location_id: z.number().int().min(1),
   scope_entity_id: z.number().int().min(0).optional(),
   ranking: z.number().int().min(0).optional(),
@@ -411,7 +412,7 @@ const FORM_SERVICE_TOOLS = new Set([
 
 const LOCATION_INTEGRITY_TOOLS = new Set([
   'glpi_list_item_history', 'glpi_list_location_history', 'glpi_audit_locations',
-  'glpi_resolve_location', 'glpi_find_location_duplicates', 'glpi_delete_location',
+  'glpi_resolve_location', 'glpi_find_location_duplicates', 'glpi_preview_delete_location', 'glpi_delete_location',
   'glpi_delete_unused_locations', 'glpi_update_monitor', 'glpi_update_network_equipment',
   'glpi_update_phone', 'glpi_update_peripheral', 'glpi_update_appliance',
   'glpi_reassign_assets_from_location_mapping', 'glpi_list_ldap_directories',
@@ -1130,7 +1131,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           name: { type: 'string' },
           cidr: { type: 'string', description: 'Canonical IPv4 network in CIDR notation, for example 192.0.2.0/24' },
-          target_entity_id: { type: 'number' },
+          target_entity_id: { type: 'number', minimum: 0 },
           target_location_id: { type: 'number' },
           scope_entity_id: { type: 'number', description: 'Rule scope entity; defaults to root entity 0' },
           ranking: { type: 'number', description: 'Evaluation order; omit to let GLPI choose' },
@@ -1827,22 +1828,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {name:'glpi_preview_delete_item_metadata',description:'Read and fingerprint financial information or an exact note before deletion.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ITEM_METADATA_KINDS]},itemtype:{type:'string',enum:[...METADATA_ITEMTYPES]},item_id:{type:'number',minimum:1},id:{type:'number',minimum:1}},required:['kind','itemtype','item_id']}},
     {name:'glpi_delete_item_metadata',description:'Delete exact fingerprinted financial information or note after literal confirmation.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ITEM_METADATA_KINDS]},itemtype:{type:'string',enum:[...METADATA_ITEMTYPES]},item_id:{type:'number',minimum:1},id:{type:'number',minimum:1},preview_fingerprint:{type:'string',pattern:'^[a-f0-9]{64}$'},confirmation:{type:'string',enum:['I_HAVE_VERIFIED_THE_ITEM_METADATA_DELETE']},correlation_id:{type:'string',format:'uuid'}},required:['kind','itemtype','item_id','preview_fingerprint','confirmation','correlation_id']}},
     {
-      name: 'glpi_list_asset_import_rules', description: 'Read every RuleImportAsset rule in evaluation order with normalized and native criteria/actions.',
-      inputSchema: { type: 'object', additionalProperties: false, properties: { active_only: { type: 'boolean' }, itemtype_filter: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, include_criteria: { type: 'boolean', default: true }, include_actions: { type: 'boolean', default: true }, fetch_all: { type: 'boolean', default: true } } },
+      name: 'glpi_list_asset_import_rules', description: 'Read a bounded page of RuleImportAsset rules in evaluation order; criteria/actions are opt-in.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { active_only: { type: 'boolean' }, itemtype_filter: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, include_criteria: { type: 'boolean', default: false }, include_actions: { type: 'boolean', default: false }, fetch_all: { type: 'boolean', default: false }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 500, default: 50 } } },
     },
     { name: 'glpi_get_asset_import_rule', description: 'Read one complete RuleImportAsset rule with ordered native and normalized children.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 } }, required: ['rule_id'] } },
     {
       name: 'glpi_export_asset_import_rules', description: 'Export a deterministic RuleImportAsset JSON snapshot with a SHA-256 fingerprint.',
       inputSchema: { type: 'object', additionalProperties: false, properties: { active_only: { type: 'boolean' }, itemtype_filter: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, include_criteria: { type: 'boolean', default: true }, include_actions: { type: 'boolean', default: true }, fetch_all: { type: 'boolean', default: true } } },
     },
-    { name: 'glpi_diff_asset_import_rule_snapshots', description: 'Compare two verified RuleImportAsset snapshots without contacting or modifying GLPI.', inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot_before: { type: 'object' }, snapshot_after: { type: 'object' } }, required: ['snapshot_before', 'snapshot_after'] } },
+    { name: 'glpi_diff_asset_import_rule_snapshots', description: 'Compare two verified RuleImportAsset snapshots without modifying GLPI. Each snapshot may be inline JSON or bounded gzip/base64.', inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot_before: { type: 'object' }, snapshot_before_gzip_base64: { type: 'string' }, snapshot_after: { type: 'object' }, snapshot_after_gzip_base64: { type: 'string' } } } },
     {
-      name: 'glpi_preview_restore_asset_import_rules', description: 'Build a no-write restore plan, detect conflicts and return a deterministic preview fingerprint.',
-      inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'object' }, restore_mode: { type: 'string', enum: ['exact', 'merge'] }, allow_create: { type: 'boolean', default: false }, allow_update: { type: 'boolean', default: false }, allow_disable: { type: 'boolean', default: false }, allow_delete: { type: 'boolean', default: false } }, required: ['snapshot', 'restore_mode'] },
+      name: 'glpi_preview_restore_asset_import_rules', description: 'Build a no-write restore plan from inline JSON or bounded gzip/base64, detect conflicts and return a deterministic preview fingerprint.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'object' }, snapshot_gzip_base64: { type: 'string' }, restore_mode: { type: 'string', enum: ['exact', 'merge'] }, allow_create: { type: 'boolean', default: false }, allow_update: { type: 'boolean', default: false }, allow_disable: { type: 'boolean', default: false }, allow_delete: { type: 'boolean', default: false } }, required: ['restore_mode'] },
     },
     {
       name: 'glpi_apply_restore_asset_import_rules', description: 'Guarded restore entry point. Validates snapshot, current state, preview fingerprint, confirmation and correlation id; unsupported writes remain fail-closed.',
-      inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'object' }, restore_mode: { type: 'string', enum: ['exact', 'merge'] }, allow_create: { type: 'boolean', default: false }, allow_update: { type: 'boolean', default: false }, allow_disable: { type: 'boolean', default: false }, allow_delete: { type: 'boolean', default: false }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE_RESTORE'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['snapshot', 'restore_mode', 'preview_fingerprint', 'confirmation', 'correlation_id'] },
+      inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'object' }, snapshot_gzip_base64: { type: 'string' }, restore_mode: { type: 'string', enum: ['exact', 'merge'] }, allow_create: { type: 'boolean', default: false }, allow_update: { type: 'boolean', default: false }, allow_disable: { type: 'boolean', default: false }, allow_delete: { type: 'boolean', default: false }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE_RESTORE'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['restore_mode', 'preview_fingerprint', 'confirmation', 'correlation_id'] },
     },
     { name: 'glpi_simulate_asset_import_rules', description: 'Fail-closed RuleImportAsset simulation contract; never invents GLPI engine semantics.', inputSchema: { type: 'object', additionalProperties: false, properties: { unmanaged_ids: { type: 'array', minItems: 1, items: { type: 'number', minimum: 1 } }, inventory_payload: { type: 'object' }, snapshot: { type: 'object' }, stop_at_first_match: { type: 'boolean', default: true } } } },
     { name: 'glpi_analyze_asset_import_rule_risks', description: 'Statically analyze a verified snapshot or current RuleImportAsset rules for ordering and matching risks.', inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'object' } } } },
@@ -1919,6 +1920,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'glpi_resolve_location', description: 'Resolve an existing Location by normalized name or complete name, entity and parent. Returns resolved, not_found or ambiguous and never creates a Location.',
       inputSchema: { type: 'object', properties: { name: { type: 'string', minLength: 1 }, entity_id: { type: 'number', minimum: 0 }, parent_location_id: { type: 'number', minimum: 0 } }, required: ['name'] },
+    },
+    {
+      name: 'glpi_preview_delete_location', description: 'Read-only deletion plan for one Location. Children, references and incomplete scans are reported as blockers.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { location_id: { type: 'number', minimum: 1 }, purge: { type: 'boolean', default: false } }, required: ['location_id'] },
     },
     {
       name: 'glpi_delete_location', description: 'Safely plan or delete one unused Location. Dry-run defaults to true; any child, reference or incomplete reference scan blocks deletion.',
@@ -2192,20 +2197,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_list_asset_import_rules':
       case 'glpi_export_asset_import_rules': {
         const input = assetRuleListSchema.parse(args);
-        const requestInput = { activeOnly: input.active_only, itemtypeFilter: input.itemtype_filter, includeCriteria: input.include_criteria, includeActions: input.include_actions, fetchAll: input.fetch_all };
+        const requestInput = { activeOnly: input.active_only, itemtypeFilter: input.itemtype_filter, includeCriteria: input.include_criteria, includeActions: input.include_actions, fetchAll: name === 'glpi_export_asset_import_rules' ? true : input.fetch_all, start: input.start, limit: input.limit };
         return text(name === 'glpi_list_asset_import_rules' ? await assetImportRuleService.list(requestInput) : await assetImportRuleService.exportSnapshot(requestInput));
       }
       case 'glpi_get_asset_import_rule': {
         const input = assetRuleGetSchema.parse(args); return text(await assetImportRuleService.get(input.rule_id));
       }
       case 'glpi_diff_asset_import_rule_snapshots': {
-        const input = assetRuleDiffSchema.parse(args); return text(await assetImportRuleService.diffSnapshots(input.snapshot_before, input.snapshot_after));
+        const input = assetRuleDiffSchema.parse(args);
+        const before = input.snapshot_before ?? decodeAssetRuleSnapshotGzip(input.snapshot_before_gzip_base64!);
+        const after = input.snapshot_after ?? decodeAssetRuleSnapshotGzip(input.snapshot_after_gzip_base64!);
+        return text(await assetImportRuleService.diffSnapshots(before, after));
       }
       case 'glpi_preview_restore_asset_import_rules': {
-        const input = assetRuleRestorePreviewSchema.parse(args); return text(await assetImportRuleService.previewRestore({ snapshot: input.snapshot, restoreMode: input.restore_mode, allowCreate: input.allow_create, allowUpdate: input.allow_update, allowDisable: input.allow_disable, allowDelete: input.allow_delete }));
+        const input = assetRuleRestorePreviewSchema.parse(args); const snapshot = input.snapshot ?? decodeAssetRuleSnapshotGzip(input.snapshot_gzip_base64!);
+        return text(await assetImportRuleService.previewRestore({ snapshot, restoreMode: input.restore_mode, allowCreate: input.allow_create, allowUpdate: input.allow_update, allowDisable: input.allow_disable, allowDelete: input.allow_delete }));
       }
       case 'glpi_apply_restore_asset_import_rules': {
-        const input = assetRuleRestoreApplySchema.parse(args); return text(await assetImportRuleService.applyRestore({ snapshot: input.snapshot, restoreMode: input.restore_mode, allowCreate: input.allow_create, allowUpdate: input.allow_update, allowDisable: input.allow_disable, allowDelete: input.allow_delete, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id }));
+        const input = assetRuleRestoreApplySchema.parse(args); const snapshot = input.snapshot ?? decodeAssetRuleSnapshotGzip(input.snapshot_gzip_base64!);
+        return text(await assetImportRuleService.applyRestore({ snapshot, restoreMode: input.restore_mode, allowCreate: input.allow_create, allowUpdate: input.allow_update, allowDisable: input.allow_disable, allowDelete: input.allow_delete, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id }));
       }
       case 'glpi_simulate_asset_import_rules': {
         const input = assetRuleSimulationSchema.parse(args); return text(await assetImportRuleService.simulate({ unmanagedIds: input.unmanaged_ids, inventoryPayload: input.inventory_payload, snapshot: input.snapshot, stopAtFirstMatch: input.stop_at_first_match }));
@@ -3044,6 +3054,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_delete_location': {
         const input = deleteLocationSchema.parse(args);
         return text(await locationIntegrityService.deleteLocation({ locationId: input.location_id, dryRun: input.dry_run, purge: input.purge, confirmation: input.confirmation }));
+      }
+      case 'glpi_preview_delete_location': {
+        const input = z.object({ location_id: z.number().int().min(1), purge: z.boolean().default(false) }).strict().parse(args);
+        return text(await locationIntegrityService.deleteLocation({ locationId: input.location_id, dryRun: true, purge: input.purge }));
       }
       case 'glpi_delete_unused_locations': {
         const input = deleteLocationsSchema.parse(args);

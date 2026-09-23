@@ -30,6 +30,25 @@ export interface GlpiRawError {
   method: string;
 }
 
+const SENSITIVE_TEXT = /(?:csrf|token|authorization|cookie|password|passwd|secret|session)[\s_:-]*(?:token)?[\s"'=:\-]*[^\s<>,;&]{1,256}/gi;
+function sanitizeText(value: string): string {
+  return value.replace(/<[^>]*>/g, ' ').replace(SENSITIVE_TEXT, '[REDACTED]')
+    .replace(/https?:\/\/[^\s"'<>]+/gi, '[UPSTREAM_URL]').replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+function sanitizeBody(value: string): string {
+  if (!value) return '';
+  try {
+    const redact = (item: unknown): unknown => Array.isArray(item) ? item.map(redact) : item && typeof item === 'object'
+      ? Object.fromEntries(Object.entries(item as Record<string, unknown>).map(([key, child]) => [key, /csrf|token|authorization|cookie|password|passwd|secret|session/i.test(key) ? '[REDACTED]' : redact(child)]))
+      : typeof item === 'string' ? sanitizeText(item) : item;
+    return JSON.stringify(redact(JSON.parse(value))).slice(0, 1000);
+  } catch { return sanitizeText(value); }
+}
+function safeEndpoint(value: string): string {
+  try { return new URL(value).pathname.replace(/\/+/g, '/'); }
+  catch { return value.split('?')[0].replace(/^https?:\/\/[^/]+/i, ''); }
+}
+
 export class GlpiError extends Error {
   readonly status: number;
   readonly glpiCode?: string;
@@ -41,14 +60,14 @@ export class GlpiError extends Error {
   constructor(raw: GlpiRawError) {
     const detail = raw.glpiCode
       ? `${raw.glpiCode}${raw.glpiMessage ? ': ' + raw.glpiMessage : ''}`
-      : raw.body.slice(0, 500);
-    super(`GLPI ${raw.method} ${raw.url} -> ${raw.status} (${detail})`);
+      : 'upstream response unavailable';
+    super(`GLPI request failed: ${raw.method} ${safeEndpoint(raw.url)} -> ${raw.status} (${sanitizeText(detail)})`);
     this.name = 'GlpiError';
     this.status = raw.status;
     this.glpiCode = raw.glpiCode;
     this.glpiMessage = raw.glpiMessage;
-    this.body = raw.body;
-    this.url = raw.url;
+    this.body = sanitizeBody(raw.body);
+    this.url = safeEndpoint(raw.url);
     this.method = raw.method;
   }
 }
@@ -158,7 +177,7 @@ export class GlpiHttp {
     } catch (err) {
       clearTimeout(timeoutId);
       if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeoutMs}ms: ${url}`);
+        throw new Error(`GLPI request timed out after ${timeoutMs}ms`);
       }
       throw err;
     }
@@ -282,7 +301,7 @@ export class GlpiHttp {
       // GLPI returns errors as ["ERROR_CODE", "message"]
       if (Array.isArray(parsed) && parsed.length >= 1 && typeof parsed[0] === 'string') {
         glpiCode = parsed[0];
-        glpiMessage = typeof parsed[1] === 'string' ? parsed[1] : undefined;
+        glpiMessage = typeof parsed[1] === 'string' ? sanitizeText(parsed[1]) : undefined;
       }
     } catch {
       // body is not JSON; leave glpiCode/Message undefined

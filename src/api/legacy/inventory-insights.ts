@@ -40,6 +40,10 @@ export class LegacyInventoryInsightsService implements InventoryInsightsService 
   private all(itemtype: string, limit = 50000): Promise<Record<string, unknown>[]> {
     return this.client.getItems<Record<string, unknown>>(itemtype, { range: `0-${limit - 1}`, expand_dropdowns: false });
   }
+  private async available(itemtype: string, limit: number): Promise<{ rows: Record<string, unknown>[]; available: boolean }> {
+    try { return { rows: await this.all(itemtype, limit), available: true }; }
+    catch { return { rows: [], available: false }; }
+  }
 
   async auditFortigateHA(input: Record<string, unknown>): Promise<unknown> {
     const [managedRows, unmanagedRows] = await Promise.all([this.all('NetworkEquipment'), this.all('Unmanaged')]);
@@ -72,7 +76,11 @@ export class LegacyInventoryInsightsService implements InventoryInsightsService 
 
   async getProvenance(input: Record<string, unknown>): Promise<unknown> {
     const itemtype = s(input.itemtype); const assetId = n(input.asset_id);
-    const [asset, logs, states] = await Promise.all([this.client.getItem<Record<string, unknown>>(itemtype, assetId, { expand_dropdowns: false }), this.all('Log'), this.all('PluginGlpiinventoryTaskjobstate')]);
+    const [asset, logRead, stateRead] = await Promise.all([
+      this.client.getItem<Record<string, unknown>>(itemtype, assetId, { expand_dropdowns: false }),
+      this.available('Log', 1000), this.available('PluginGlpiinventoryTaskjobstate', 5000),
+    ]);
+    const logs = logRead.rows; const states = stateRead.rows;
     const relevantLogs = logs.filter((row) => related(row, 'items_id', assetId) && (!row.itemtype || s(row.itemtype) === itemtype));
     const relevantStates = states.filter((row) => related(row, 'items_id', assetId) || related(row, 'item_id', assetId));
     return { asset: { itemtype, id: assetId, name: asset.name, date_creation: asset.date_creation ?? null, date_mod: asset.date_mod ?? null },
@@ -80,7 +88,9 @@ export class LegacyInventoryInsightsService implements InventoryInsightsService 
       inventory_agent: relevantStates.length ? relevantStates.map((row) => row.plugin_glpiinventory_agents_id ?? row.agents_id).filter(Boolean) : 'unavailable',
       task_job_evidence: sanitize(relevantStates), scanned_ip: relevantStates.map((row) => row.ip ?? row.ip_address).filter(Boolean),
       credential: relevantStates.map((row) => ({ id: row.snmpcredentials_id ?? row.credentials_id ?? null, secret: '[REDACTED]' })).filter((row) => row.id),
-      payload_checksum: 'unavailable', field_changes: sanitize(relevantLogs), limitations: ['GLPI REST does not guarantee persistence of the winning rule or raw payload checksum'], modifies_data: false };
+      payload_checksum: 'unavailable', field_changes: sanitize(relevantLogs),
+      evidence_availability: { glpi_logs: logRead.available ? 'bounded_to_1000_rows' : 'unavailable_or_forbidden', inventory_job_states: stateRead.available ? 'bounded_to_5000_rows' : 'unavailable_or_forbidden' },
+      limitations: ['GLPI REST does not guarantee persistence of the winning rule or raw payload checksum', 'Evidence reads are bounded and may be incomplete'], modifies_data: false };
   }
 
   async getTimeline(input: Record<string, unknown>): Promise<unknown> {
@@ -100,7 +110,8 @@ export class LegacyInventoryInsightsService implements InventoryInsightsService 
 
   async previewTaskSchedule(input: Record<string, unknown>): Promise<unknown> {
     const taskId = n(input.task_id); const task = await this.client.getItem<Record<string, unknown>>('PluginGlpiinventoryTask', taskId, { expand_dropdowns: false });
-    const [jobs, states] = await Promise.all([this.all('PluginGlpiinventoryTaskjob'), this.all('PluginGlpiinventoryTaskjobstate')]);
+    const [jobRead, stateRead] = await Promise.all([this.available('PluginGlpiinventoryTaskjob', 5000), this.available('PluginGlpiinventoryTaskjobstate', 5000)]);
+    const jobs = jobRead.rows; const states = stateRead.rows;
     const taskJobs = jobs.filter((row) => related(row, 'plugin_glpiinventory_tasks_id', taskId));
     const jobIds = new Set(taskJobs.map((row) => n(row.id)));
     const taskStates = states.filter((row) => jobIds.has(n(row.plugin_glpiinventory_taskjobs_id)));
@@ -109,7 +120,8 @@ export class LegacyInventoryInsightsService implements InventoryInsightsService 
       window: { start: task.datetime_start ?? null, end: task.datetime_end ?? null, timeslot_id: task.plugin_glpiinventory_timeslots_id ?? null },
       actor: task.users_id ?? null, last_preparation: task.date_mod ?? null, last_execution: latest ? dateOf(latest) : null,
       next_execution_probable: bool(task.is_active) ? 'scheduler_or_agent_poll_dependent' : null,
-      trigger: task.execution_id ?? task.method ?? 'server_wakeup_or_agent_polling_not_exposed', jobs: sanitize(taskJobs), modifies_data: false };
+      trigger: task.execution_id ?? task.method ?? 'server_wakeup_or_agent_polling_not_exposed', jobs: sanitize(taskJobs),
+      evidence_availability: { jobs: jobRead.available ? 'available' : 'unavailable_or_forbidden', states: stateRead.available ? 'available' : 'unavailable_or_forbidden' }, modifies_data: false };
   }
 
   async setTaskReprepare(input: Record<string, unknown>): Promise<unknown> {
@@ -130,7 +142,8 @@ export class LegacyInventoryInsightsService implements InventoryInsightsService 
   }
 
   async getTaskExecutionTimeline(input: Record<string, unknown>): Promise<unknown> {
-    const [jobs, states] = await Promise.all([this.all('PluginGlpiinventoryTaskjob'), this.all('PluginGlpiinventoryTaskjobstate')]);
+    const [jobRead, stateRead] = await Promise.all([this.available('PluginGlpiinventoryTaskjob', 5000), this.available('PluginGlpiinventoryTaskjobstate', 5000)]);
+    const jobs = jobRead.rows; const states = stateRead.rows;
     const taskId = input.task_id === undefined ? undefined : n(input.task_id); const jobId = input.job_id === undefined ? undefined : n(input.job_id);
     const allowedJobs = new Set(jobs.filter((row) => taskId === undefined || related(row, 'plugin_glpiinventory_tasks_id', taskId)).map((row) => n(row.id)));
     const filtered = states.filter((row) => (jobId === undefined ? allowedJobs.has(n(row.plugin_glpiinventory_taskjobs_id)) : n(row.plugin_glpiinventory_taskjobs_id) === jobId) &&
@@ -139,6 +152,7 @@ export class LegacyInventoryInsightsService implements InventoryInsightsService 
       .sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
     const start = n(input.start); const limit = n(input.limit) || 100;
     return { events: sanitize(filtered.slice(start, start + limit)), pagination: { start, returned: Math.min(limit, Math.max(0, filtered.length - start)), total: filtered.length },
+      evidence_availability: { jobs: jobRead.available ? 'available' : 'unavailable_or_forbidden', states: stateRead.available ? 'available' : 'unavailable_or_forbidden' },
       timezones: { utc: 'dates returned as stored by GLPI; UTC conversion unavailable without confirmed GLPI timezone', glpi: 'unavailable_from_this_endpoint' }, modifies_data: false };
   }
 

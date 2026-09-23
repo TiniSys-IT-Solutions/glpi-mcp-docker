@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 257 tools currently registered by `src/index.ts` on
+This catalogue lists the 258 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -111,6 +111,7 @@ explicitly to Legacy; High-Level fails clearly pending confirmed Swagger routes.
 | `glpi_find_location_duplicates` | Read | Focus the Location audit on duplicate candidates. |
 | `glpi_resolve_location` | Read | Resolve an existing location by normalized name/complete name, entity and parent; return `resolved`, `not_found` or `ambiguous`. |
 | `glpi_delete_location` | Destructive | Dry-run and safely delete one explicit unused Location; references, children and incomplete scans block deletion. |
+| `glpi_preview_delete_location` | Read only | Build the same Location deletion plan without requiring destructive-call approval. |
 | `glpi_delete_unused_locations` | Destructive | Validate an explicit Location list completely before the first deletion; no implicit range selection. |
 | `glpi_update_monitor` | Write | Partially update a monitor with validated entity/location and raw-ID post-verification. |
 | `glpi_update_network_equipment` | Write | Partially update network equipment with validated entity/location and raw-ID post-verification. |
@@ -168,12 +169,12 @@ The High-Level API is fail-closed because no confirmed GLPI 11 route is used.
 
 | Tool | Access | Function |
 | --- | --- | --- |
-| `glpi_list_asset_import_rules` | Read | List complete ordered rules with native and normalized criteria/actions. |
+| `glpi_list_asset_import_rules` | Read | List a bounded ordered page; criteria and actions are opt-in, while `fetch_all` remains explicit. |
 | `glpi_get_asset_import_rule` | Read | Read one complete rule. |
 | `glpi_export_asset_import_rules` | Read | Produce a deterministic, fingerprinted snapshot. |
-| `glpi_diff_asset_import_rule_snapshots` | Read | Report additions, removals, edits, moves, activation and child changes. |
-| `glpi_preview_restore_asset_import_rules` | Read | Compare a verified snapshot to current state and fingerprint the restore plan. |
-| `glpi_apply_restore_asset_import_rules` | Destructive guard | Revalidate the plan, then currently return `not_supported`; no write occurs until child ordering/deletion semantics are confirmed. |
+| `glpi_diff_asset_import_rule_snapshots` | Read | Report additions, removals, edits, moves, activation and child changes; large snapshots may use bounded gzip/base64. |
+| `glpi_preview_restore_asset_import_rules` | Read | Compare a verified inline or gzip/base64 snapshot to current state and fingerprint the restore plan. |
+| `glpi_apply_restore_asset_import_rules` | Destructive guard | Revalidate an inline or compressed plan, then currently return `not_supported`; no write occurs until child ordering/deletion semantics are confirmed. |
 | `glpi_simulate_asset_import_rules` | Read | Return `not_supported` instead of inventing GLPI engine evaluation semantics. |
 | `glpi_analyze_asset_import_rule_risks` | Read | Perform deterministic static checks for ranking and overly permissive rule risks. |
 | `glpi_set_asset_import_rule_enabled` | Guarded write | Validated activation contract; currently `not_supported` with no write. |

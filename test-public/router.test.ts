@@ -144,11 +144,11 @@ test('hybrid matrix covers every registered MCP tool and contains no phantom too
   }
 
   assert.deepEqual(Object.keys(HYBRID_TOOL_BACKENDS).sort(), [...new Set(active)].sort());
-  assert.equal(new Set(active).size, 257, 'README and docs/TOOLS.md tool count must be updated when the registry changes');
+  assert.equal(new Set(active).size, 258, 'README and docs/TOOLS.md tool count must be updated when the registry changes');
   const catalogue = readFileSync(new URL('../docs/TOOLS.md', import.meta.url), 'utf8');
-  assert.match(catalogue, /lists the 257 tools currently registered/);
+  assert.match(catalogue, /lists the 258 tools currently registered/);
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /expose \*\*257 outils\*\*/);
+  assert.match(readme, /expose \*\*258 outils\*\*/);
   for (const tool of new Set(active)) {
     assert.ok(catalogue.includes(`\`${tool}\``), `${tool} must be documented in docs/TOOLS.md`);
   }

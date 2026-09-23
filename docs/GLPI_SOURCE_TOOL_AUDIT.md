@@ -363,7 +363,7 @@ on explicit IDs returned to the caller.
 
 ### Current integration status
 
-Implemented in the current `0.4.0` working tree: allowlisted asset/component/
+Implemented in the current `0.4.1` working tree: allowlisted asset/component/
 dropdown/management lifecycle, complete persisted network-identity reads,
 NetworkPort create/update/delete, NetworkName-aware IP attach/move/delete, and guarded VLAN and physical-port links,
 18 component-to-asset relation families with usage checks and guarded detach,

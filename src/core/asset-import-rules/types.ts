@@ -7,6 +7,8 @@ export interface AssetImportRuleListRequest {
   includeCriteria: boolean;
   includeActions: boolean;
   fetchAll: boolean;
+  start: number;
+  limit: number;
 }
 
 export interface AssetImportRuleSnapshot {
