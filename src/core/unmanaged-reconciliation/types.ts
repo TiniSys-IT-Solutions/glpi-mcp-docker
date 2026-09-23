@@ -14,6 +14,17 @@ export interface UnmanagedAuditRequest {
   assetTypes: ManagedAssetType[];
   minimumConfidence: Confidence;
   includeUnmatched: boolean;
+  start: number;
+  onlyExactDuplicates: boolean;
+  onlyManagedMatches: boolean;
+  onlyInternalUnmanagedDuplicates: boolean;
+  hasSysdescr?: boolean;
+  hasIp?: boolean;
+  hasMac?: boolean;
+  hasSerial?: boolean;
+  genericNamesPolicy: 'include' | 'exclude' | 'only';
+  includeEvidence: boolean;
+  includeRawFields: boolean;
 }
 
 export interface UnmanagedApplyRequest {

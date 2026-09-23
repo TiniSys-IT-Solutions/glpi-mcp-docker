@@ -25,10 +25,96 @@ import { LegacyUnmanagedReconciliationService } from '../api/legacy/unmanaged-re
 import { HighLevelUnmanagedReconciliationService } from '../api/highlevel/unmanaged-reconciliation.js';
 import { LegacyAddressingSyncService } from '../api/legacy/addressing-sync.js';
 import { HighLevelAddressingSyncService } from '../api/highlevel/addressing-sync.js';
+import { LegacyAssetImportRuleService } from '../api/legacy/asset-import-rules.js';
+import { HighLevelAssetImportRuleService } from '../api/highlevel/asset-import-rules.js';
+import { LegacyInventoryInsightsService } from '../api/legacy/inventory-insights.js';
+import { HighLevelInventoryInsightsService } from '../api/highlevel/inventory-insights.js';
+import { LegacyCatalogService } from '../api/legacy/catalog.js';
+import { HighLevelCatalogService } from '../api/highlevel/catalog.js';
+import { LegacyGovernanceService } from '../api/legacy/governance.js';
+import { HighLevelGovernanceService } from '../api/highlevel/governance.js';
+import { LegacyNetworkTopologyService } from '../api/legacy/network-topology.js';
+import { HighLevelNetworkTopologyService } from '../api/highlevel/network-topology.js';
+import { LegacyComponentRelationService } from '../api/legacy/component-relations.js';
+import { HighLevelComponentRelationService } from '../api/highlevel/component-relations.js';
+import { LegacyAssetSubobjectService } from '../api/legacy/asset-subobjects.js';
+import { HighLevelAssetSubobjectService } from '../api/highlevel/asset-subobjects.js';
+import { LegacyItemMetadataService } from '../api/legacy/item-metadata.js';
+import { HighLevelItemMetadataService } from '../api/highlevel/item-metadata.js';
 
 export type BackendName = 'legacy' | 'highlevel';
 
 export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
+  glpi_list_item_metadata: 'legacy',
+  glpi_get_item_metadata: 'legacy',
+  glpi_create_item_metadata: 'legacy',
+  glpi_update_item_metadata: 'legacy',
+  glpi_preview_delete_item_metadata: 'legacy',
+  glpi_delete_item_metadata: 'legacy',
+  glpi_list_asset_subobjects: 'legacy',
+  glpi_get_asset_subobject: 'legacy',
+  glpi_create_asset_subobject: 'legacy',
+  glpi_update_asset_subobject: 'legacy',
+  glpi_preview_delete_asset_subobject: 'legacy',
+  glpi_delete_asset_subobject: 'legacy',
+  glpi_list_asset_components: 'legacy',
+  glpi_get_component_usage: 'legacy',
+  glpi_attach_component_to_asset: 'legacy',
+  glpi_update_asset_component: 'legacy',
+  glpi_preview_detach_component: 'legacy',
+  glpi_detach_component_from_asset: 'legacy',
+  glpi_list_asset_network_ports: 'legacy',
+  glpi_get_network_port: 'legacy',
+  glpi_create_network_port: 'legacy',
+  glpi_update_network_port: 'legacy',
+  glpi_attach_vlan_to_port: 'legacy',
+  glpi_connect_network_ports: 'legacy',
+  glpi_preview_remove_network_link: 'legacy',
+  glpi_remove_network_link: 'legacy',
+  glpi_attach_ip_address: 'legacy',
+  glpi_move_ip_address: 'legacy',
+  glpi_preview_delete_network_object: 'legacy',
+  glpi_delete_network_object: 'legacy',
+  glpi_list_asset_relations: 'legacy',
+  glpi_attach_asset_relation: 'legacy',
+  glpi_preview_detach_asset_relation: 'legacy',
+  glpi_detach_asset_relation: 'legacy',
+  glpi_get_dropdown_usage: 'legacy',
+  glpi_run_governance_audit: 'legacy',
+  glpi_list_catalog_items: 'legacy',
+  glpi_get_catalog_item: 'legacy',
+  glpi_create_catalog_item: 'legacy',
+  glpi_update_catalog_item: 'legacy',
+  glpi_preview_delete_catalog_item: 'legacy',
+  glpi_delete_catalog_item: 'legacy',
+  glpi_audit_fortigate_ha_assets: 'legacy',
+  glpi_get_asset_inventory_provenance: 'legacy',
+  glpi_get_asset_inventory_timeline: 'legacy',
+  glpi_get_asset_inventory_raw_payload: 'legacy',
+  glpi_inventory_preview_task_schedule: 'legacy',
+  glpi_inventory_set_task_reprepare: 'legacy',
+  glpi_inventory_prepare_task_once: 'legacy',
+  glpi_inventory_get_task_execution_timeline: 'legacy',
+  glpi_classify_unmanaged_discovery: 'legacy',
+  glpi_get_asset_network_identity: 'legacy',
+  glpi_list_asset_import_rules: 'legacy',
+  glpi_get_asset_import_rule: 'legacy',
+  glpi_export_asset_import_rules: 'legacy',
+  glpi_diff_asset_import_rule_snapshots: 'legacy',
+  glpi_preview_restore_asset_import_rules: 'legacy',
+  glpi_apply_restore_asset_import_rules: 'legacy',
+  glpi_simulate_asset_import_rules: 'legacy',
+  glpi_analyze_asset_import_rule_risks: 'legacy',
+  glpi_set_asset_import_rule_enabled: 'legacy',
+  glpi_update_asset_import_rule: 'legacy',
+  glpi_add_asset_import_rule_criterion: 'legacy',
+  glpi_update_asset_import_rule_criterion: 'legacy',
+  glpi_delete_asset_import_rule_criterion: 'legacy',
+  glpi_add_asset_import_rule_action: 'legacy',
+  glpi_update_asset_import_rule_action: 'legacy',
+  glpi_delete_asset_import_rule_action: 'legacy',
+  glpi_create_asset_import_rule: 'legacy',
+  glpi_reorder_asset_import_rules: 'legacy',
   glpi_addressing_list_ranges: 'legacy',
   glpi_addressing_get_range: 'legacy',
   glpi_addressing_preview_ip_network_sync: 'legacy',
@@ -200,6 +286,22 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_inventory_get_deploy_package: 'legacy',
   glpi_inventory_list_deploy_groups: 'legacy',
   glpi_inventory_get_deploy_group: 'legacy',
+  glpi_inventory_list_agents: 'legacy',
+  glpi_inventory_get_agent: 'legacy',
+  glpi_inventory_list_agent_modules: 'legacy',
+  glpi_inventory_get_agent_module: 'legacy',
+  glpi_inventory_list_task_job_logs: 'legacy',
+  glpi_inventory_get_task_job_log: 'legacy',
+  glpi_inventory_list_timeslot_entries: 'legacy',
+  glpi_inventory_get_timeslot_entry: 'legacy',
+  glpi_inventory_list_collect_file_results: 'legacy',
+  glpi_inventory_get_collect_file_result: 'legacy',
+  glpi_inventory_list_collect_registry_results: 'legacy',
+  glpi_inventory_get_collect_registry_result: 'legacy',
+  glpi_inventory_list_collect_wmi_results: 'legacy',
+  glpi_inventory_get_collect_wmi_result: 'legacy',
+  glpi_inventory_list_deploy_mirrors: 'legacy',
+  glpi_inventory_get_deploy_mirror: 'legacy',
 };
 
 export interface ApiRouter {
@@ -256,6 +358,14 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         locationIntegrity: new HighLevelLocationIntegrityService(),
         unmanagedReconciliation: new HighLevelUnmanagedReconciliationService(),
         addressingSync: new HighLevelAddressingSyncService(),
+        assetImportRules: new HighLevelAssetImportRuleService(),
+        inventoryInsights: new HighLevelInventoryInsightsService(),
+        catalog: new HighLevelCatalogService(highlevel),
+        governance: new HighLevelGovernanceService(),
+        networkTopology: new HighLevelNetworkTopologyService(),
+        componentRelations: new HighLevelComponentRelationService(highlevel),
+        assetSubobjects: new HighLevelAssetSubobjectService(highlevel),
+        itemMetadata: new HighLevelItemMetadataService(highlevel),
       },
       backendForTool: () => 'highlevel',
       describeStartup: () =>
@@ -279,6 +389,14 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       locationIntegrity: new LegacyLocationIntegrityService(client),
       unmanagedReconciliation: new LegacyUnmanagedReconciliationService(client),
       addressingSync: new LegacyAddressingSyncService(client),
+      assetImportRules: new LegacyAssetImportRuleService(client),
+      inventoryInsights: new LegacyInventoryInsightsService(client),
+      catalog: new LegacyCatalogService(client),
+      governance: new LegacyGovernanceService(client),
+      networkTopology: new LegacyNetworkTopologyService(client),
+      componentRelations: new LegacyComponentRelationService(client),
+      assetSubobjects: new LegacyAssetSubobjectService(client),
+      itemMetadata: new LegacyItemMetadataService(client),
     },
     backendForTool(toolName: string): BackendName {
       if (config.apiMode === 'legacy') return 'legacy';

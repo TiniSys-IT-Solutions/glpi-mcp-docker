@@ -130,17 +130,25 @@ test('hybrid matrix covers every registered MCP tool and contains no phantom too
     active.push(`glpi_update_${asset}`);
   }
   for (const [plural, singular] of [
+    ['agents', 'agent'], ['agent_modules', 'agent_module'],
     ['credentials', 'credential'], ['tasks', 'task'], ['task_jobs', 'task_job'],
-    ['task_job_states', 'task_job_state'], ['timeslots', 'timeslot'], ['collects', 'collect'],
+    ['task_job_states', 'task_job_state'], ['task_job_logs', 'task_job_log'],
+    ['timeslots', 'timeslot'], ['timeslot_entries', 'timeslot_entry'], ['collects', 'collect'],
     ['collect_files', 'collect_file'], ['collect_registries', 'collect_registry'],
-    ['collect_wmi_queries', 'collect_wmi_query'], ['deploy_packages', 'deploy_package'],
-    ['deploy_groups', 'deploy_group'],
+    ['collect_wmi_queries', 'collect_wmi_query'], ['collect_file_results', 'collect_file_result'],
+    ['collect_registry_results', 'collect_registry_result'], ['collect_wmi_results', 'collect_wmi_result'],
+    ['deploy_packages', 'deploy_package'], ['deploy_groups', 'deploy_group'],
+    ['deploy_mirrors', 'deploy_mirror'],
   ]) {
     active.push(`glpi_inventory_list_${plural}`, `glpi_inventory_get_${singular}`);
   }
 
   assert.deepEqual(Object.keys(HYBRID_TOOL_BACKENDS).sort(), [...new Set(active)].sort());
+  assert.equal(new Set(active).size, 257, 'README and docs/TOOLS.md tool count must be updated when the registry changes');
   const catalogue = readFileSync(new URL('../docs/TOOLS.md', import.meta.url), 'utf8');
+  assert.match(catalogue, /lists the 257 tools currently registered/);
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /expose \*\*257 outils\*\*/);
   for (const tool of new Set(active)) {
     assert.ok(catalogue.includes(`\`${tool}\``), `${tool} must be documented in docs/TOOLS.md`);
   }

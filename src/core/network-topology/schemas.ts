@@ -1,0 +1,17 @@
+import { z } from 'zod';
+import { isIP } from 'node:net';
+import { RELATION_ASSET_TYPES } from '../governance/types.js';
+const id = z.number().int().min(1);
+const fields = z.object({ name: z.string().optional(), mac: z.string().optional(), comment: z.string().nullable().optional(), logical_number: z.number().int().min(0).optional(), ifmtu: z.number().int().min(0).optional(), ifspeed: z.number().int().min(0).optional(), instantiation_type: z.enum(['NetworkPortEthernet', 'NetworkPortWifi', 'NetworkPortAggregate', 'NetworkPortAlias', 'NetworkPortDialup', 'NetworkPortLocal', 'NetworkPortFiberchannel']).optional() }).strict();
+export const portOwnerSchema = z.object({ itemtype: z.enum(RELATION_ASSET_TYPES), asset_id: id }).strict();
+export const portCreateSchema = portOwnerSchema.extend({ fields, correlation_id: z.string().uuid() }).strict();
+export const portUpdateSchema = z.object({ port_id: id, expected_asset_id: id.optional(), fields, correlation_id: z.string().uuid() }).strict().refine((v) => Object.keys(v.fields).length > 0, 'fields must not be empty');
+export const vlanAttachSchema = z.object({ port_id: id, vlan_id: id, tagged: z.boolean().optional(), correlation_id: z.string().uuid() }).strict();
+export const portConnectSchema = z.object({ port_id: id, peer_port_id: id, correlation_id: z.string().uuid() }).strict().refine((v) => v.port_id !== v.peer_port_id, 'A port cannot connect to itself');
+export const networkLinkPreviewSchema = z.object({ kind: z.enum(['vlan', 'port_connection']), relation_id: id }).strict();
+export const networkLinkRemoveSchema = networkLinkPreviewSchema.extend({ preview_fingerprint: z.string().regex(/^[a-f0-9]{64}$/), confirmation: z.literal('I_HAVE_VERIFIED_THE_NETWORK_LINK_REMOVAL'), correlation_id: z.string().uuid() }).strict();
+const address = z.string().trim().refine((value) => isIP(value) !== 0, 'Expected an IPv4 or IPv6 address');
+export const ipAttachSchema = z.object({ port_id: id, address, network_name: z.string().trim().min(1).optional(), fqdn_id: id.optional(), correlation_id: z.string().uuid() }).strict();
+export const ipMoveSchema = z.object({ ip_address_id: id, target_port_id: id, network_name: z.string().trim().min(1).optional(), fqdn_id: id.optional(), expected_network_name_id: id.optional(), correlation_id: z.string().uuid() }).strict();
+export const topologyDeletePreviewSchema = z.object({ kind: z.enum(['ip_address', 'network_port']), id }).strict();
+export const topologyDeleteSchema = topologyDeletePreviewSchema.extend({ preview_fingerprint: z.string().regex(/^[a-f0-9]{64}$/), confirmation: z.literal('I_HAVE_VERIFIED_THE_NETWORK_OBJECT_DELETE'), correlation_id: z.string().uuid() }).strict();

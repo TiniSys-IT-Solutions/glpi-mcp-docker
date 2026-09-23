@@ -12,6 +12,11 @@ export const unmanagedAuditSchema = z.object({
   include_network_equipment: z.boolean().default(true), include_phones: z.boolean().default(true),
   include_peripherals: z.boolean().default(false),
   minimum_confidence: z.enum(['low', 'medium', 'high']).default('low'), include_unmatched: z.boolean().default(true),
+  only_exact_duplicates: z.boolean().default(false), only_managed_matches: z.boolean().default(false),
+  only_internal_unmanaged_duplicates: z.boolean().default(false), itemtype_candidates: z.array(z.enum(MANAGED_ASSET_TYPES)).min(1).optional(),
+  has_sysdescr: z.boolean().optional(), has_ip: z.boolean().optional(), has_mac: z.boolean().optional(), has_serial: z.boolean().optional(),
+  generic_names_policy: z.enum(['include', 'exclude', 'only']).default('include'), include_evidence: z.boolean().default(true),
+  include_raw_fields: z.boolean().default(false), start: z.number().int().min(0).default(0),
 }).strict();
 
 export const unmanagedApplySchema = z.object({

@@ -11,17 +11,25 @@ import { SearchCriterion } from './search.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
 
 export const INVENTORY_PLUGIN_ITEMTYPES: Record<InventoryPluginResource, string> = {
+  agents: 'Agent',
+  agent_modules: 'PluginGlpiinventoryAgentmodule',
   credentials: 'PluginGlpiinventoryCredential',
   tasks: 'PluginGlpiinventoryTask',
   task_jobs: 'PluginGlpiinventoryTaskjob',
   task_job_states: 'PluginGlpiinventoryTaskjobstate',
+  task_job_logs: 'PluginGlpiinventoryTaskjoblog',
   timeslots: 'PluginGlpiinventoryTimeslot',
+  timeslot_entries: 'PluginGlpiinventoryTimeslotEntry',
   collects: 'PluginGlpiinventoryCollect',
   collect_files: 'PluginGlpiinventoryCollect_File',
   collect_registries: 'PluginGlpiinventoryCollect_Registry',
   collect_wmi_queries: 'PluginGlpiinventoryCollect_Wmi',
+  collect_file_results: 'PluginGlpiinventoryCollect_File_Content',
+  collect_registry_results: 'PluginGlpiinventoryCollect_Registry_Content',
+  collect_wmi_results: 'PluginGlpiinventoryCollect_Wmi_Content',
   deploy_packages: 'PluginGlpiinventoryDeployPackage',
   deploy_groups: 'PluginGlpiinventoryDeployGroup',
+  deploy_mirrors: 'PluginGlpiinventoryDeployMirror',
 };
 
 const IP_RANGE_SNMP_RELATION = 'PluginGlpiinventoryIPRange_SNMPCredential';

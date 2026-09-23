@@ -59,6 +59,23 @@ import { UnmanagedReconciliationService } from './core/unmanaged-reconciliation/
 import { AddressingSyncService } from './core/addressing-sync/service.js';
 import { addressingApplySchema, addressingListSchema, addressingPreviewSchema } from './core/addressing-sync/schemas.js';
 import { LocationAssetType } from './core/location-integrity/types.js';
+import { AssetImportRuleService } from './core/asset-import-rules/service.js';
+import { assetRuleDiffSchema, assetRuleGetSchema, assetRuleListSchema, assetRuleRestoreApplySchema, assetRuleRestorePreviewSchema, assetRuleRiskSchema, assetRuleSimulationSchema } from './core/asset-import-rules/schemas.js';
+import { InventoryInsightsService } from './core/inventory-insights/service.js';
+import { assetNetworkIdentitySchema, discoveryClassifySchema, fortigateAuditSchema, provenanceSchema, rawPayloadSchema, taskIdSchema, taskPrepareOnceSchema, taskReprepareSchema, taskTimelineSchema } from './core/inventory-insights/schemas.js';
+import { CatalogService } from './core/catalog/service.js';
+import { CATALOG_DOMAINS, CATALOG_ITEMTYPES } from './core/catalog/types.js';
+import { catalogCreateSchema, catalogDeletePreviewSchema, catalogDeleteSchema, catalogGetSchema, catalogListSchema, catalogUpdateSchema } from './core/catalog/schemas.js';
+import { GovernanceService } from './core/governance/service.js';
+import { ASSET_RELATION_KINDS, GOVERNANCE_AUDITS, RELATION_ASSET_TYPES } from './core/governance/types.js';
+import { assetRelationAttachSchema, assetRelationDetachPreviewSchema, assetRelationDetachSchema, assetRelationListSchema, dropdownUsageSchema, governanceAuditSchema } from './core/governance/schemas.js';
+import { NetworkTopologyService } from './core/network-topology/service.js';
+import { ipAttachSchema, ipMoveSchema, networkLinkPreviewSchema, networkLinkRemoveSchema, portConnectSchema, portCreateSchema, portOwnerSchema, portUpdateSchema, topologyDeletePreviewSchema, topologyDeleteSchema, vlanAttachSchema } from './core/network-topology/schemas.js';
+import { ComponentRelationService } from './core/component-relations/service.js';
+import { COMPONENT_ASSET_TYPES, COMPONENT_TYPES } from './core/component-relations/types.js';
+import { componentAttachSchema, componentDetachPreviewSchema, componentDetachSchema, componentListSchema, componentRelationUpdateSchema, componentUsageSchema } from './core/component-relations/schemas.js';
+import { AssetSubobjectService } from './core/asset-subobjects/service.js'; import { ASSET_SUBOBJECT_KINDS, SUBOBJECT_ASSET_TYPES } from './core/asset-subobjects/types.js'; import { subobjectCreateSchema, subobjectDeletePreviewSchema, subobjectDeleteSchema, subobjectGetSchema, subobjectListSchema, subobjectUpdateSchema } from './core/asset-subobjects/schemas.js';
+import {ItemMetadataService}from'./core/item-metadata/service.js';import{ITEM_METADATA_KINDS,METADATA_ITEMTYPES}from'./core/item-metadata/types.js';import{metadataCreateSchema,metadataDeletePreviewSchema,metadataDeleteSchema,metadataGetSchema,metadataListSchema,metadataUpdateSchema}from'./core/item-metadata/schemas.js';
 
 // ---------------------------------------------------------------------------
 // Validation Schemas
@@ -330,6 +347,14 @@ let formService: FormService;
 let locationIntegrityService: LocationIntegrityService;
 let unmanagedReconciliationService: UnmanagedReconciliationService;
 let addressingSyncService: AddressingSyncService;
+let assetImportRuleService: AssetImportRuleService;
+let inventoryInsightsService: InventoryInsightsService;
+let catalogService: CatalogService;
+let governanceService: GovernanceService;
+let networkTopologyService: NetworkTopologyService;
+let componentRelationService: ComponentRelationService;
+let assetSubobjectService: AssetSubobjectService;
+let itemMetadataService:ItemMetadataService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -399,6 +424,27 @@ const ADDRESSING_SYNC_TOOLS = new Set([
   'glpi_addressing_list_ranges', 'glpi_addressing_get_range',
   'glpi_addressing_preview_ip_network_sync', 'glpi_addressing_apply_ip_network_sync',
 ]);
+const ASSET_IMPORT_RULE_TOOLS = new Set([
+  'glpi_list_asset_import_rules', 'glpi_get_asset_import_rule', 'glpi_export_asset_import_rules',
+  'glpi_diff_asset_import_rule_snapshots', 'glpi_preview_restore_asset_import_rules', 'glpi_apply_restore_asset_import_rules',
+  'glpi_simulate_asset_import_rules', 'glpi_analyze_asset_import_rule_risks',
+  'glpi_set_asset_import_rule_enabled', 'glpi_update_asset_import_rule', 'glpi_add_asset_import_rule_criterion',
+  'glpi_update_asset_import_rule_criterion', 'glpi_delete_asset_import_rule_criterion', 'glpi_add_asset_import_rule_action',
+  'glpi_update_asset_import_rule_action', 'glpi_delete_asset_import_rule_action', 'glpi_create_asset_import_rule',
+  'glpi_reorder_asset_import_rules',
+]);
+const INVENTORY_INSIGHTS_TOOLS = new Set([
+  'glpi_audit_fortigate_ha_assets', 'glpi_get_asset_inventory_provenance', 'glpi_get_asset_inventory_timeline',
+  'glpi_get_asset_inventory_raw_payload', 'glpi_inventory_preview_task_schedule', 'glpi_inventory_set_task_reprepare',
+  'glpi_inventory_prepare_task_once', 'glpi_inventory_get_task_execution_timeline', 'glpi_classify_unmanaged_discovery',
+  'glpi_get_asset_network_identity',
+]);
+const CATALOG_TOOLS = new Set(['glpi_list_catalog_items', 'glpi_get_catalog_item', 'glpi_create_catalog_item', 'glpi_update_catalog_item', 'glpi_preview_delete_catalog_item', 'glpi_delete_catalog_item']);
+const GOVERNANCE_TOOLS = new Set(['glpi_list_asset_relations', 'glpi_attach_asset_relation', 'glpi_preview_detach_asset_relation', 'glpi_detach_asset_relation', 'glpi_get_dropdown_usage', 'glpi_run_governance_audit']);
+const NETWORK_TOPOLOGY_TOOLS = new Set(['glpi_list_asset_network_ports', 'glpi_get_network_port', 'glpi_create_network_port', 'glpi_update_network_port', 'glpi_attach_vlan_to_port', 'glpi_connect_network_ports', 'glpi_preview_remove_network_link', 'glpi_remove_network_link', 'glpi_attach_ip_address', 'glpi_move_ip_address', 'glpi_preview_delete_network_object', 'glpi_delete_network_object']);
+const COMPONENT_RELATION_TOOLS = new Set(['glpi_list_asset_components','glpi_get_component_usage','glpi_attach_component_to_asset','glpi_update_asset_component','glpi_preview_detach_component','glpi_detach_component_from_asset']);
+const ASSET_SUBOBJECT_TOOLS=new Set(['glpi_list_asset_subobjects','glpi_get_asset_subobject','glpi_create_asset_subobject','glpi_update_asset_subobject','glpi_preview_delete_asset_subobject','glpi_delete_asset_subobject']);
+const ITEM_METADATA_TOOLS=new Set(['glpi_list_item_metadata','glpi_get_item_metadata','glpi_create_item_metadata','glpi_update_item_metadata','glpi_preview_delete_item_metadata','glpi_delete_item_metadata']);
 
 function isTicketServiceTool(toolName: string): boolean {
   return TICKET_SERVICE_TOOLS.has(toolName);
@@ -414,6 +460,14 @@ function isBackendServiceTool(toolName: string): boolean {
     LOCATION_INTEGRITY_TOOLS.has(toolName) ||
     UNMANAGED_RECONCILIATION_TOOLS.has(toolName) ||
     ADDRESSING_SYNC_TOOLS.has(toolName) ||
+    ASSET_IMPORT_RULE_TOOLS.has(toolName) ||
+    INVENTORY_INSIGHTS_TOOLS.has(toolName) ||
+    CATALOG_TOOLS.has(toolName) ||
+    GOVERNANCE_TOOLS.has(toolName) ||
+    NETWORK_TOPOLOGY_TOOLS.has(toolName) ||
+    COMPONENT_RELATION_TOOLS.has(toolName) ||
+    ASSET_SUBOBJECT_TOOLS.has(toolName) ||
+    ITEM_METADATA_TOOLS.has(toolName) ||
     toolName === 'glpi_get_session_info';
 }
 
@@ -471,17 +525,25 @@ const INVENTORY_PLUGIN_READ_TOOLS: Array<{
   singular: string;
   description: string;
 }> = [
+  { resource: 'agents', plural: 'agents', singular: 'agent', description: 'registered GLPI agents and their reported status' },
+  { resource: 'agent_modules', plural: 'agent_modules', singular: 'agent_module', description: 'Inventory agent module settings' },
   { resource: 'credentials', plural: 'credentials', singular: 'credential', description: 'remote-device credentials (secrets are never returned)' },
   { resource: 'tasks', plural: 'tasks', singular: 'task', description: 'inventory tasks' },
   { resource: 'task_jobs', plural: 'task_jobs', singular: 'task_job', description: 'inventory task jobs' },
   { resource: 'task_job_states', plural: 'task_job_states', singular: 'task_job_state', description: 'task execution states' },
+  { resource: 'task_job_logs', plural: 'task_job_logs', singular: 'task_job_log', description: 'task execution logs' },
   { resource: 'timeslots', plural: 'timeslots', singular: 'timeslot', description: 'execution time slots' },
+  { resource: 'timeslot_entries', plural: 'timeslot_entries', singular: 'timeslot_entry', description: 'execution time-slot entries' },
   { resource: 'collects', plural: 'collects', singular: 'collect', description: 'collection definitions' },
   { resource: 'collect_files', plural: 'collect_files', singular: 'collect_file', description: 'file collection definitions' },
   { resource: 'collect_registries', plural: 'collect_registries', singular: 'collect_registry', description: 'registry collection definitions' },
   { resource: 'collect_wmi_queries', plural: 'collect_wmi_queries', singular: 'collect_wmi_query', description: 'WMI collection definitions' },
+  { resource: 'collect_file_results', plural: 'collect_file_results', singular: 'collect_file_result', description: 'redacted file collection results' },
+  { resource: 'collect_registry_results', plural: 'collect_registry_results', singular: 'collect_registry_result', description: 'redacted registry collection results' },
+  { resource: 'collect_wmi_results', plural: 'collect_wmi_results', singular: 'collect_wmi_result', description: 'redacted WMI collection results' },
   { resource: 'deploy_packages', plural: 'deploy_packages', singular: 'deploy_package', description: 'deployment packages' },
   { resource: 'deploy_groups', plural: 'deploy_groups', singular: 'deploy_group', description: 'deployment target groups' },
+  { resource: 'deploy_mirrors', plural: 'deploy_mirrors', singular: 'deploy_mirror', description: 'deployment mirrors' },
 ];
 
 /** MIME types for glpi_upload_document, keyed by lowercase file extension. */
@@ -1720,6 +1782,91 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'glpi_list_catalog_items', description: 'List allowlisted GLPI assets, components, dropdown values or management objects through one validated contract.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string', enum: [...new Set(Object.values(CATALOG_ITEMTYPES).flat())] }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000, default: 100 }, fetch_all: { type: 'boolean', default: false }, include_deleted: { type: 'boolean', default: false } }, required: ['domain', 'itemtype'] },
+    },
+    { name: 'glpi_get_catalog_item', description: 'Read one allowlisted catalog object by raw GLPI id.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 } }, required: ['domain', 'itemtype', 'id'] } },
+    { name: 'glpi_create_catalog_item', description: 'Create an allowlisted catalog object, reject controlled/secret fields and verify the returned object.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, fields: { type: 'object', minProperties: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['domain', 'itemtype', 'fields', 'correlation_id'] } },
+    { name: 'glpi_update_catalog_item', description: 'Partially update an allowlisted catalog object with before/after state and post-write verification.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, fields: { type: 'object', minProperties: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['domain', 'itemtype', 'id', 'fields', 'correlation_id'] } },
+    { name: 'glpi_preview_delete_catalog_item', description: 'Read-only delete preview with current state, recoverability warning, reference-scan completeness and fingerprint.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, purge: { type: 'boolean', default: false } }, required: ['domain', 'itemtype', 'id'] } },
+    { name: 'glpi_delete_catalog_item', description: 'Destructive fingerprinted catalog deletion. Purge remains blocked until a complete polymorphic reference scan is available.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, purge: { type: 'boolean', default: false }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_CATALOG_DELETE', 'I_HAVE_VERIFIED_THE_CATALOG_PURGE'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['domain', 'itemtype', 'id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
+    { name: 'glpi_list_asset_relations', description: 'List source-audited contract, document, certificate or domain relations attached to an asset.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] } }, required: ['itemtype', 'asset_id', 'relation'] } },
+    { name: 'glpi_attach_asset_relation', description: 'Idempotently attach an existing contract, document, certificate or domain to an asset and verify the relation.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] }, related_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['itemtype', 'asset_id', 'relation', 'related_id', 'correlation_id'] } },
+    { name: 'glpi_preview_detach_asset_relation', description: 'Read and fingerprint an exact asset relation before detaching it; neither endpoint object is deleted.', inputSchema: { type: 'object', additionalProperties: false, properties: { relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] }, relation_id: { type: 'number', minimum: 1 } }, required: ['relation', 'relation_id'] } },
+    { name: 'glpi_detach_asset_relation', description: 'Detach one exact fingerprinted relation without deleting the asset or related management object.', inputSchema: { type: 'object', additionalProperties: false, properties: { relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] }, relation_id: { type: 'number', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_RELATION_DETACH'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['relation', 'relation_id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
+    { name: 'glpi_get_dropdown_usage', description: 'Scan the audited reference map for uses of an allowlisted dropdown value before merge or deletion.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...CATALOG_ITEMTYPES.dropdown] }, id: { type: 'number', minimum: 1 }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000, default: 100 } }, required: ['itemtype', 'id'] } },
+    { name: 'glpi_run_governance_audit', description: 'Run one bounded read-only asset, inventory, dropdown, document, expiration or ITIL governance audit.', inputSchema: { type: 'object', additionalProperties: false, properties: { audit: { type: 'string', enum: [...GOVERNANCE_AUDITS] }, itemtypes: { type: 'array', maxItems: 20, items: { type: 'string', enum: [...RELATION_ASSET_TYPES] } }, entity_id: { type: 'number', minimum: 0 }, days: { type: 'number', minimum: 0, maximum: 3650, default: 90 }, required_fields: { type: 'array', maxItems: 30, items: { type: 'string' } }, limit: { type: 'number', minimum: 1, maximum: 50000, default: 10000 } }, required: ['audit'] } },
+    { name: 'glpi_list_asset_network_ports', description: 'List every persisted NetworkPort owned by one asset.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 } }, required: ['itemtype', 'asset_id'] } },
+    { name: 'glpi_get_network_port', description: 'Read one NetworkPort by id.', inputSchema: { type: 'object', additionalProperties: false, properties: { port_id: { type: 'number', minimum: 1 } }, required: ['port_id'] } },
+    { name: 'glpi_create_network_port', description: 'Create a validated NetworkPort attached to an existing asset and verify it.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, fields: { type: 'object' }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['itemtype', 'asset_id', 'fields', 'correlation_id'] } },
+    { name: 'glpi_update_network_port', description: 'Partially update port metadata while explicitly preserving IP, VLAN and physical-link relations.', inputSchema: { type: 'object', additionalProperties: false, properties: { port_id: { type: 'number', minimum: 1 }, expected_asset_id: { type: 'number', minimum: 1 }, fields: { type: 'object' }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['port_id', 'fields', 'correlation_id'] } },
+    { name: 'glpi_attach_vlan_to_port', description: 'Idempotently attach an existing VLAN to an existing port.', inputSchema: { type: 'object', additionalProperties: false, properties: { port_id: { type: 'number', minimum: 1 }, vlan_id: { type: 'number', minimum: 1 }, tagged: { type: 'boolean' }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['port_id', 'vlan_id', 'correlation_id'] } },
+    { name: 'glpi_connect_network_ports', description: 'Connect two free physical ports, rejecting self-links and occupied endpoints.', inputSchema: { type: 'object', additionalProperties: false, properties: { port_id: { type: 'number', minimum: 1 }, peer_port_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['port_id', 'peer_port_id', 'correlation_id'] } },
+    { name: 'glpi_preview_remove_network_link', description: 'Read and fingerprint one VLAN membership or physical port connection before removal.', inputSchema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', enum: ['vlan', 'port_connection'] }, relation_id: { type: 'number', minimum: 1 } }, required: ['kind', 'relation_id'] } },
+    { name: 'glpi_remove_network_link', description: 'Remove only one fingerprinted VLAN membership or port connection after literal confirmation.', inputSchema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', enum: ['vlan', 'port_connection'] }, relation_id: { type: 'number', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_NETWORK_LINK_REMOVAL'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['kind', 'relation_id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
+    { name: 'glpi_attach_ip_address', description: 'Idempotently attach an IPv4/IPv6 address to a port through an existing or newly verified NetworkName.', inputSchema: { type: 'object', additionalProperties: false, properties: { port_id: { type: 'number', minimum: 1 }, address: { type: 'string' }, network_name: { type: 'string' }, fqdn_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['port_id', 'address', 'correlation_id'] } },
+    { name: 'glpi_move_ip_address', description: 'Move one IPAddress to a NetworkName on another port with an optional expected-current-parent guard.', inputSchema: { type: 'object', additionalProperties: false, properties: { ip_address_id: { type: 'number', minimum: 1 }, target_port_id: { type: 'number', minimum: 1 }, network_name: { type: 'string' }, fqdn_id: { type: 'number', minimum: 1 }, expected_network_name_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['ip_address_id', 'target_port_id', 'correlation_id'] } },
+    { name: 'glpi_preview_delete_network_object', description: 'Preview deletion of one IP address or port; ports are blocked while any name, IP, VLAN or physical link remains.', inputSchema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', enum: ['ip_address', 'network_port'] }, id: { type: 'number', minimum: 1 } }, required: ['kind', 'id'] } },
+    { name: 'glpi_delete_network_object', description: 'Delete one exact fingerprinted IP address or dependency-free port after literal confirmation.', inputSchema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', enum: ['ip_address', 'network_port'] }, id: { type: 'number', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_NETWORK_OBJECT_DELETE'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['kind', 'id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
+    { name:'glpi_list_asset_components',description:'List component relations of one source-audited Device type for an asset.',inputSchema:{type:'object',additionalProperties:false,properties:{itemtype:{type:'string',enum:[...COMPONENT_ASSET_TYPES]},asset_id:{type:'number',minimum:1},component_type:{type:'string',enum:[...COMPONENT_TYPES]}},required:['itemtype','asset_id','component_type']}},
+    { name:'glpi_get_component_usage',description:'List every asset relation using a component definition and report whether deletion is safe.',inputSchema:{type:'object',additionalProperties:false,properties:{component_type:{type:'string',enum:[...COMPONENT_TYPES]},component_id:{type:'number',minimum:1}},required:['component_type','component_id']}},
+    { name:'glpi_attach_component_to_asset',description:'Idempotently attach an existing component definition to an existing asset.',inputSchema:{type:'object',additionalProperties:false,properties:{itemtype:{type:'string',enum:[...COMPONENT_ASSET_TYPES]},asset_id:{type:'number',minimum:1},component_type:{type:'string',enum:[...COMPONENT_TYPES]},component_id:{type:'number',minimum:1},fields:{type:'object'},correlation_id:{type:'string',format:'uuid'}},required:['itemtype','asset_id','component_type','component_id','correlation_id']}},
+    { name:'glpi_update_asset_component',description:'Update only fields of one component-to-asset relation with an optional owner concurrency guard.',inputSchema:{type:'object',additionalProperties:false,properties:{component_type:{type:'string',enum:[...COMPONENT_TYPES]},relation_id:{type:'number',minimum:1},expected_asset_id:{type:'number',minimum:1},fields:{type:'object',minProperties:1},correlation_id:{type:'string',format:'uuid'}},required:['component_type','relation_id','fields','correlation_id']}},
+    { name:'glpi_preview_detach_component',description:'Read and fingerprint one exact component-to-asset relation before detaching it.',inputSchema:{type:'object',additionalProperties:false,properties:{component_type:{type:'string',enum:[...COMPONENT_TYPES]},relation_id:{type:'number',minimum:1}},required:['component_type','relation_id']}},
+    { name:'glpi_detach_component_from_asset',description:'Detach one fingerprinted component relation without deleting the definition or asset.',inputSchema:{type:'object',additionalProperties:false,properties:{component_type:{type:'string',enum:[...COMPONENT_TYPES]},relation_id:{type:'number',minimum:1},preview_fingerprint:{type:'string',pattern:'^[a-f0-9]{64}$'},confirmation:{type:'string',enum:['I_HAVE_VERIFIED_THE_COMPONENT_DETACH']},correlation_id:{type:'string',format:'uuid'}},required:['component_type','relation_id','preview_fingerprint','confirmation','correlation_id']}},
+    {name:'glpi_list_asset_subobjects',description:'List volumes, OS/software installations, antivirus, virtual machines or remote-management records for an asset.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ASSET_SUBOBJECT_KINDS]},itemtype:{type:'string',enum:[...SUBOBJECT_ASSET_TYPES]},asset_id:{type:'number',minimum:1}},required:['kind','itemtype','asset_id']}},
+    {name:'glpi_get_asset_subobject',description:'Read one allowlisted asset inventory subobject.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ASSET_SUBOBJECT_KINDS]},id:{type:'number',minimum:1},itemtype:{type:'string',enum:[...SUBOBJECT_ASSET_TYPES]},asset_id:{type:'number',minimum:1}},required:['kind','id']}},
+    {name:'glpi_create_asset_subobject',description:'Create and verify an asset inventory subobject using explicit fields.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ASSET_SUBOBJECT_KINDS]},itemtype:{type:'string',enum:[...SUBOBJECT_ASSET_TYPES]},asset_id:{type:'number',minimum:1},fields:{type:'object',minProperties:1},correlation_id:{type:'string',format:'uuid'}},required:['kind','itemtype','asset_id','fields','correlation_id']}},
+    {name:'glpi_update_asset_subobject',description:'Partially update one subobject with optional owner concurrency guard.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ASSET_SUBOBJECT_KINDS]},id:{type:'number',minimum:1},itemtype:{type:'string',enum:[...SUBOBJECT_ASSET_TYPES]},asset_id:{type:'number',minimum:1},expected_asset_id:{type:'number',minimum:1},fields:{type:'object',minProperties:1},correlation_id:{type:'string',format:'uuid'}},required:['kind','id','fields','correlation_id']}},
+    {name:'glpi_preview_delete_asset_subobject',description:'Read and fingerprint an exact asset inventory subobject before deletion.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ASSET_SUBOBJECT_KINDS]},id:{type:'number',minimum:1},itemtype:{type:'string',enum:[...SUBOBJECT_ASSET_TYPES]},asset_id:{type:'number',minimum:1}},required:['kind','id']}},
+    {name:'glpi_delete_asset_subobject',description:'Delete one exact fingerprinted asset subobject after literal confirmation.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ASSET_SUBOBJECT_KINDS]},id:{type:'number',minimum:1},itemtype:{type:'string',enum:[...SUBOBJECT_ASSET_TYPES]},asset_id:{type:'number',minimum:1},preview_fingerprint:{type:'string',pattern:'^[a-f0-9]{64}$'},confirmation:{type:'string',enum:['I_HAVE_VERIFIED_THE_ASSET_SUBOBJECT_DELETE']},correlation_id:{type:'string',format:'uuid'}},required:['kind','id','preview_fingerprint','confirmation','correlation_id']}},
+    {name:'glpi_list_item_metadata',description:'List financial information or notes for an allowlisted GLPI item.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ITEM_METADATA_KINDS]},itemtype:{type:'string',enum:[...METADATA_ITEMTYPES]},item_id:{type:'number',minimum:1}},required:['kind','itemtype','item_id']}},
+    {name:'glpi_get_item_metadata',description:'Read financial information or one exact note.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ITEM_METADATA_KINDS]},itemtype:{type:'string',enum:[...METADATA_ITEMTYPES]},item_id:{type:'number',minimum:1},id:{type:'number',minimum:1}},required:['kind','itemtype','item_id']}},
+    {name:'glpi_create_item_metadata',description:'Create an Infocom record or note with controlled ownership fields.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ITEM_METADATA_KINDS]},itemtype:{type:'string',enum:[...METADATA_ITEMTYPES]},item_id:{type:'number',minimum:1},fields:{type:'object',minProperties:1},correlation_id:{type:'string',format:'uuid'}},required:['kind','itemtype','item_id','fields','correlation_id']}},
+    {name:'glpi_update_item_metadata',description:'Partially update existing financial information or an exact note.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ITEM_METADATA_KINDS]},itemtype:{type:'string',enum:[...METADATA_ITEMTYPES]},item_id:{type:'number',minimum:1},id:{type:'number',minimum:1},fields:{type:'object',minProperties:1},correlation_id:{type:'string',format:'uuid'}},required:['kind','itemtype','item_id','fields','correlation_id']}},
+    {name:'glpi_preview_delete_item_metadata',description:'Read and fingerprint financial information or an exact note before deletion.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ITEM_METADATA_KINDS]},itemtype:{type:'string',enum:[...METADATA_ITEMTYPES]},item_id:{type:'number',minimum:1},id:{type:'number',minimum:1}},required:['kind','itemtype','item_id']}},
+    {name:'glpi_delete_item_metadata',description:'Delete exact fingerprinted financial information or note after literal confirmation.',inputSchema:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:[...ITEM_METADATA_KINDS]},itemtype:{type:'string',enum:[...METADATA_ITEMTYPES]},item_id:{type:'number',minimum:1},id:{type:'number',minimum:1},preview_fingerprint:{type:'string',pattern:'^[a-f0-9]{64}$'},confirmation:{type:'string',enum:['I_HAVE_VERIFIED_THE_ITEM_METADATA_DELETE']},correlation_id:{type:'string',format:'uuid'}},required:['kind','itemtype','item_id','preview_fingerprint','confirmation','correlation_id']}},
+    {
+      name: 'glpi_list_asset_import_rules', description: 'Read every RuleImportAsset rule in evaluation order with normalized and native criteria/actions.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { active_only: { type: 'boolean' }, itemtype_filter: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, include_criteria: { type: 'boolean', default: true }, include_actions: { type: 'boolean', default: true }, fetch_all: { type: 'boolean', default: true } } },
+    },
+    { name: 'glpi_get_asset_import_rule', description: 'Read one complete RuleImportAsset rule with ordered native and normalized children.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 } }, required: ['rule_id'] } },
+    {
+      name: 'glpi_export_asset_import_rules', description: 'Export a deterministic RuleImportAsset JSON snapshot with a SHA-256 fingerprint.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { active_only: { type: 'boolean' }, itemtype_filter: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, include_criteria: { type: 'boolean', default: true }, include_actions: { type: 'boolean', default: true }, fetch_all: { type: 'boolean', default: true } } },
+    },
+    { name: 'glpi_diff_asset_import_rule_snapshots', description: 'Compare two verified RuleImportAsset snapshots without contacting or modifying GLPI.', inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot_before: { type: 'object' }, snapshot_after: { type: 'object' } }, required: ['snapshot_before', 'snapshot_after'] } },
+    {
+      name: 'glpi_preview_restore_asset_import_rules', description: 'Build a no-write restore plan, detect conflicts and return a deterministic preview fingerprint.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'object' }, restore_mode: { type: 'string', enum: ['exact', 'merge'] }, allow_create: { type: 'boolean', default: false }, allow_update: { type: 'boolean', default: false }, allow_disable: { type: 'boolean', default: false }, allow_delete: { type: 'boolean', default: false } }, required: ['snapshot', 'restore_mode'] },
+    },
+    {
+      name: 'glpi_apply_restore_asset_import_rules', description: 'Guarded restore entry point. Validates snapshot, current state, preview fingerprint, confirmation and correlation id; unsupported writes remain fail-closed.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'object' }, restore_mode: { type: 'string', enum: ['exact', 'merge'] }, allow_create: { type: 'boolean', default: false }, allow_update: { type: 'boolean', default: false }, allow_disable: { type: 'boolean', default: false }, allow_delete: { type: 'boolean', default: false }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE_RESTORE'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['snapshot', 'restore_mode', 'preview_fingerprint', 'confirmation', 'correlation_id'] },
+    },
+    { name: 'glpi_simulate_asset_import_rules', description: 'Fail-closed RuleImportAsset simulation contract; never invents GLPI engine semantics.', inputSchema: { type: 'object', additionalProperties: false, properties: { unmanaged_ids: { type: 'array', minItems: 1, items: { type: 'number', minimum: 1 } }, inventory_payload: { type: 'object' }, snapshot: { type: 'object' }, stop_at_first_match: { type: 'boolean', default: true } } } },
+    { name: 'glpi_analyze_asset_import_rule_risks', description: 'Statically analyze a verified snapshot or current RuleImportAsset rules for ordering and matching risks.', inputSchema: { type: 'object', additionalProperties: false, properties: { snapshot: { type: 'object' } } } },
+    { name: 'glpi_set_asset_import_rule_enabled', description: 'Guarded RuleImportAsset activation contract; currently fail-closed without writing.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 }, enabled: { type: 'boolean' }, expected_current_state: { type: 'boolean' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['rule_id', 'enabled', 'expected_current_state', 'confirmation'] } },
+    { name: 'glpi_update_asset_import_rule', description: 'Guarded metadata-only RuleImportAsset update contract; never changes criteria, actions or activation implicitly.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 }, name: { type: 'string' }, description: { type: ['string', 'null'] }, comment: { type: ['string', 'null'] }, ranking: { type: 'number' }, match_operator: { type: 'string', enum: ['AND', 'OR'] }, recursive: { type: 'boolean' }, entity_id: { type: 'number', minimum: 0 }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['rule_id', 'confirmation'] } },
+    { name: 'glpi_add_asset_import_rule_criterion', description: 'Guarded criterion creation contract; currently fail-closed without writing.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 }, criterion: { type: 'string' }, condition: { type: 'number' }, pattern: {}, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['rule_id', 'criterion', 'condition', 'pattern', 'confirmation'] } },
+    { name: 'glpi_update_asset_import_rule_criterion', description: 'Guarded criterion update contract; currently fail-closed without writing.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 }, criterion_id: { type: 'number', minimum: 1 }, criterion: { type: 'string' }, condition: { type: 'number' }, pattern: {}, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['rule_id', 'criterion_id', 'confirmation'] } },
+    { name: 'glpi_delete_asset_import_rule_criterion', description: 'Destructive guarded criterion deletion contract requiring preview fingerprint; currently fail-closed.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 }, criterion_id: { type: 'number', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['rule_id', 'criterion_id', 'preview_fingerprint', 'confirmation'] } },
+    { name: 'glpi_add_asset_import_rule_action', description: 'Guarded action creation contract; currently fail-closed without writing.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 }, action_type: { type: 'string' }, field: { type: 'string' }, value: {}, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['rule_id', 'action_type', 'field', 'value', 'confirmation'] } },
+    { name: 'glpi_update_asset_import_rule_action', description: 'Guarded action update contract; currently fail-closed without writing.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 }, action_id: { type: 'number', minimum: 1 }, action_type: { type: 'string' }, field: { type: 'string' }, value: {}, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['rule_id', 'action_id', 'confirmation'] } },
+    { name: 'glpi_delete_asset_import_rule_action', description: 'Destructive guarded action deletion contract requiring preview fingerprint; currently fail-closed.', inputSchema: { type: 'object', additionalProperties: false, properties: { rule_id: { type: 'number', minimum: 1 }, action_id: { type: 'number', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['rule_id', 'action_id', 'preview_fingerprint', 'confirmation'] } },
+    { name: 'glpi_create_asset_import_rule', description: 'Guarded create-disabled RuleImportAsset contract; currently fail-closed without writing.', inputSchema: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', minLength: 1 }, entity_id: { type: 'number', minimum: 0 }, recursive: { type: 'boolean' }, ranking: { type: 'number' }, match_operator: { type: 'string', enum: ['AND', 'OR'] }, description: { type: 'string' }, comment: { type: 'string' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['name', 'confirmation'] } },
+    { name: 'glpi_reorder_asset_import_rules', description: 'Guarded complete-order contract requiring preview fingerprint; currently fail-closed without writing.', inputSchema: { type: 'object', additionalProperties: false, properties: { ordered_rule_ids: { type: 'array', minItems: 1, uniqueItems: true, items: { type: 'number', minimum: 1 } }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ASSET_IMPORT_RULE'] } }, required: ['ordered_rule_ids', 'preview_fingerprint', 'confirmation'] } },
+    { name: 'glpi_audit_fortigate_ha_assets', description: 'Read-only FortiGate HA audit. Serial identifies members; shared HA IP/MAC never merges distinct serials.', inputSchema: { type: 'object', additionalProperties: false, properties: { entity_id: { type: 'number', minimum: 0 }, unmanaged_ids: { type: 'array', minItems: 1, items: { type: 'number', minimum: 1 } }, network_equipment_ids: { type: 'array', minItems: 1, items: { type: 'number', minimum: 1 } }, cluster_identity: { type: 'string', enum: ['shared_ip', 'shared_mac', 'cluster_name'], default: 'cluster_name' }, member_identity: { type: 'string', enum: ['serial'], default: 'serial' }, allow_shared_mac_for_member_linking: { type: 'boolean', default: false }, virtual_mac_prefixes: { type: 'array', items: { type: 'string' }, default: ['00:00:5e:00:01'] } } } },
+    { name: 'glpi_get_asset_inventory_provenance', description: 'Read available GLPI logs and Inventory job evidence for one asset; unavailable provenance is explicit.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, asset_id: { type: 'number', minimum: 1 } }, required: ['itemtype', 'asset_id'] } },
+    { name: 'glpi_get_asset_inventory_timeline', description: 'Return a compact chronological asset/inventory timeline without inventing missing events.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, asset_id: { type: 'number', minimum: 1 } }, required: ['itemtype', 'asset_id'] } },
+    { name: 'glpi_get_asset_inventory_raw_payload', description: 'Safe raw-payload access contract with mandatory secret redaction; returns not_supported when no audited GLPI itemtype exists.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] }, asset_id: { type: 'number', minimum: 1 }, inventory_id: { type: 'number', minimum: 1 } }, required: ['itemtype', 'asset_id'] } },
+    { name: 'glpi_inventory_preview_task_schedule', description: 'Read task activity, repetition, window, jobs, last execution and probable trigger without writing.', inputSchema: { type: 'object', additionalProperties: false, properties: { task_id: { type: 'number', minimum: 1 } }, required: ['task_id'] } },
+    { name: 'glpi_inventory_set_task_reprepare', description: 'Set reprepare_if_successful with expected-state concurrency guard, explicit confirmation and post-write verification.', inputSchema: { type: 'object', additionalProperties: false, properties: { task_id: { type: 'number', minimum: 1 }, enabled: { type: 'boolean' }, expected_current_state: { type: 'boolean' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_INVENTORY_TASK'] } }, required: ['task_id', 'enabled', 'expected_current_state', 'confirmation'] } },
+    { name: 'glpi_inventory_prepare_task_once', description: 'Prepare one scheduler execution while explicitly disabling repetition, with confirmation and verification.', inputSchema: { type: 'object', additionalProperties: false, properties: { task_id: { type: 'number', minimum: 1 }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_INVENTORY_TASK'] } }, required: ['task_id', 'confirmation'] } },
+    { name: 'glpi_inventory_get_task_execution_timeline', description: 'Read filtered Inventory task/job/agent state history with explicit timezone limitations.', inputSchema: { type: 'object', additionalProperties: false, properties: { task_id: { type: 'number', minimum: 1 }, job_id: { type: 'number', minimum: 1 }, agent_id: { type: 'number', minimum: 1 }, date_from: { type: 'string' }, date_to: { type: 'string' }, state: { type: ['string', 'number'] }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000, default: 100 } } } },
+    { name: 'glpi_classify_unmanaged_discovery', description: 'Classify Unmanaged discoveries without writing; OUI/vendor names remain inference only.', inputSchema: { type: 'object', additionalProperties: false, properties: { unmanaged_ids: { type: 'array', minItems: 1, items: { type: 'number', minimum: 1 } }, entity_id: { type: 'number', minimum: 0 }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000, default: 100 }, include_evidence: { type: 'boolean', default: true } } } },
+    { name: 'glpi_get_asset_network_identity', description: 'Read the complete persisted network identity graph of one asset: ports, MAC classifications, network names, IP addresses and VLAN links.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral', 'Monitor', 'Unmanaged'] }, asset_id: { type: 'number', minimum: 1 }, include_raw: { type: 'boolean', default: false } }, required: ['itemtype', 'asset_id'] } },
+    {
       name: 'glpi_audit_unmanaged_assets',
       description: 'Read-only, explainable reconciliation audit between GLPI Inventory Unmanaged discoveries and existing managed assets. It never links, converts, creates, merges or deletes objects.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {
@@ -1730,7 +1877,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         include_computers: { type: 'boolean', default: true }, include_printers: { type: 'boolean', default: true },
         include_network_equipment: { type: 'boolean', default: true }, include_phones: { type: 'boolean', default: true },
         include_peripherals: { type: 'boolean', default: false }, minimum_confidence: { type: 'string', enum: ['low', 'medium', 'high'], default: 'low' },
-        include_unmatched: { type: 'boolean', default: true },
+        include_unmatched: { type: 'boolean', default: true }, only_exact_duplicates: { type: 'boolean', default: false },
+        only_managed_matches: { type: 'boolean', default: false }, only_internal_unmanaged_duplicates: { type: 'boolean', default: false },
+        itemtype_candidates: { type: 'array', items: { type: 'string', enum: ['Computer', 'Printer', 'NetworkEquipment', 'Phone', 'Peripheral'] } },
+        has_sysdescr: { type: 'boolean' }, has_ip: { type: 'boolean' }, has_mac: { type: 'boolean' }, has_serial: { type: 'boolean' },
+        generic_names_policy: { type: 'string', enum: ['include', 'exclude', 'only'], default: 'include' }, include_evidence: { type: 'boolean', default: true },
+        include_raw_fields: { type: 'boolean', default: false }, start: { type: 'number', minimum: 0, default: 0 },
       } },
     },
     {
@@ -1981,6 +2133,117 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     switch (name) {
+      case 'glpi_list_catalog_items': {
+        const input = catalogListSchema.parse(args); return text(await catalogService.list({ domain: input.domain, itemtype: input.itemtype, start: input.start, limit: input.limit, fetchAll: input.fetch_all, includeDeleted: input.include_deleted }));
+      }
+      case 'glpi_get_catalog_item': {
+        const input = catalogGetSchema.parse(args); return text(await catalogService.get(input));
+      }
+      case 'glpi_create_catalog_item': {
+        const input = catalogCreateSchema.parse(args); return text(await catalogService.create({ domain: input.domain, itemtype: input.itemtype, fields: input.fields, correlationId: input.correlation_id }));
+      }
+      case 'glpi_update_catalog_item': {
+        const input = catalogUpdateSchema.parse(args); return text(await catalogService.update({ domain: input.domain, itemtype: input.itemtype, id: input.id, fields: input.fields, correlationId: input.correlation_id }));
+      }
+      case 'glpi_preview_delete_catalog_item': {
+        const input = catalogDeletePreviewSchema.parse(args); return text(await catalogService.previewDelete({ domain: input.domain, itemtype: input.itemtype, id: input.id, purge: input.purge }));
+      }
+      case 'glpi_delete_catalog_item': {
+        const input = catalogDeleteSchema.parse(args); return text(await catalogService.delete({ domain: input.domain, itemtype: input.itemtype, id: input.id, purge: input.purge, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id }));
+      }
+      case 'glpi_list_asset_relations': {
+        const input = assetRelationListSchema.parse(args); return text(await governanceService.listAssetRelations({ itemtype: input.itemtype, assetId: input.asset_id, kind: input.relation }));
+      }
+      case 'glpi_attach_asset_relation': {
+        const input = assetRelationAttachSchema.parse(args); return text(await governanceService.attachAssetRelation({ itemtype: input.itemtype, assetId: input.asset_id, kind: input.relation, relatedId: input.related_id, correlationId: input.correlation_id }));
+      }
+      case 'glpi_preview_detach_asset_relation': {
+        const input = assetRelationDetachPreviewSchema.parse(args); return text(await governanceService.previewDetachAssetRelation({ relationId: input.relation_id, kind: input.relation }));
+      }
+      case 'glpi_detach_asset_relation': {
+        const input = assetRelationDetachSchema.parse(args); return text(await governanceService.detachAssetRelation({ relationId: input.relation_id, kind: input.relation, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id }));
+      }
+      case 'glpi_get_dropdown_usage': {
+        const input = dropdownUsageSchema.parse(args); return text(await governanceService.getDropdownUsage({ itemtype: input.itemtype, id: input.id, start: input.start, limit: input.limit }));
+      }
+      case 'glpi_run_governance_audit': {
+        const input = governanceAuditSchema.parse(args); return text(await governanceService.audit({ audit: input.audit, itemtypes: input.itemtypes, entityId: input.entity_id, days: input.days, requiredFields: input.required_fields, limit: input.limit }));
+      }
+      case 'glpi_list_asset_network_ports': { const input = portOwnerSchema.parse(args); return text(await networkTopologyService.listPorts({ itemtype: input.itemtype, assetId: input.asset_id })); }
+      case 'glpi_get_network_port': { const input = z.object({ port_id: z.number().int().min(1) }).strict().parse(args); return text(await networkTopologyService.getPort(input.port_id)); }
+      case 'glpi_create_network_port': { const input = portCreateSchema.parse(args); return text(await networkTopologyService.createPort({ itemtype: input.itemtype, assetId: input.asset_id, fields: input.fields, correlationId: input.correlation_id })); }
+      case 'glpi_update_network_port': { const input = portUpdateSchema.parse(args); return text(await networkTopologyService.updatePort({ id: input.port_id, fields: input.fields, expectedAssetId: input.expected_asset_id, correlationId: input.correlation_id })); }
+      case 'glpi_attach_vlan_to_port': { const input = vlanAttachSchema.parse(args); return text(await networkTopologyService.attachVlan({ portId: input.port_id, vlanId: input.vlan_id, tagged: input.tagged, correlationId: input.correlation_id })); }
+      case 'glpi_connect_network_ports': { const input = portConnectSchema.parse(args); return text(await networkTopologyService.connectPorts({ portId: input.port_id, peerPortId: input.peer_port_id, correlationId: input.correlation_id })); }
+      case 'glpi_preview_remove_network_link': { const input = networkLinkPreviewSchema.parse(args); return text(await networkTopologyService.previewRemoveLink({ kind: input.kind, relationId: input.relation_id })); }
+      case 'glpi_remove_network_link': { const input = networkLinkRemoveSchema.parse(args); return text(await networkTopologyService.removeLink({ kind: input.kind, relationId: input.relation_id, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id })); }
+      case 'glpi_attach_ip_address': { const input = ipAttachSchema.parse(args); return text(await networkTopologyService.attachIPAddress({ portId: input.port_id, address: input.address, networkName: input.network_name, fqdnId: input.fqdn_id, correlationId: input.correlation_id })); }
+      case 'glpi_move_ip_address': { const input = ipMoveSchema.parse(args); return text(await networkTopologyService.moveIPAddress({ ipAddressId: input.ip_address_id, targetPortId: input.target_port_id, networkName: input.network_name, fqdnId: input.fqdn_id, expectedNetworkNameId: input.expected_network_name_id, correlationId: input.correlation_id })); }
+      case 'glpi_preview_delete_network_object': { const input = topologyDeletePreviewSchema.parse(args); return text(await networkTopologyService.previewDelete(input)); }
+      case 'glpi_delete_network_object': { const input = topologyDeleteSchema.parse(args); return text(await networkTopologyService.delete({ kind: input.kind, id: input.id, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id })); }
+      case 'glpi_list_asset_components':{const i=componentListSchema.parse(args);return text(await componentRelationService.list({itemtype:i.itemtype,assetId:i.asset_id,componentType:i.component_type}));}
+      case 'glpi_get_component_usage':{const i=componentUsageSchema.parse(args);return text(await componentRelationService.usage({componentType:i.component_type,componentId:i.component_id}));}
+      case 'glpi_attach_component_to_asset':{const i=componentAttachSchema.parse(args);return text(await componentRelationService.attach({itemtype:i.itemtype,assetId:i.asset_id,componentType:i.component_type,componentId:i.component_id,fields:i.fields,correlationId:i.correlation_id}));}
+      case 'glpi_update_asset_component':{const i=componentRelationUpdateSchema.parse(args);return text(await componentRelationService.update({componentType:i.component_type,relationId:i.relation_id,fields:i.fields,expectedAssetId:i.expected_asset_id,correlationId:i.correlation_id}));}
+      case 'glpi_preview_detach_component':{const i=componentDetachPreviewSchema.parse(args);return text(await componentRelationService.previewDetach({componentType:i.component_type,relationId:i.relation_id}));}
+      case 'glpi_detach_component_from_asset':{const i=componentDetachSchema.parse(args);return text(await componentRelationService.detach({componentType:i.component_type,relationId:i.relation_id,previewFingerprint:i.preview_fingerprint,confirmation:i.confirmation,correlationId:i.correlation_id}));}
+      case'glpi_list_asset_subobjects':{const i=subobjectListSchema.parse(args);return text(await assetSubobjectService.list({kind:i.kind,itemtype:i.itemtype,assetId:i.asset_id}))}case'glpi_get_asset_subobject':{const i=subobjectGetSchema.parse(args);return text(await assetSubobjectService.get({kind:i.kind,id:i.id,itemtype:i.itemtype,assetId:i.asset_id}))}case'glpi_create_asset_subobject':{const i=subobjectCreateSchema.parse(args);return text(await assetSubobjectService.create({kind:i.kind,itemtype:i.itemtype,assetId:i.asset_id,fields:i.fields,correlationId:i.correlation_id}))}case'glpi_update_asset_subobject':{const i=subobjectUpdateSchema.parse(args);return text(await assetSubobjectService.update({kind:i.kind,id:i.id,itemtype:i.itemtype,assetId:i.asset_id,fields:i.fields,expectedAssetId:i.expected_asset_id,correlationId:i.correlation_id}))}case'glpi_preview_delete_asset_subobject':{const i=subobjectDeletePreviewSchema.parse(args);return text(await assetSubobjectService.previewDelete({kind:i.kind,id:i.id,itemtype:i.itemtype,assetId:i.asset_id}))}case'glpi_delete_asset_subobject':{const i=subobjectDeleteSchema.parse(args);return text(await assetSubobjectService.delete({kind:i.kind,id:i.id,itemtype:i.itemtype,assetId:i.asset_id,previewFingerprint:i.preview_fingerprint,confirmation:i.confirmation,correlationId:i.correlation_id}))}
+      case'glpi_list_item_metadata':{const i=metadataListSchema.parse(args);return text(await itemMetadataService.list({kind:i.kind,itemtype:i.itemtype,itemId:i.item_id}))}case'glpi_get_item_metadata':{const i=metadataGetSchema.parse(args);return text(await itemMetadataService.get({kind:i.kind,itemtype:i.itemtype,itemId:i.item_id,id:i.id}))}case'glpi_create_item_metadata':{const i=metadataCreateSchema.parse(args);return text(await itemMetadataService.create({kind:i.kind,itemtype:i.itemtype,itemId:i.item_id,fields:i.fields,correlationId:i.correlation_id}))}case'glpi_update_item_metadata':{const i=metadataUpdateSchema.parse(args);return text(await itemMetadataService.update({kind:i.kind,itemtype:i.itemtype,itemId:i.item_id,id:i.id,fields:i.fields,correlationId:i.correlation_id}))}case'glpi_preview_delete_item_metadata':{const i=metadataDeletePreviewSchema.parse(args);return text(await itemMetadataService.previewDelete({kind:i.kind,itemtype:i.itemtype,itemId:i.item_id,id:i.id}))}case'glpi_delete_item_metadata':{const i=metadataDeleteSchema.parse(args);return text(await itemMetadataService.delete({kind:i.kind,itemtype:i.itemtype,itemId:i.item_id,id:i.id,previewFingerprint:i.preview_fingerprint,confirmation:i.confirmation,correlationId:i.correlation_id}))}
+      case 'glpi_list_asset_import_rules':
+      case 'glpi_export_asset_import_rules': {
+        const input = assetRuleListSchema.parse(args);
+        const requestInput = { activeOnly: input.active_only, itemtypeFilter: input.itemtype_filter, includeCriteria: input.include_criteria, includeActions: input.include_actions, fetchAll: input.fetch_all };
+        return text(name === 'glpi_list_asset_import_rules' ? await assetImportRuleService.list(requestInput) : await assetImportRuleService.exportSnapshot(requestInput));
+      }
+      case 'glpi_get_asset_import_rule': {
+        const input = assetRuleGetSchema.parse(args); return text(await assetImportRuleService.get(input.rule_id));
+      }
+      case 'glpi_diff_asset_import_rule_snapshots': {
+        const input = assetRuleDiffSchema.parse(args); return text(await assetImportRuleService.diffSnapshots(input.snapshot_before, input.snapshot_after));
+      }
+      case 'glpi_preview_restore_asset_import_rules': {
+        const input = assetRuleRestorePreviewSchema.parse(args); return text(await assetImportRuleService.previewRestore({ snapshot: input.snapshot, restoreMode: input.restore_mode, allowCreate: input.allow_create, allowUpdate: input.allow_update, allowDisable: input.allow_disable, allowDelete: input.allow_delete }));
+      }
+      case 'glpi_apply_restore_asset_import_rules': {
+        const input = assetRuleRestoreApplySchema.parse(args); return text(await assetImportRuleService.applyRestore({ snapshot: input.snapshot, restoreMode: input.restore_mode, allowCreate: input.allow_create, allowUpdate: input.allow_update, allowDisable: input.allow_disable, allowDelete: input.allow_delete, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id }));
+      }
+      case 'glpi_simulate_asset_import_rules': {
+        const input = assetRuleSimulationSchema.parse(args); return text(await assetImportRuleService.simulate({ unmanagedIds: input.unmanaged_ids, inventoryPayload: input.inventory_payload, snapshot: input.snapshot, stopAtFirstMatch: input.stop_at_first_match }));
+      }
+      case 'glpi_analyze_asset_import_rule_risks': {
+        const input = assetRuleRiskSchema.parse(args); return text(await assetImportRuleService.analyzeRisks(input.snapshot));
+      }
+      case 'glpi_set_asset_import_rule_enabled':
+      case 'glpi_update_asset_import_rule':
+      case 'glpi_add_asset_import_rule_criterion':
+      case 'glpi_update_asset_import_rule_criterion':
+      case 'glpi_delete_asset_import_rule_criterion':
+      case 'glpi_add_asset_import_rule_action':
+      case 'glpi_update_asset_import_rule_action':
+      case 'glpi_delete_asset_import_rule_action':
+      case 'glpi_create_asset_import_rule':
+      case 'glpi_reorder_asset_import_rules':
+        return text(await assetImportRuleService.guardedMutation(name, z.record(z.string(), z.unknown()).parse(args)));
+      case 'glpi_audit_fortigate_ha_assets':
+        return text(await inventoryInsightsService.auditFortigateHA(fortigateAuditSchema.parse(args)));
+      case 'glpi_get_asset_inventory_provenance':
+        return text(await inventoryInsightsService.getProvenance(provenanceSchema.parse(args)));
+      case 'glpi_get_asset_inventory_timeline':
+        return text(await inventoryInsightsService.getTimeline(provenanceSchema.parse(args)));
+      case 'glpi_get_asset_inventory_raw_payload':
+        return text(await inventoryInsightsService.getRawPayload(rawPayloadSchema.parse(args)));
+      case 'glpi_inventory_preview_task_schedule':
+        return text(await inventoryInsightsService.previewTaskSchedule(taskIdSchema.parse(args)));
+      case 'glpi_inventory_set_task_reprepare':
+        return text(await inventoryInsightsService.setTaskReprepare(taskReprepareSchema.parse(args)));
+      case 'glpi_inventory_prepare_task_once':
+        return text(await inventoryInsightsService.prepareTaskOnce(taskPrepareOnceSchema.parse(args)));
+      case 'glpi_inventory_get_task_execution_timeline':
+        return text(await inventoryInsightsService.getTaskExecutionTimeline(taskTimelineSchema.parse(args)));
+      case 'glpi_classify_unmanaged_discovery':
+        return text(await inventoryInsightsService.classifyDiscovery(discoveryClassifySchema.parse(args)));
+      case 'glpi_get_asset_network_identity':
+        return text(await inventoryInsightsService.getAssetNetworkIdentity(assetNetworkIdentitySchema.parse(args)));
       // ==== IMPORT ENTITY RULES — read ====
       case 'glpi_list_import_entity_rules': {
         const validated = listArgsSchema.parse(args);
@@ -2739,15 +3002,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_audit_unmanaged_assets': {
         const input = unmanagedAuditSchema.parse(args);
         const assetTypes: ManagedAssetType[] = [];
-        if (input.include_computers) assetTypes.push('Computer');
-        if (input.include_printers) assetTypes.push('Printer');
-        if (input.include_network_equipment) assetTypes.push('NetworkEquipment');
-        if (input.include_phones) assetTypes.push('Phone');
-        if (input.include_peripherals) assetTypes.push('Peripheral');
+        if (input.itemtype_candidates) assetTypes.push(...input.itemtype_candidates);
+        else if (input.include_computers) assetTypes.push('Computer');
+        if (!input.itemtype_candidates && input.include_printers) assetTypes.push('Printer');
+        if (!input.itemtype_candidates && input.include_network_equipment) assetTypes.push('NetworkEquipment');
+        if (!input.itemtype_candidates && input.include_phones) assetTypes.push('Phone');
+        if (!input.itemtype_candidates && input.include_peripherals) assetTypes.push('Peripheral');
         return text(await unmanagedReconciliationService.audit({ entityId: input.entity_id, recursive: input.recursive,
           unmanagedIds: input.unmanaged_ids, createdFrom: input.created_from, modifiedFrom: input.modified_from,
           limit: input.limit, fetchAll: input.fetch_all, maxRows: input.max_rows, assetTypes,
-          minimumConfidence: input.minimum_confidence, includeUnmatched: input.include_unmatched }));
+          minimumConfidence: input.minimum_confidence, includeUnmatched: input.include_unmatched, start: input.start,
+          onlyExactDuplicates: input.only_exact_duplicates, onlyManagedMatches: input.only_managed_matches,
+          onlyInternalUnmanagedDuplicates: input.only_internal_unmanaged_duplicates, hasSysdescr: input.has_sysdescr,
+          hasIp: input.has_ip, hasMac: input.has_mac, hasSerial: input.has_serial, genericNamesPolicy: input.generic_names_policy,
+          includeEvidence: input.include_evidence, includeRawFields: input.include_raw_fields }));
       }
       case 'glpi_apply_unmanaged_asset_reconciliation': {
         const input = unmanagedApplySchema.parse(args);
@@ -3244,6 +3512,14 @@ async function main() {
     locationIntegrityService = apiRouter.services.locationIntegrity;
     unmanagedReconciliationService = apiRouter.services.unmanagedReconciliation;
     addressingSyncService = apiRouter.services.addressingSync;
+    assetImportRuleService = apiRouter.services.assetImportRules;
+    inventoryInsightsService = apiRouter.services.inventoryInsights;
+    catalogService = apiRouter.services.catalog;
+    governanceService = apiRouter.services.governance;
+    networkTopologyService = apiRouter.services.networkTopology;
+    componentRelationService = apiRouter.services.componentRelations;
+    assetSubobjectService = apiRouter.services.assetSubobjects;
+    itemMetadataService=apiRouter.services.itemMetadata;
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 

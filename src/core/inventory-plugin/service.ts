@@ -8,9 +8,10 @@ import {
 } from './types.js';
 
 export type InventoryPluginResource =
-  | 'credentials' | 'tasks' | 'task_jobs' | 'task_job_states' | 'timeslots'
+  | 'agents' | 'agent_modules' | 'credentials' | 'tasks' | 'task_jobs' | 'task_job_states' | 'task_job_logs' | 'timeslots' | 'timeslot_entries'
   | 'collects' | 'collect_files' | 'collect_registries' | 'collect_wmi_queries'
-  | 'deploy_packages' | 'deploy_groups';
+  | 'collect_file_results' | 'collect_registry_results' | 'collect_wmi_results'
+  | 'deploy_packages' | 'deploy_groups' | 'deploy_mirrors';
 
 export interface InventoryPluginService {
   list(resource: InventoryPluginResource, input: InventoryPluginListRequest): Promise<unknown[]>;

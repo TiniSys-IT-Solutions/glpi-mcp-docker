@@ -1,7 +1,7 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **167 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **257 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
@@ -15,15 +15,31 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 167 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 257 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |
 | Architecture et routage | [Architecture](docs/ARCHITECTURE.md) |
+| Audit des capacités GLPI 11 / GLPI Inventory et feuille de route CRUD | [Audit des sources](docs/GLPI_SOURCE_TOOL_AUDIT.md) |
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.3.10
+## État de la version 0.4.0
+
+La version 0.4.0 étend la gestion métier à **257 outils**. Elle ajoute les
+catalogues allowlistés d'actifs, composants, intitulés et objets de gestion,
+les relations documentaires, la topologie réseau persistée (ports, VLAN,
+liaisons et adresses IP), les composants installés, les sous-objets
+d'inventaire, les informations financières et les notes. Chaque suppression
+nouvelle passe par une prévisualisation empreintée et une confirmation
+littérale.
+
+Cette version ajoute aussi les snapshots et audits `RuleImportAsset`, les
+diagnostics de provenance et d'exécution GLPI Inventory, les lectures étendues
+du plugin Inventory et les audits transverses de gouvernance. Les adaptateurs
+High-Level n'utilisent que des routes confirmées dans les sources GLPI 11 ; les
+autres opérations échouent explicitement ou sont routées vers Legacy par la
+matrice Hybrid, sans repli silencieux.
 
 | Composant | État |
 | --- | --- |
@@ -40,7 +56,8 @@ jour partielles avec lecture avant/après écriture.
 
 La version 0.3.10 corrige la synchronisation Addressing lorsque Legacy REST
 retourne un `IPNetwork` sous forme `address + netmask`, sécurise les sélections
-explicites et leurs annotations read-only, et prépare le premier aperçu SALINS.
+explicites et leurs annotations read-only, et prépare le premier aperçu de
+synchronisation.
 
 La version 0.3.9 inclut les améliorations fonctionnelles préparées depuis 0.3.3,
 corrige leur construction dans l'image Docker et ajoute la mise à jour partielle
@@ -97,8 +114,8 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3.10
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.3
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.0
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4
 ```
 
 Mise à jour :
@@ -134,7 +151,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.3.10**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.4.0**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité

@@ -91,8 +91,8 @@ Legacy REST commonly returns native `IPNetwork` definitions as `address` plus
 an IPv4 `netmask`, without a `network` CIDR field. The Legacy adapter validates
 both values, requires a contiguous mask, derives a canonical CIDR, and rejects
 missing, malformed, or contradictory representations. When explicit
-`network` is present, both numeric CIDR (`10.1.107.0/24`) and GLPI's display
-form (`10.1.107.0 / 255.255.255.0`) are normalized before comparison. When explicit
+`network` is present, both numeric CIDR (`192.0.2.0/24`) and GLPI's display
+form (`192.0.2.0 / 255.255.255.0`) are normalized before comparison. When explicit
 `ip_network_ids` are supplied, every object is fetched directly by id; no
 selected id depends on the bounded list pagination. The former
 `include_recursive` option was removed because it had no valid implemented

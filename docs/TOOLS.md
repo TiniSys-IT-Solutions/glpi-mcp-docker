@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 167 tools currently registered by `src/index.ts` on
+This catalogue lists the 257 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -130,10 +130,13 @@ with selected managed asset types. It is strictly read-only. Values are
 normalized only in memory: MAC separators/case, valid IPv4/IPv6, FQDN trailing
 dots and short host names, serial whitespace and empty/generic values.
 
-The score is deliberately explainable. A valid exact serial contributes 70,
-a non-generic exact MAC 65, IP 30, exact name 30, short-name/FQDN 25, matching
-entity 10, location 8, and manufacturer/model 4 each. Contradictory serial,
-MAC or entity values are reported explicitly and penalized. IP alone can never
+The score is deliberately explainable. A valid exact serial or UUID contributes
+100, a physical exact MAC 90, exact FQDN 45, IP 35, exact non-generic name 35,
+and short-name/FQDN 25. Entity and location are context only; manufacturer,
+model and OUI never contribute identity evidence. Null, broadcast, multicast,
+and VRRP MAC addresses are excluded from physical identity. Locally administered
+unicast MACs remain candidates but are explicitly classified as such.
+Contradictory serial, MAC or entity values are reported explicitly. IP alone can never
 produce an `exact_match`. Equal top candidates are `ambiguous`; weak discoveries
 and probable duplicate `Unmanaged` rows are reported separately.
 
@@ -155,6 +158,158 @@ Example:
 ```json
 {"entity_id": 2, "recursive": true, "minimum_confidence": "medium", "limit": 200}
 ```
+
+## Asset import rules
+
+The RuleImportAsset vertical is Legacy-only in Hybrid mode. Reads, exports,
+diffs, restore previews and static risk analysis are read-only. Snapshot hashes
+exclude `captured_at`, so identical rule configurations have the same SHA-256.
+The High-Level API is fail-closed because no confirmed GLPI 11 route is used.
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_list_asset_import_rules` | Read | List complete ordered rules with native and normalized criteria/actions. |
+| `glpi_get_asset_import_rule` | Read | Read one complete rule. |
+| `glpi_export_asset_import_rules` | Read | Produce a deterministic, fingerprinted snapshot. |
+| `glpi_diff_asset_import_rule_snapshots` | Read | Report additions, removals, edits, moves, activation and child changes. |
+| `glpi_preview_restore_asset_import_rules` | Read | Compare a verified snapshot to current state and fingerprint the restore plan. |
+| `glpi_apply_restore_asset_import_rules` | Destructive guard | Revalidate the plan, then currently return `not_supported`; no write occurs until child ordering/deletion semantics are confirmed. |
+| `glpi_simulate_asset_import_rules` | Read | Return `not_supported` instead of inventing GLPI engine evaluation semantics. |
+| `glpi_analyze_asset_import_rule_risks` | Read | Perform deterministic static checks for ranking and overly permissive rule risks. |
+| `glpi_set_asset_import_rule_enabled` | Guarded write | Validated activation contract; currently `not_supported` with no write. |
+| `glpi_update_asset_import_rule` | Guarded write | Metadata-only update contract; currently `not_supported` with no write. |
+| `glpi_add_asset_import_rule_criterion` | Guarded write | Criterion-add contract; currently `not_supported` with no write. |
+| `glpi_update_asset_import_rule_criterion` | Guarded write | Criterion-update contract; currently `not_supported` with no write. |
+| `glpi_delete_asset_import_rule_criterion` | Destructive guard | Fingerprinted deletion contract; currently `not_supported` with no write. |
+| `glpi_add_asset_import_rule_action` | Guarded write | Action-add contract; currently `not_supported` with no write. |
+| `glpi_update_asset_import_rule_action` | Guarded write | Action-update contract; currently `not_supported` with no write. |
+| `glpi_delete_asset_import_rule_action` | Destructive guard | Fingerprinted deletion contract; currently `not_supported` with no write. |
+| `glpi_create_asset_import_rule` | Guarded write | Create-disabled contract; currently `not_supported` with no write. |
+| `glpi_reorder_asset_import_rules` | Guarded write | Complete-order/fingerprint contract; currently `not_supported` with no write. |
+
+## Allowlisted catalog lifecycle
+
+The common catalog vertical provides one consistent contract for source-audited
+assets, hardware component definitions, dropdown values and management objects.
+The `(domain, itemtype)` pair is strictly allowlisted. Generic writes reject
+GLPI-controlled identifiers/timestamps and secret-like fields.
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_list_catalog_items` | Read | List an allowlisted type with pagination, deleted-state selection and a safety cap. |
+| `glpi_get_catalog_item` | Read | Read one object by raw ID. |
+| `glpi_create_catalog_item` | Write | Create and reread an object; ambiguous verification explicitly warns against blind retry. |
+| `glpi_update_catalog_item` | Write | Partial update with before/after data and exact field verification. |
+| `glpi_preview_delete_catalog_item` | Read | Fingerprint current state and report reference-scan completeness/recoverability. |
+| `glpi_delete_catalog_item` | Destructive | Require a fresh fingerprint, literal confirmation and correlation ID. Purge is blocked while the polymorphic reference scan is incomplete. |
+
+This foundation covers core assets, software/licences, consumable definitions,
+the hardware component catalogue, common asset/ITIL models and types, locations,
+manufacturers, states, calendars, contracts, suppliers, contacts, budgets,
+documents, domains, certificates, datacenters, clusters, databases and lines.
+
+## Asset relations and governance
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_list_asset_relations` | Read | List an asset's contract, document, certificate or domain relations. |
+| `glpi_attach_asset_relation` | Write | Idempotently attach an existing related object and reread the relation. |
+| `glpi_preview_detach_asset_relation` | Read | Fingerprint one exact relation without deleting either endpoint. |
+| `glpi_detach_asset_relation` | Guarded write | Detach only that relation after literal confirmation and a fresh fingerprint. |
+| `glpi_get_dropdown_usage` | Read | Scan the explicit reference map before deleting or merging an intitulé. |
+| `glpi_run_governance_audit` | Read | Run bounded completeness, duplicate, orphan, expiration, stale-inventory, coverage, unassigned-ITIL or SLA-risk audits. |
+
+The dropdown usage result reports its coverage and whether it is complete.
+Unsupported reference families are never silently treated as zero usage.
+
+## Mutable network topology
+
+`glpi_list_asset_network_ports`, `glpi_get_network_port`,
+`glpi_create_network_port` and `glpi_update_network_port` manage port metadata.
+Normal port updates preserve IP, VLAN and physical-connection relations.
+`glpi_attach_vlan_to_port` and `glpi_connect_network_ports` are idempotent;
+occupied physical ports are rejected. `glpi_preview_remove_network_link` and
+`glpi_remove_network_link` remove only an exact VLAN membership or physical
+connection after fingerprint and literal-confirmation validation.
+
+`glpi_attach_ip_address` creates or reuses the port's `NetworkName` and is
+idempotent for an exact address/name pair. `glpi_move_ip_address` supports an
+expected-current-parent guard and preserves the former `NetworkName`.
+`glpi_preview_delete_network_object` and `glpi_delete_network_object` handle
+explicit IP deletion and dependency-free port deletion. A port containing any
+NetworkName, IP, VLAN membership or physical connection is blocked.
+
+## Asset component relations
+
+`glpi_list_asset_components` reads the native `Item_Device*` relations for all
+18 source-confirmed hardware component families. `glpi_get_component_usage`
+lists every attachment and explicitly reports whether the component definition
+is unused. `glpi_attach_component_to_asset` is idempotent for the same asset,
+definition and serial. `glpi_update_asset_component` changes relation-specific
+fields with an optional owner concurrency guard. `glpi_preview_detach_component`
+and `glpi_detach_component_from_asset` require a fresh fingerprint and remove
+only the relation, preserving both the asset and component definition.
+
+## Asset inventory subobjects
+
+`glpi_list_asset_subobjects`, `glpi_get_asset_subobject`,
+`glpi_create_asset_subobject`, `glpi_update_asset_subobject`,
+`glpi_preview_delete_asset_subobject` and `glpi_delete_asset_subobject` provide
+one guarded lifecycle for volumes, OS installations, software installations,
+antivirus products, virtual machines and remote-management records. Legacy
+maps these to the native `Item_Disk`, `Item_OperatingSystem`,
+`Item_SoftwareVersion`, `ItemAntivirus`, `ItemVirtualMachine` and
+`Item_RemoteManagement` classes. High-Level uses the confirmed nested
+`/Assets/{itemtype}/{id}/...` routes. Parent ownership fields cannot be changed
+through the generic payload.
+
+## Financial information and item notes
+
+`glpi_list_item_metadata`, `glpi_get_item_metadata`,
+`glpi_create_item_metadata`, `glpi_update_item_metadata`,
+`glpi_preview_delete_item_metadata` and `glpi_delete_item_metadata` expose
+native `Infocom` records and `Notepad` notes through one guarded contract.
+Financial information is unique per item. Notes require their exact ID.
+Ownership, author and GLPI timestamp fields cannot be overwritten. Deletion
+requires a current fingerprint and literal confirmation. High-Level uses the
+official nested Infocom and Note controllers.
+
+## Inventory analysis, FortiGate HA and task control
+
+These tools use confirmed Legacy itemtypes only. They never infer unavailable
+provenance. Returned Inventory records are recursively redacted for communities,
+passwords, authentication/encryption keys, tokens, cookies and Authorization
+data.
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_audit_fortigate_ha_assets` | Read | Identify likely HA members and shared cluster IP/MAC evidence; distinct serials are never merged. |
+| `glpi_get_asset_inventory_provenance` | Read | Correlate an asset with available GLPI logs and Inventory job states while marking unavailable facts. |
+| `glpi_get_asset_inventory_timeline` | Read | Produce a chronological view of persisted asset and inventory events. |
+| `glpi_get_asset_inventory_raw_payload` | Read | Safe payload contract; currently `not_supported` because no source-audited raw-payload itemtype is confirmed. |
+| `glpi_inventory_preview_task_schedule` | Read | Show task activity, repetition, window, jobs, last execution and scheduler-dependent next execution. |
+| `glpi_inventory_set_task_reprepare` | Write | Change only `reprepare_if_successful` after expected-state and literal-confirmation checks, then verify. |
+| `glpi_inventory_prepare_task_once` | Write | Enable one scheduler run while disabling automatic re-preparation, then verify both fields. |
+| `glpi_inventory_get_task_execution_timeline` | Read | Filter task-job states by task, job, agent, date and state; timezone limitations remain explicit. |
+| `glpi_classify_unmanaged_discovery` | Read | Classify discoveries from persisted name, IP, MAC, SysDescr and sysObjectID signals without writing. |
+| `glpi_get_asset_network_identity` | Read | Join persisted ports, classified MACs, network names, IP addresses and VLAN links for one asset. |
+
+The generic Inventory read family also includes agents, agent modules, task-job
+logs, time-slot entries, redacted collect results and deployment mirrors in
+addition to the previously exposed tasks, jobs, states, collects and packages.
+
+Explicit additions: `glpi_inventory_list_agents`, `glpi_inventory_get_agent`,
+`glpi_inventory_list_agent_modules`, `glpi_inventory_get_agent_module`,
+`glpi_inventory_list_task_job_logs`, `glpi_inventory_get_task_job_log`,
+`glpi_inventory_list_timeslot_entries`, `glpi_inventory_get_timeslot_entry`,
+`glpi_inventory_list_collect_file_results`, `glpi_inventory_get_collect_file_result`,
+`glpi_inventory_list_collect_registry_results`, `glpi_inventory_get_collect_registry_result`,
+`glpi_inventory_list_collect_wmi_results`, `glpi_inventory_get_collect_wmi_result`,
+`glpi_inventory_list_deploy_mirrors` and `glpi_inventory_get_deploy_mirror`.
+
+FortiGate policy defaults to `member_identity=serial` and
+`allow_shared_mac_for_member_linking=false`. Shared VRRP or HA MAC/IP evidence
+may establish cluster context, but cannot collapse two different serials.
 | `glpi_upload_document` | Write | Upload a document, optionally linked directly to a ticket. |
 | `glpi_attach_document_to_ticket` | Write | Link an existing GLPI document to a ticket. |
 | `glpi_list_problems` | Read | List problems. |
@@ -521,7 +676,7 @@ documents this plugin relation.
 
 The following are deliberately not presented as active tools:
 
-- VLAN management and `IPNetwork`/VLAN relationships;
+- richer FQDN/alias editing beyond the guarded NetworkName relationships already exposed;
 - High-Level API domains not marked implemented in the compatibility matrix;
 - GLPI Inventory import-configuration writes until an official, versioned API contract confirms the item type and writable fields;
 - per-user OAuth authentication;

@@ -10,6 +10,14 @@ import { FormService } from './forms/service.js';
 import { LocationIntegrityService } from './location-integrity/service.js';
 import { UnmanagedReconciliationService } from './unmanaged-reconciliation/service.js';
 import { AddressingSyncService } from './addressing-sync/service.js';
+import { AssetImportRuleService } from './asset-import-rules/service.js';
+import { InventoryInsightsService } from './inventory-insights/service.js';
+import { CatalogService } from './catalog/service.js';
+import { GovernanceService } from './governance/service.js';
+import { NetworkTopologyService } from './network-topology/service.js';
+import { ComponentRelationService } from './component-relations/service.js';
+import { AssetSubobjectService } from './asset-subobjects/service.js';
+import { ItemMetadataService } from './item-metadata/service.js';
 
 export interface GlpiServices {
   tickets: TicketService;
@@ -24,4 +32,12 @@ export interface GlpiServices {
   locationIntegrity: LocationIntegrityService;
   unmanagedReconciliation: UnmanagedReconciliationService;
   addressingSync: AddressingSyncService;
+  assetImportRules: AssetImportRuleService;
+  inventoryInsights: InventoryInsightsService;
+  catalog: CatalogService;
+  governance: GovernanceService;
+  networkTopology: NetworkTopologyService;
+  componentRelations: ComponentRelationService;
+  assetSubobjects: AssetSubobjectService;
+  itemMetadata: ItemMetadataService;
 }

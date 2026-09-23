@@ -19,10 +19,10 @@ function addressingCatalogue() {
   return { byField: new Map(options.map(([, option]) => [option.field, option])), byId: new Map(options) };
 }
 
-const salins = {
-  id: 42, name: 'GB - SALINS : 10.1.107.0/24', completename: 'GB - SALINS : 10.1.107.0/24',
-  entities_id: 4, address: '10.1.107.0', netmask: '255.255.255.0', gateway: '10.1.107.254',
-  addressable: 1, is_recursive: 1, comment: 'Réseau LAN GENBIO',
+const exampleNetwork = {
+  id: 42, name: 'Example site: 192.0.2.0/24', completename: 'Example site: 192.0.2.0/24',
+  entities_id: 4, address: '192.0.2.0', netmask: '255.255.255.0', gateway: '192.0.2.254',
+  addressable: 1, is_recursive: 1, comment: 'Example LAN network',
 };
 
 test('IPv4 range calculation canonicalizes /24 and applies usable host policy', () => {
@@ -118,52 +118,52 @@ test('Addressing 3.2.11 itemtype detection accepts its real search-option subset
 
 test('Legacy IPNetwork normalization derives canonical CIDRs for /24, /30, /31 and /32 masks', () => {
   for (const [netmask, expected] of [
-    ['255.255.255.0', '10.1.107.0/24'], ['255.255.255.252', '10.1.107.0/30'],
-    ['255.255.255.254', '10.1.107.0/31'], ['255.255.255.255', '10.1.107.1/32'],
+    ['255.255.255.0', '192.0.2.0/24'], ['255.255.255.252', '192.0.2.0/30'],
+    ['255.255.255.254', '192.0.2.0/31'], ['255.255.255.255', '192.0.2.1/32'],
   ]) {
-    assert.equal(normalizeLegacyIPNetwork({ ...salins, address: expected.split('/')[0], netmask }).cidr, expected);
+    assert.equal(normalizeLegacyIPNetwork({ ...exampleNetwork, address: expected.split('/')[0], netmask }).cidr, expected);
   }
-  assert.equal(normalizeLegacyIPNetwork({ ...salins, network: '10.1.107.0 / 255.255.255.0' }).cidr, '10.1.107.0/24');
+  assert.equal(normalizeLegacyIPNetwork({ ...exampleNetwork, network: '192.0.2.0 / 255.255.255.0' }).cidr, '192.0.2.0/24');
 });
 
 test('Legacy IPNetwork normalization rejects invalid, missing and ambiguous IPv4 data', () => {
-  assert.equal(normalizeLegacyIPNetwork({ ...salins, netmask: '255.0.255.0' }).normalization_error, 'invalid_ipv4_netmask');
-  assert.equal(normalizeLegacyIPNetwork({ ...salins, address: undefined }).normalization_error, 'missing_address_or_netmask');
-  assert.equal(normalizeLegacyIPNetwork({ ...salins, netmask: undefined }).normalization_error, 'missing_address_or_netmask');
-  assert.equal(normalizeLegacyIPNetwork({ ...salins, address: '999.1.1.1' }).normalization_error, 'invalid_ipv4_address');
-  assert.equal(normalizeLegacyIPNetwork({ ...salins, network: '10.2.0.0/16' }).normalization_error, 'ambiguous_ip_network_definition');
-  assert.equal(normalizeLegacyIPNetwork({ ...salins, network: '2001:db8::/64' }).normalization_error, 'ambiguous_ip_network_definition');
+  assert.equal(normalizeLegacyIPNetwork({ ...exampleNetwork, netmask: '255.0.255.0' }).normalization_error, 'invalid_ipv4_netmask');
+  assert.equal(normalizeLegacyIPNetwork({ ...exampleNetwork, address: undefined }).normalization_error, 'missing_address_or_netmask');
+  assert.equal(normalizeLegacyIPNetwork({ ...exampleNetwork, netmask: undefined }).normalization_error, 'missing_address_or_netmask');
+  assert.equal(normalizeLegacyIPNetwork({ ...exampleNetwork, address: '999.1.1.1' }).normalization_error, 'invalid_ipv4_address');
+  assert.equal(normalizeLegacyIPNetwork({ ...exampleNetwork, network: '198.51.100.0/24' }).normalization_error, 'ambiguous_ip_network_definition');
+  assert.equal(normalizeLegacyIPNetwork({ ...exampleNetwork, network: '2001:db8::/64' }).normalization_error, 'ambiguous_ip_network_definition');
 });
 
 test('Legacy IPNetwork normalization keeps IPv6 explicit for plugin_ipv4_only planning', () => {
-  const normalized = normalizeLegacyIPNetwork({ ...salins, address: '2001:db8::', netmask: 'ffff:ffff:ffff:ffff::' });
+  const normalized = normalizeLegacyIPNetwork({ ...exampleNetwork, address: '2001:db8::', netmask: 'ffff:ffff:ffff:ffff::' });
   const plan = buildAddressingPlan({ itemtype: 'x', sources: [normalized], ranges: [], request: { ip_network_ids: [42] } });
   assert.equal(plan.items[0].reason, 'plugin_ipv4_only');
 });
 
-test('SALINS adapter preview reads the selected id directly and proposes the expected first range', async () => {
+test('Addressing adapter preview reads the selected id directly and proposes the expected first range', async () => {
   const calls: Array<{ method: string; itemtype: string; id?: number }> = [];
   const client = {
     searchOptions: { get: async () => addressingCatalogue() },
-    getItem: async (itemtype: string, id: number) => { calls.push({ method: 'getItem', itemtype, id }); return salins; },
+    getItem: async (itemtype: string, id: number) => { calls.push({ method: 'getItem', itemtype, id }); return exampleNetwork; },
     getItems: async (itemtype: string) => { calls.push({ method: 'getItems', itemtype }); return []; },
   } as any;
   const plan = await new LegacyAddressingSyncService(client).preview({ ip_network_ids: [42], range_policy: 'usable_hosts' });
   const item = plan.items[0];
   assert.equal(item.action, 'create');
   assert.equal(item.proposed_values?.entities_id, 4);
-  assert.equal(item.proposed_values?.name, salins.name);
-  assert.equal(item.proposed_values?.begin_ip, '10.1.107.1');
-  assert.equal(item.proposed_values?.end_ip, '10.1.107.254');
+  assert.equal(item.proposed_values?.name, exampleNetwork.name);
+  assert.equal(item.proposed_values?.begin_ip, '192.0.2.1');
+  assert.equal(item.proposed_values?.end_ip, '192.0.2.254');
   assert.equal(item.proposed_values?.use_ping, false);
-  assert.equal(item.proposed_values?.comment, 'Réseau LAN GENBIO\n[mcp-ipnetwork-sync:v1 ipnetwork_id=42]');
+  assert.equal(item.proposed_values?.comment, 'Example LAN network\n[mcp-ipnetwork-sync:v1 ipnetwork_id=42]');
   assert.deepEqual(calls.filter((call) => call.itemtype === 'IPNetwork'), [{ method: 'getItem', itemtype: 'IPNetwork', id: 42 }]);
 });
 
 test('explicit IPNetwork selection rejects mismatched returned ids instead of producing a partial plan', async () => {
   const client = {
     searchOptions: { get: async () => addressingCatalogue() },
-    getItem: async () => ({ ...salins, id: 99 }), getItems: async () => [],
+    getItem: async () => ({ ...exampleNetwork, id: 99 }), getItems: async () => [],
   } as any;
   await assert.rejects(() => new LegacyAddressingSyncService(client).preview({ ip_network_ids: [42] }), /missing ids: 42/);
 });
@@ -172,7 +172,7 @@ test('first write on an empty plugin requires and accepts audited Addressing 3.2
   const creates: unknown[] = [];
   const client = {
     searchOptions: { get: async () => addressingCatalogue() },
-    getItem: async (itemtype: string) => itemtype === 'IPNetwork' ? salins : { id: 1, ...(creates[0] as object) },
+    getItem: async (itemtype: string) => itemtype === 'IPNetwork' ? exampleNetwork : { id: 1, ...(creates[0] as object) },
     getItems: async (itemtype: string) => itemtype === 'Plugin' ? [{ directory: 'addressing', version: '3.2.11', state: 1 }] : [],
     createItem: async (_itemtype: string, payload: unknown) => { creates.push(payload); return { id: 1 }; },
   } as any;
@@ -188,7 +188,7 @@ test('first write on an empty plugin requires and accepts audited Addressing 3.2
 test('first write refuses an empty plugin whose installed version is not source-audited', async () => {
   let creates = 0;
   const client = {
-    searchOptions: { get: async () => addressingCatalogue() }, getItem: async () => salins,
+    searchOptions: { get: async () => addressingCatalogue() }, getItem: async () => exampleNetwork,
     getItems: async (itemtype: string) => itemtype === 'Plugin' ? [{ directory: 'addressing', version: '3.2.10' }] : [],
     createItem: async () => { creates++; return { id: 1 }; },
   } as any;
@@ -201,7 +201,7 @@ test('first write refuses an empty plugin whose installed version is not source-
 
 test('first write refuses source-audited Addressing when the plugin is not active', async () => {
   const client = {
-    searchOptions: { get: async () => addressingCatalogue() }, getItem: async () => salins,
+    searchOptions: { get: async () => addressingCatalogue() }, getItem: async () => exampleNetwork,
     getItems: async (itemtype: string) => itemtype === 'Plugin' ? [{ directory: 'addressing', version: '3.2.11', state: 4 }] : [],
     createItem: async () => { throw new Error('must not write'); },
   } as any;
