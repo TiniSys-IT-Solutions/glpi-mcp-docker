@@ -24,9 +24,9 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.4.2
+## État de la version 0.4.3
 
-La version 0.4.2 consolide la gestion métier à **270 outils**. Elle ajoute les
+La version 0.4.3 consolide la gestion métier à **270 outils**. Elle ajoute les
 catalogues allowlistés d'actifs, composants, intitulés et objets de gestion,
 les relations documentaires, la topologie réseau persistée (ports, VLAN,
 liaisons et adresses IP), les composants installés, les sous-objets
@@ -119,7 +119,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.2
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.3
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4
 ```
 
@@ -156,7 +156,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.4.2**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.4.3**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité
