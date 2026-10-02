@@ -1,7 +1,7 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **258 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **270 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
@@ -15,7 +15,7 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 258 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 270 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |
@@ -24,9 +24,9 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.4.1
+## État de la version 0.4.2
 
-La version 0.4.1 consolide la gestion métier à **258 outils**. Elle ajoute les
+La version 0.4.2 consolide la gestion métier à **270 outils**. Elle ajoute les
 catalogues allowlistés d'actifs, composants, intitulés et objets de gestion,
 les relations documentaires, la topologie réseau persistée (ports, VLAN,
 liaisons et adresses IP), les composants installés, les sous-objets
@@ -40,6 +40,11 @@ du plugin Inventory et les audits transverses de gouvernance. Les adaptateurs
 High-Level n'utilisent que des routes confirmées dans les sources GLPI 11 ; les
 autres opérations échouent explicitement ou sont routées vers Legacy par la
 matrice Hybrid, sans repli silencieux.
+
+Le workflow réseau de site assemble désormais, sous un aperçu empreinté unique,
+le lieu, l'`IPNetwork`, la plage Inventory, les relations SNMP, la règle
+`RuleImportEntity`, les deux cibles de jobs et la plage Addressing. Son apply est
+reprenable et idempotent ; il ne lance jamais de tâche, de ping ou de cron.
 
 | Composant | État |
 | --- | --- |
@@ -114,7 +119,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.1
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.2
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4
 ```
 
@@ -151,7 +156,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.4.1**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.4.2**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité
