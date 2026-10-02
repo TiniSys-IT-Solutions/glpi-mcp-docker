@@ -43,3 +43,15 @@ export interface InventoryIPRangeSNMPAssociationCreateRequest {
   snmp_credential_id: number;
   rank?: number;
 }
+
+export type InventoryTaskJobTargetAction = 'add' | 'remove';
+export interface InventoryTaskJobTargetChangeRequest {
+  task_id: number;
+  job_id: number;
+  ip_range_id: number;
+  action: InventoryTaskJobTargetAction;
+}
+export interface InventoryTaskJobTargetApplyRequest extends InventoryTaskJobTargetChangeRequest {
+  preview_fingerprint: string;
+  confirmation: 'I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_CHANGE' | 'I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_REMOVAL';
+}

@@ -134,6 +134,84 @@ Every successful POST/PUT is read back. The result distinguishes the accepted
 write from its `verified` or `failed` post-write verification; a failed readback
 does not cause an unsafe replay of the write.
 
+## Provisioning a complete site network
+
+`glpi_preview_site_network_provisioning` and
+`glpi_apply_site_network_provisioning` coordinate the complete official GLPI
+chain without bypassing its REST model:
+
+1. validate the entity and parent location;
+2. create or reuse the child location;
+3. create, reuse or reconcile the native `IPNetwork`;
+4. create, reuse or rename the GLPI Inventory usable-host range;
+5. optionally copy existing range-to-SNMP-credential associations (never the
+   credential secrets);
+6. create or reuse a disabled `RuleImportEntity` containing both `subnet` and
+   `ip` CIDR criteria with match mode `OR`, plus entity and location actions;
+7. add the range target to the selected discovery and inventory jobs while
+   preserving every unrelated target;
+8. create or reuse the Addressing range with an explicit `use_ping` choice;
+9. optionally activate the new rule only with its separate confirmation.
+
+Preview is mandatory and returns evidence, dependencies, warnings, conflicts,
+the proposed action for every stage and a deterministic fingerprint. Duplicate
+locations, overlapping networks or ranges, ambiguous rules, mismatched task/job
+parents and unadopted Addressing rows fail closed. Apply re-runs the preview and
+rejects stale state before its first write.
+
+The operation is a resumable saga, not a database transaction. Every successful
+creation is retained if a later stage fails; no object is automatically deleted
+and the result reports completed IDs and the failing stage. Re-run preview,
+review the new fingerprint, then apply again: already satisfied stages are
+skipped. The workflow never activates or requeues an Inventory task, never
+starts a scan, ping or cron, and never creates implicit `Network`, VLAN or FQDN
+objects.
+
+Legacy is the only implemented adapter. Hybrid selects Legacy through its
+explicit compatibility matrix. High-Level returns a not-supported error rather
+than guessing GLPI 11 routes.
+
+Generic preview example:
+
+```json
+{
+  "entity_id": 101,
+  "parent_location_id": 201,
+  "location_name": "Example Wireless Lab",
+  "network_name": "Example Wireless Lab - 192.0.2.0/24",
+  "cidr": "192.0.2.0/24",
+  "gateway": "192.0.2.254",
+  "is_recursive": false,
+  "addressable": true,
+  "discovery_task_id": 301,
+  "discovery_job_id": 302,
+  "inventory_task_id": 303,
+  "inventory_job_id": 304,
+  "copy_snmp_credentials": false,
+  "copy_addressing_options": false,
+  "addressing_options": { "use_ping": false },
+  "rule_name": "Example Wireless Lab - subnet assignment",
+  "rule_scope_entity_id": 0,
+  "rule_match": "OR",
+  "activate_rule": false
+}
+```
+
+Apply repeats every preview field and adds:
+
+```json
+{
+  "preview_fingerprint": "<64-hex fingerprint>",
+  "confirmation": "I_HAVE_VERIFIED_THE_SITE_NETWORK_PLAN"
+}
+```
+
+After a partial failure there is no special force/resume flag: request a fresh
+preview of the same desired state, verify that completed stages are reported as
+`already_satisfied`, then apply its new fingerprint. Rule activation additionally
+requires `activate_rule: true` and
+`rule_activation_confirmation: "I_HAVE_VERIFIED_THE_RULE_ACTIVATION"`.
+
 Preview example:
 
 ```json

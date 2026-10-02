@@ -18,6 +18,8 @@ import { NetworkTopologyService } from './network-topology/service.js';
 import { ComponentRelationService } from './component-relations/service.js';
 import { AssetSubobjectService } from './asset-subobjects/service.js';
 import { ItemMetadataService } from './item-metadata/service.js';
+import { SiteNetworkProvisioningService } from './site-network-provisioning/service.js';
+import { AssetControlService } from './asset-controls/service.js';
 
 export interface GlpiServices {
   tickets: TicketService;
@@ -40,4 +42,6 @@ export interface GlpiServices {
   componentRelations: ComponentRelationService;
   assetSubobjects: AssetSubobjectService;
   itemMetadata: ItemMetadataService;
+  siteNetworkProvisioning: SiteNetworkProvisioningService;
+  assetControls: AssetControlService;
 }

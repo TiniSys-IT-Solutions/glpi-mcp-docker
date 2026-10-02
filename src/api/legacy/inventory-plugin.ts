@@ -6,7 +6,10 @@ import {
   InventoryTaskWriteRequest,
   InventoryIPRangeSNMPAssociationCreateRequest,
   InventoryIPRangeSNMPAssociationListRequest,
+  InventoryTaskJobTargetChangeRequest,
+  InventoryTaskJobTargetApplyRequest,
 } from '../../core/inventory-plugin/types.js';
+import { createHash } from 'node:crypto';
 import { SearchCriterion } from './search.js';
 import { GlpiClient, ListOptions } from './glpi-client.js';
 
@@ -34,6 +37,41 @@ export const INVENTORY_PLUGIN_ITEMTYPES: Record<InventoryPluginResource, string>
 
 const IP_RANGE_SNMP_RELATION = 'PluginGlpiinventoryIPRange_SNMPCredential';
 const SNMP_CREDENTIAL = 'SNMPCredential';
+const IP_RANGE_TARGET = 'PluginGlpiinventoryIPRange';
+
+type NormalizedTarget = { itemtype: string; id: number };
+function stable(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => [key, stable(child)]));
+  return value;
+}
+function fingerprint(value: unknown): string { return createHash('sha256').update(JSON.stringify(stable(value))).digest('hex'); }
+function rawTargets(value: unknown): unknown[] {
+  let decoded = value;
+  if (typeof decoded === 'string') {
+    if (!decoded.trim()) return [];
+    try { decoded = JSON.parse(decoded); } catch { throw new Error('Unknown task job targets format: invalid JSON'); }
+  }
+  if (Array.isArray(decoded)) return decoded;
+  if (decoded && typeof decoded === 'object') {
+    const entries = Object.entries(decoded as Record<string, unknown>);
+    if (entries.every(([key]) => /^\d+$/.test(key))) return entries.sort(([a], [b]) => Number(a) - Number(b)).map(([, child]) => child);
+  }
+  throw new Error('Unknown task job targets format: expected an array or numerically indexed object');
+}
+export function normalizeTaskJobTargets(value: unknown): NormalizedTarget[] {
+  return rawTargets(value).map((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('Ambiguous task job target entry');
+    const pairs = Object.entries(entry as Record<string, unknown>);
+    if (pairs.length !== 1) throw new Error('Ambiguous task job target entry: expected exactly one itemtype');
+    const [itemtype, rawId] = pairs[0]; const id = Number(rawId);
+    if (!itemtype || !Number.isInteger(id) || id < 1) throw new Error('Ambiguous task job target entry: invalid itemtype or id');
+    return { itemtype, id };
+  });
+}
+function encodeTaskJobTargets(targets: NormalizedTarget[]): string {
+  return JSON.stringify(targets.map((target) => ({ [target.itemtype]: String(target.id) })));
+}
 
 function listOptions(input: InventoryPluginListRequest): ListOptions {
   const start = input.start ?? 0;
@@ -201,6 +239,38 @@ export class LegacyInventoryPluginService implements InventoryPluginService {
     const relation = await this.getIPRangeSNMPCredential(id);
     await this.client.deleteItem(IP_RANGE_SNMP_RELATION, id, true);
     return { success: true, id, deleted: true, relation };
+  }
+  async previewTaskJobTargetChange(input: InventoryTaskJobTargetChangeRequest) {
+    const [task, job, range] = await Promise.all([
+      this.client.getItem<Record<string, unknown>>('PluginGlpiinventoryTask', input.task_id, { expand_dropdowns: false }),
+      this.client.getItem<Record<string, unknown>>('PluginGlpiinventoryTaskjob', input.job_id, { expand_dropdowns: false }),
+      this.client.getItem<Record<string, unknown>>('PluginGlpiinventoryIPRange', input.ip_range_id, { expand_dropdowns: false }),
+    ]);
+    const parentId = Number(job.plugin_glpiinventory_tasks_id ?? job.tasks_id);
+    if (parentId !== input.task_id) throw new Error(`Task job ${input.job_id} does not belong to task ${input.task_id}`);
+    const before = normalizeTaskJobTargets(job.targets);
+    const matches = before.filter((target) => target.itemtype === IP_RANGE_TARGET && target.id === input.ip_range_id);
+    if (matches.length > 1) throw new Error('Ambiguous task job targets: duplicate IP range target');
+    const present = matches.length === 1;
+    const after = input.action === 'add'
+      ? (present ? before : [...before, { itemtype: IP_RANGE_TARGET, id: input.ip_range_id }])
+      : before.filter((target) => !(target.itemtype === IP_RANGE_TARGET && target.id === input.ip_range_id));
+    const state = { task_id: input.task_id, job_id: input.job_id, ip_range_id: input.ip_range_id, action: input.action, before, after,
+      task_state: { id: task.id, date_mod: task.date_mod ?? null }, job_state: { id: job.id, date_mod: job.date_mod ?? null, targets: before }, range_state: { id: range.id, date_mod: range.date_mod ?? null } };
+    return { ...state, already_satisfied: input.action === 'add' ? present : !present, preview_fingerprint: fingerprint(state), reversible: true, modifies_data: false };
+  }
+  async applyTaskJobTargetChange(input: InventoryTaskJobTargetApplyRequest) {
+    if (input.action === 'remove' && input.confirmation !== 'I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_REMOVAL') throw new Error('Target removal requires I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_REMOVAL');
+    if (input.action === 'add' && input.confirmation !== 'I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_CHANGE') throw new Error('Target addition requires I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_CHANGE');
+    const preview = await this.previewTaskJobTargetChange(input) as Record<string, unknown>;
+    if (preview.preview_fingerprint !== input.preview_fingerprint) throw new Error('Preview is stale: task, job, range, or targets changed');
+    if (preview.already_satisfied) return { success: true, idempotent: true, action: 'already_satisfied', job_id: input.job_id, targets: preview.after };
+    const after = preview.after as NormalizedTarget[];
+    await this.client.updateItem('PluginGlpiinventoryTaskjob', input.job_id, { targets: encodeTaskJobTargets(after) });
+    const verified = await this.client.getItem<Record<string, unknown>>('PluginGlpiinventoryTaskjob', input.job_id, { expand_dropdowns: false });
+    const verifiedTargets = normalizeTaskJobTargets(verified.targets);
+    if (JSON.stringify(verifiedTargets) !== JSON.stringify(after)) throw new Error('Post-write verification failed for task job targets');
+    return { success: true, idempotent: false, action: input.action === 'add' ? 'added' : 'removed', task_id: input.task_id, job_id: input.job_id, ip_range_id: input.ip_range_id, targets: verifiedTargets, verification_status: 'verified' };
   }
   async createTask(input: InventoryTaskWriteRequest & { name: string }) { return this.client.createItem('PluginGlpiinventoryTask', mapTask(input)); }
   async updateTask(id: number, input: InventoryTaskWriteRequest) { await this.client.updateItem('PluginGlpiinventoryTask', id, mapTask(input)); return { success: true, id }; }

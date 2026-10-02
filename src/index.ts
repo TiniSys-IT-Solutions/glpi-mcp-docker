@@ -62,6 +62,11 @@ import { LocationAssetType } from './core/location-integrity/types.js';
 import { AssetImportRuleService } from './core/asset-import-rules/service.js';
 import { assetRuleDiffSchema, assetRuleGetSchema, assetRuleListSchema, assetRuleRestoreApplySchema, assetRuleRestorePreviewSchema, assetRuleRiskSchema, assetRuleSimulationSchema } from './core/asset-import-rules/schemas.js';
 import { decodeAssetRuleSnapshotGzip } from './core/asset-import-rules/snapshot-codec.js';
+import { SiteNetworkProvisioningService } from './core/site-network-provisioning/service.js';
+import { siteNetworkProvisioningApplySchema, siteNetworkProvisioningSchema } from './core/site-network-provisioning/schemas.js';
+import { AssetControlService } from './core/asset-controls/service.js';
+import { TAGGABLE_ASSET_TYPES } from './core/asset-controls/types.js';
+import { assetInventoryLockSchema, assetTagChangeSchema, assetTagDetachSchema, assetTagSchema, tagListSchema } from './core/asset-controls/schemas.js';
 import { InventoryInsightsService } from './core/inventory-insights/service.js';
 import { assetNetworkIdentitySchema, discoveryClassifySchema, fortigateAuditSchema, provenanceSchema, rawPayloadSchema, taskIdSchema, taskPrepareOnceSchema, taskReprepareSchema, taskTimelineSchema } from './core/inventory-insights/schemas.js';
 import { CatalogService } from './core/catalog/service.js';
@@ -356,6 +361,8 @@ let networkTopologyService: NetworkTopologyService;
 let componentRelationService: ComponentRelationService;
 let assetSubobjectService: AssetSubobjectService;
 let itemMetadataService:ItemMetadataService;
+let siteNetworkProvisioningService: SiteNetworkProvisioningService;
+let assetControlService: AssetControlService;
 
 const TICKET_SERVICE_TOOLS = new Set([
   'glpi_list_tickets',
@@ -519,6 +526,16 @@ const LIST_TOOL_COMMON_PROPS = {
   order: { type: 'string', enum: ['ASC', 'DESC'] },
   expand_dropdowns: { type: 'boolean', description: 'Resolve FK ids to labels (default true)' },
 };
+const SITE_NETWORK_PROVISIONING_PROPS = {
+  entity_id: { type: 'number', minimum: 0 }, parent_location_id: { type: 'number', minimum: 1 }, location_name: { type: 'string', minLength: 1 },
+  network_name: { type: 'string', minLength: 1 }, cidr: { type: 'string' }, gateway: { type: 'string' }, is_recursive: { type: 'boolean', default: false }, addressable: { type: 'boolean', default: true },
+  discovery_task_id: { type: 'number', minimum: 1 }, discovery_job_id: { type: 'number', minimum: 1 }, inventory_task_id: { type: 'number', minimum: 1 }, inventory_job_id: { type: 'number', minimum: 1 },
+  source_ip_network_id: { type: 'number', minimum: 1 }, source_inventory_range_id: { type: 'number', minimum: 1 }, source_addressing_range_id: { type: 'number', minimum: 1 },
+  copy_snmp_credentials: { type: 'boolean', default: false }, copy_addressing_options: { type: 'boolean', default: false }, addressing_options: { type: 'object', additionalProperties: false, properties: { use_as_filter: { type: 'boolean' }, alloted_ip: { type: 'boolean' }, double_ip: { type: 'boolean' }, free_ip: { type: 'boolean' }, reserved_ip: { type: 'boolean' }, use_ping: { type: 'boolean' } }, required: ['use_ping'] },
+  rule_name: { type: 'string', minLength: 1 }, rule_ranking: { type: 'number', minimum: 0 }, rule_scope_entity_id: { type: 'number', minimum: 0, default: 0 }, rule_match: { type: 'string', enum: ['OR'], default: 'OR' },
+  activate_rule: { type: 'boolean', default: false }, rule_activation_confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_RULE_ACTIVATION'] },
+};
+const SITE_NETWORK_REQUIRED = ['entity_id', 'parent_location_id', 'location_name', 'network_name', 'cidr', 'gateway', 'discovery_task_id', 'discovery_job_id', 'inventory_task_id', 'inventory_job_id', 'addressing_options', 'rule_name'];
 
 const INVENTORY_PLUGIN_READ_TOOLS: Array<{
   resource: InventoryPluginResource;
@@ -1229,6 +1246,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       }, required: ['ip_network_ids', 'preview_fingerprint', 'confirmation'] },
     },
     {
+      name: 'glpi_preview_site_network_provisioning',
+      description: 'Read-only PROVISION_GLPI_SITE_NETWORK plan for the complete Location, IPNetwork, Inventory range, SNMP, rule, jobs and Addressing chain.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: SITE_NETWORK_PROVISIONING_PROPS, required: SITE_NETWORK_REQUIRED },
+    },
+    {
+      name: 'glpi_apply_site_network_provisioning',
+      description: 'Apply a confirmed PROVISION_GLPI_SITE_NETWORK plan as an idempotent resumable saga. It never deletes objects or executes/requeues tasks.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: { ...SITE_NETWORK_PROVISIONING_PROPS, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_SITE_NETWORK_PLAN'] } }, required: [...SITE_NETWORK_REQUIRED, 'preview_fingerprint', 'confirmation'] },
+    },
+    {
       name: 'glpi_list_ip_networks',
       description: 'List declared IPv4 and IPv6 LANs (GLPI IPNetwork objects).',
       inputSchema: { type: 'object', properties: LIST_TOOL_COMMON_PROPS },
@@ -1382,6 +1409,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ['id', 'confirmation'],
       },
+    },
+    {
+      name: 'glpi_inventory_preview_task_job_target_change',
+      description: 'Read-only plan to add or remove one GLPI Inventory IP range target while preserving every other task-job target.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        task_id: { type: 'number', minimum: 1 }, job_id: { type: 'number', minimum: 1 }, ip_range_id: { type: 'number', minimum: 1 }, action: { type: 'string', enum: ['add', 'remove'] },
+      }, required: ['task_id', 'job_id', 'ip_range_id', 'action'] },
+    },
+    {
+      name: 'glpi_inventory_apply_task_job_target_change',
+      description: 'Apply a fingerprinted, confirmed, idempotent addition of one IP-range target. It never activates, requeues or executes the task.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        task_id: { type: 'number', minimum: 1 }, job_id: { type: 'number', minimum: 1 }, ip_range_id: { type: 'number', minimum: 1 }, action: { type: 'string', enum: ['add'] },
+        preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_CHANGE'] },
+      }, required: ['task_id', 'job_id', 'ip_range_id', 'action', 'preview_fingerprint', 'confirmation'] },
+    },
+    {
+      name: 'glpi_inventory_apply_task_job_target_removal',
+      description: 'Destructively remove one exact IP-range target after fingerprinted preview and stronger confirmation; other targets are preserved.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        task_id: { type: 'number', minimum: 1 }, job_id: { type: 'number', minimum: 1 }, ip_range_id: { type: 'number', minimum: 1 },
+        preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_REMOVAL'] },
+      }, required: ['task_id', 'job_id', 'ip_range_id', 'preview_fingerprint', 'confirmation'] },
     },
     {
       name: 'glpi_inventory_create_task',
@@ -1793,6 +1843,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     { name: 'glpi_delete_catalog_item', description: 'Destructive fingerprinted catalog deletion. Purge remains blocked until a complete polymorphic reference scan is available.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, purge: { type: 'boolean', default: false }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_CATALOG_DELETE', 'I_HAVE_VERIFIED_THE_CATALOG_PURGE'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['domain', 'itemtype', 'id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
     { name: 'glpi_list_asset_relations', description: 'List source-audited contract, document, certificate or domain relations attached to an asset.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] } }, required: ['itemtype', 'asset_id', 'relation'] } },
     { name: 'glpi_attach_asset_relation', description: 'Idempotently attach an existing contract, document, certificate or domain to an asset and verify the relation.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] }, related_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['itemtype', 'asset_id', 'relation', 'related_id', 'correlation_id'] } },
+    { name: 'glpi_list_tags', description: 'List or search existing active tags from the official GLPI TAG plugin. Never creates a tag.', inputSchema: { type: 'object', additionalProperties: false, properties: { query: { type: 'string', minLength: 1 }, active_only: { type: 'boolean', default: true }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 1000, default: 100 } } } },
+    { name: 'glpi_list_asset_tags', description: 'List TAG-plugin associations for a Printer, Computer or NetworkEquipment.', inputSchema: { type: 'object', additionalProperties: false, properties: { asset_type: { type: 'string', enum: [...TAGGABLE_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 } }, required: ['asset_type', 'asset_id'] } },
+    { name: 'glpi_attach_tag_to_asset', description: 'Idempotently attach an existing TAG-plugin tag to a supported asset and verify the exact relation. Never creates a tag.', inputSchema: { type: 'object', additionalProperties: false, properties: { asset_type: { type: 'string', enum: [...TAGGABLE_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, tag_id: { type: 'number', minimum: 1 } }, required: ['asset_type', 'asset_id', 'tag_id'] } },
+    { name: 'glpi_detach_tag_from_asset', description: 'Remove only one exact TAG-plugin association after explicit confirmation; neither the tag nor asset is deleted or updated.', inputSchema: { type: 'object', additionalProperties: false, properties: { asset_type: { type: 'string', enum: [...TAGGABLE_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, tag_id: { type: 'number', minimum: 1 }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_TAG_DETACH'] } }, required: ['asset_type', 'asset_id', 'tag_id', 'confirmation'] } },
+    { name: 'glpi_list_asset_inventory_locks', description: 'Read effective native GLPI inventory field locks for a supported asset, including global locks.', inputSchema: { type: 'object', additionalProperties: false, properties: { asset_type: { type: 'string', enum: [...TAGGABLE_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 } }, required: ['asset_type', 'asset_id'] } },
+    { name: 'glpi_lock_asset_inventory_field', description: 'Idempotently create one native GLPI inventory field lock without changing the asset field value.', inputSchema: { type: 'object', additionalProperties: false, properties: { asset_type: { type: 'string', enum: [...TAGGABLE_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, field: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_]{0,49}$' } }, required: ['asset_type', 'asset_id', 'field'] } },
+    { name: 'glpi_unlock_asset_inventory_field', description: 'Idempotently remove one asset-specific native inventory field lock without changing the asset field value. Global locks are never removed.', inputSchema: { type: 'object', additionalProperties: false, properties: { asset_type: { type: 'string', enum: [...TAGGABLE_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, field: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_]{0,49}$' } }, required: ['asset_type', 'asset_id', 'field'] } },
     { name: 'glpi_preview_detach_asset_relation', description: 'Read and fingerprint an exact asset relation before detaching it; neither endpoint object is deleted.', inputSchema: { type: 'object', additionalProperties: false, properties: { relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] }, relation_id: { type: 'number', minimum: 1 } }, required: ['relation', 'relation_id'] } },
     { name: 'glpi_detach_asset_relation', description: 'Detach one exact fingerprinted relation without deleting the asset or related management object.', inputSchema: { type: 'object', additionalProperties: false, properties: { relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] }, relation_id: { type: 'number', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_RELATION_DETACH'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['relation', 'relation_id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
     { name: 'glpi_get_dropdown_usage', description: 'Scan the audited reference map for uses of an allowlisted dropdown value before merge or deletion.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...CATALOG_ITEMTYPES.dropdown] }, id: { type: 'number', minimum: 1 }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000, default: 100 } }, required: ['itemtype', 'id'] } },
@@ -2162,6 +2219,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_attach_asset_relation': {
         const input = assetRelationAttachSchema.parse(args); return text(await governanceService.attachAssetRelation({ itemtype: input.itemtype, assetId: input.asset_id, kind: input.relation, relatedId: input.related_id, correlationId: input.correlation_id }));
       }
+      case 'glpi_list_tags':
+        return text(await assetControlService.listTags(tagListSchema.parse(args)));
+      case 'glpi_list_asset_tags':
+        return text(await assetControlService.listAssetTags(assetTagSchema.parse(args)));
+      case 'glpi_attach_tag_to_asset':
+        return text(await assetControlService.attachTag(assetTagChangeSchema.parse(args)));
+      case 'glpi_detach_tag_from_asset': {
+        const { confirmation: _confirmation, ...input } = assetTagDetachSchema.parse(args);
+        return text(await assetControlService.detachTag(input));
+      }
+      case 'glpi_list_asset_inventory_locks':
+        return text(await assetControlService.listInventoryLocks(assetTagSchema.parse(args)));
+      case 'glpi_lock_asset_inventory_field':
+        return text(await assetControlService.lockInventoryField(assetInventoryLockSchema.parse(args)));
+      case 'glpi_unlock_asset_inventory_field':
+        return text(await assetControlService.unlockInventoryField(assetInventoryLockSchema.parse(args)));
       case 'glpi_preview_detach_asset_relation': {
         const input = assetRelationDetachPreviewSchema.parse(args); return text(await governanceService.previewDetachAssetRelation({ relationId: input.relation_id, kind: input.relation }));
       }
@@ -2809,6 +2882,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text(await addressingSyncService.preview(addressingPreviewSchema.parse(args)));
       case 'glpi_addressing_apply_ip_network_sync':
         return text(await addressingSyncService.apply(addressingApplySchema.parse(args)));
+      case 'glpi_preview_site_network_provisioning':
+        return text(await siteNetworkProvisioningService.preview(siteNetworkProvisioningSchema.parse(args)));
+      case 'glpi_apply_site_network_provisioning':
+        return text(await siteNetworkProvisioningService.apply(siteNetworkProvisioningApplySchema.parse(args)));
       case 'glpi_list_ip_networks': {
         const validated = listArgsSchema.parse(args);
         return text(await ipNetworkService.list(validated));
@@ -2885,6 +2962,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           id: z.number().int().min(1), confirmation: z.literal('I_HAVE_VERIFIED_THE_ASSOCIATION'),
         }).parse(args);
         return text(await inventoryPluginService.detachSNMPCredentialFromIPRange(validated.id));
+      }
+      case 'glpi_inventory_preview_task_job_target_change': {
+        const input = z.object({ task_id: z.number().int().min(1), job_id: z.number().int().min(1), ip_range_id: z.number().int().min(1), action: z.enum(['add', 'remove']) }).strict().parse(args);
+        return text(await inventoryPluginService.previewTaskJobTargetChange(input));
+      }
+      case 'glpi_inventory_apply_task_job_target_change': {
+        const input = z.object({ task_id: z.number().int().min(1), job_id: z.number().int().min(1), ip_range_id: z.number().int().min(1), action: z.literal('add'), preview_fingerprint: z.string().regex(/^[a-f0-9]{64}$/), confirmation: z.literal('I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_CHANGE') }).strict().parse(args);
+        return text(await inventoryPluginService.applyTaskJobTargetChange(input));
+      }
+      case 'glpi_inventory_apply_task_job_target_removal': {
+        const input = z.object({ task_id: z.number().int().min(1), job_id: z.number().int().min(1), ip_range_id: z.number().int().min(1), preview_fingerprint: z.string().regex(/^[a-f0-9]{64}$/), confirmation: z.literal('I_HAVE_VERIFIED_THE_TASK_JOB_TARGET_REMOVAL') }).strict().parse(args);
+        return text(await inventoryPluginService.applyTaskJobTargetChange({ ...input, action: 'remove' }));
       }
       case 'glpi_inventory_create_task': {
         const validated = z.object({
@@ -3534,6 +3623,8 @@ async function main() {
     componentRelationService = apiRouter.services.componentRelations;
     assetSubobjectService = apiRouter.services.assetSubobjects;
     itemMetadataService=apiRouter.services.itemMetadata;
+    siteNetworkProvisioningService = apiRouter.services.siteNetworkProvisioning;
+    assetControlService = apiRouter.services.assetControls;
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 

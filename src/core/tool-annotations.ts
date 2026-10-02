@@ -9,7 +9,7 @@ export function toolAnnotations(name: string): ToolAnnotations {
   if (/^glpi_(export_|diff_|preview_|simulate_|analyze_|classify_)/.test(name)) {
     return { readOnlyHint: true, openWorldHint: false };
   }
-  if (name === 'glpi_inventory_preview_task_schedule') return { readOnlyHint: true, openWorldHint: false };
+  if (name === 'glpi_inventory_preview_task_schedule' || name === 'glpi_inventory_preview_task_job_target_change') return { readOnlyHint: true, openWorldHint: false };
   if (name === 'glpi_inventory_set_task_reprepare' || name === 'glpi_inventory_prepare_task_once') {
     return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
   }
@@ -55,6 +55,11 @@ export function toolAnnotations(name: string): ToolAnnotations {
   if (name === 'glpi_inventory_requeue_task' || name === 'glpi_inventory_detach_snmp_credential_from_ip_range') {
     return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
   }
+  if (name === 'glpi_inventory_apply_task_job_target_removal') return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+  if (name === 'glpi_detach_tag_from_asset') return { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+  if (name === 'glpi_attach_tag_to_asset' || name === 'glpi_lock_asset_inventory_field' || name === 'glpi_unlock_asset_inventory_field') return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  if (name === 'glpi_inventory_apply_task_job_target_change') return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  if (name === 'glpi_apply_site_network_provisioning') return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true };
   // Activation is reversible, idempotent and already guarded by an exact
   // confirmation phrase. Marking it destructive makes approval-policy=never
   // reject the call before the MCP server can validate that confirmation.

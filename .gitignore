@@ -7,6 +7,10 @@ dist/
 coverage/
 uploads/
 
+# Local maintainer workspace: production samples, reports, scratch files, and
+# private validation artifacts. Never publish this directory.
+/.local/
+
 # Archived legacy MCP repository; retained locally for historical reference.
 /upstream/legacy-mcp-glpi/
 

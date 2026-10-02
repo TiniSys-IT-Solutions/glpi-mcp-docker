@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 258 tools currently registered by `src/index.ts` on
+This catalogue lists the 270 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -222,6 +222,22 @@ documents, domains, certificates, datacenters, clusters, databases and lines.
 
 The dropdown usage result reports its coverage and whether it is complete.
 Unsupported reference families are never silently treated as zero usage.
+
+## Asset tags and inventory locks
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_list_tags` | Read | List or search active tags from the official TAG plugin without creating tags. |
+| `glpi_list_asset_tags` | Read | List TAG-plugin associations for one printer, computer or network equipment asset. |
+| `glpi_attach_tag_to_asset` | Write | Idempotently attach an existing tag and verify the exact relation. |
+| `glpi_detach_tag_from_asset` | Destructive | Remove only one confirmed tag association without deleting the tag or changing the asset. |
+| `glpi_list_asset_inventory_locks` | Read | List effective native GLPI inventory-field locks, including global locks. |
+| `glpi_lock_asset_inventory_field` | Write | Idempotently create one allowlisted asset-specific lock without changing the field value. |
+| `glpi_unlock_asset_inventory_field` | Write | Idempotently remove one asset-specific lock without removing global locks or changing the field value. |
+
+These tools are Legacy-only. Hybrid routes them explicitly to Legacy and
+High-Level returns a clear unsupported-domain error until official GLPI routes
+cover the TAG plugin and native inventory locks.
 
 ## Mutable network topology
 
@@ -639,6 +655,9 @@ deprecated compatibility alias.
 | `glpi_inventory_requeue_task` | Destructive | After a network change, cycle a verified task, enable successful re-preparation and queue it for the GLPI scheduler. Requires explicit confirmation. |
 | `glpi_inventory_list_task_jobs` | Read | List jobs belonging to inventory tasks. |
 | `glpi_inventory_get_task_job` | Read | Read one inventory task job. |
+| `glpi_inventory_preview_task_job_target_change` | Read | Normalize a task-job target payload, preserve unrelated targets, and preview one Inventory IP-range addition or removal with a deterministic fingerprint. |
+| `glpi_inventory_apply_task_job_target_change` | Write | Apply a fingerprinted additive IP-range target change, reject stale state, and verify the persisted target list without activating or requeueing the task. |
+| `glpi_inventory_apply_task_job_target_removal` | Destructive | Remove one fingerprinted IP-range target after the stronger literal confirmation, preserving every unrelated target and without activating or requeueing the task. |
 | `glpi_inventory_list_task_job_states` | Read | List execution and supervision states. |
 | `glpi_inventory_get_task_job_state` | Read | Read one execution or supervision state. |
 | `glpi_inventory_list_timeslots` | Read | List execution time slots. |
@@ -655,6 +674,17 @@ deprecated compatibility alias.
 | `glpi_inventory_get_deploy_package` | Read | Read one deployment package without executing it. |
 | `glpi_inventory_list_deploy_groups` | Read | List deployment target-group metadata. |
 | `glpi_inventory_get_deploy_group` | Read | Read one deployment target group. |
+
+## Site network provisioning
+
+| Tool | Access | Function |
+| --- | --- | --- |
+| `glpi_preview_site_network_provisioning` | Read | Build a fail-closed, deterministic plan for a location, IPNetwork, Inventory range, SNMP associations, disabled entity-import rule, discovery/inventory job targets and Addressing range. |
+| `glpi_apply_site_network_provisioning` | Write | Apply the exact fingerprinted plan as a resumable saga, verify writes, preserve completed objects after a later failure, and never execute Inventory tasks or Addressing scans. |
+
+This workflow is Legacy-only. Hybrid routes it explicitly to Legacy. High-Level
+returns a clear unsupported-domain error until official GLPI routes cover every
+object in the chain.
 
 The SNMP association tools use the plugin relation
 `PluginGlpiinventoryIPRange_SNMPCredential`. Friendly MCP fields map as follows:

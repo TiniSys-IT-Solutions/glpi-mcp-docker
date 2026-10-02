@@ -5,6 +5,8 @@ import {
   InventoryTaskWriteRequest,
   InventoryIPRangeSNMPAssociationCreateRequest,
   InventoryIPRangeSNMPAssociationListRequest,
+  InventoryTaskJobTargetChangeRequest,
+  InventoryTaskJobTargetApplyRequest,
 } from './types.js';
 
 export type InventoryPluginResource =
@@ -26,6 +28,8 @@ export interface InventoryPluginService {
   attachSNMPCredentialToIPRange(input: InventoryIPRangeSNMPAssociationCreateRequest): Promise<unknown>;
   updateIPRangeSNMPCredential(id: number, rank: number): Promise<unknown>;
   detachSNMPCredentialFromIPRange(id: number): Promise<unknown>;
+  previewTaskJobTargetChange(input: InventoryTaskJobTargetChangeRequest): Promise<unknown>;
+  applyTaskJobTargetChange(input: InventoryTaskJobTargetApplyRequest): Promise<unknown>;
   createTask(input: InventoryTaskWriteRequest & { name: string }): Promise<unknown>;
   updateTask(id: number, input: InventoryTaskWriteRequest): Promise<unknown>;
   setTaskActive(id: number, active: boolean): Promise<unknown>;
