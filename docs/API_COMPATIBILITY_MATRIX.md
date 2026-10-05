@@ -13,7 +13,7 @@ Status values:
 
 | MCP capability | Legacy | High-Level | Hybrid | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Addressing ranges and IPNetwork sync | PARTIAL | BLOCKED | OK VIA LEGACY | Pure planner + routing | List/get/preview/apply; runtime itemtype/schema detection. Equipment/rule/name inference awaits target-instance REST validation. |
+| Addressing ranges and IPNetwork sync | PARTIAL | BLOCKED | OK VIA LEGACY | Pure planner + routing | List/get/sync preview/apply; report reads, per-IP comments and reservation preview/apply via Legacy REST; Addressing 3.2.11 required for report writes. Equipment/rule/name inference awaits target-instance REST validation. |
 | Create ticket | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Supports friendly fields and Legacy mapping. |
 | Update ticket | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Supports `location_id`, `entity_id`, `category_id`, requester, assignment, priority fields, and `time_to_resolve`. |
 | Ticket location | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Create and update map `location_id -> locations_id`. |

@@ -58,6 +58,7 @@ import { ManagedAssetType } from './core/unmanaged-reconciliation/types.js';
 import { UnmanagedReconciliationService } from './core/unmanaged-reconciliation/service.js';
 import { AddressingSyncService } from './core/addressing-sync/service.js';
 import { addressingApplySchema, addressingListSchema, addressingPreviewSchema } from './core/addressing-sync/schemas.js';
+import { addressingReportSchema, addressingCommentSchema, addressingReservationPreviewSchema, addressingReservationApplySchema, reservationAssetTypes } from './core/addressing-sync/report-schemas.js';
 import { LocationAssetType } from './core/location-integrity/types.js';
 import { AssetImportRuleService } from './core/asset-import-rules/service.js';
 import { assetRuleDiffSchema, assetRuleGetSchema, assetRuleListSchema, assetRuleRestoreApplySchema, assetRuleRestorePreviewSchema, assetRuleRiskSchema, assetRuleSimulationSchema } from './core/asset-import-rules/schemas.js';
@@ -429,6 +430,8 @@ const UNMANAGED_RECONCILIATION_TOOLS = new Set([
   'glpi_audit_unmanaged_assets', 'glpi_apply_unmanaged_asset_reconciliation',
 ]);
 const ADDRESSING_SYNC_TOOLS = new Set([
+  'glpi_addressing_get_report', 'glpi_addressing_set_ip_comment',
+  'glpi_addressing_preview_ip_reservation', 'glpi_addressing_reserve_ip',
   'glpi_addressing_list_ranges', 'glpi_addressing_get_range',
   'glpi_addressing_preview_ip_network_sync', 'glpi_addressing_apply_ip_network_sync',
 ]);
@@ -1210,6 +1213,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
 
     // ============== IP NETWORKS ==============
+    {
+      name: 'glpi_addressing_get_report',
+      description: 'Read a paginated Addressing range report with per-IP comments and visible inventory reservations/assignments. Never pings; unassigned does not prove an IP is free on the network.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        range_id: { type: 'integer', minimum: 1 }, start: { type: 'integer', minimum: 0, default: 0 }, limit: { type: 'integer', minimum: 1, maximum: 1000, default: 50 },
+      }, required: ['range_id'] },
+    },
+    {
+      name: 'glpi_addressing_set_ip_comment',
+      description: 'Set the native per-IP comment displayed in the selected Addressing range report. Supply expected_comment from a fresh report to prevent overwriting a changed comment. Empty comment clears the text.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        range_id: { type: 'integer', minimum: 1 }, ip: { type: 'string' }, comment: { type: 'string', maxLength: 65535 }, expected_comment: { type: 'string', maxLength: 65535 },
+      }, required: ['range_id', 'ip', 'comment', 'expected_comment'] },
+    },
+    {
+      name: 'glpi_addressing_preview_ip_reservation',
+      description: 'Preview reserving an IPv4 in a readable Addressing range on an existing GLPI asset in the same entity, using a native reserv-IP network port. Checks visible inventory conflicts without ping or DHCP/DNS writes.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        range_id: { type: 'integer', minimum: 1 }, ip: { type: 'string' }, asset_type: { type: 'string', enum: [...reservationAssetTypes] }, asset_id: { type: 'integer', minimum: 1 },
+        mac: { type: 'string', pattern: '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' }, fqdn_id: { type: 'integer', minimum: 0 },
+      }, required: ['range_id', 'ip', 'asset_type', 'asset_id'] },
+    },
+    {
+      name: 'glpi_addressing_reserve_ip',
+      description: 'Apply the exact fingerprinted Addressing reservation preview on an existing asset. Creates a native reserv-IP port and its IP children; preserves and reports partial writes. No scan or DHCP/DNS changes.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        range_id: { type: 'integer', minimum: 1 }, ip: { type: 'string' }, asset_type: { type: 'string', enum: [...reservationAssetTypes] }, asset_id: { type: 'integer', minimum: 1 },
+        mac: { type: 'string', pattern: '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' }, fqdn_id: { type: 'integer', minimum: 0 },
+        preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_ADDRESSING_RESERVATION'] },
+      }, required: ['range_id', 'ip', 'asset_type', 'asset_id', 'preview_fingerprint', 'confirmation'] },
+    },
     {
       name: 'glpi_addressing_list_ranges',
       description: 'List IPv4 ranges exposed by the GLPI IP Addressing plugin, with friendly relationship names and optional filters.',
@@ -2872,6 +2906,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return text(await client.getPhone(args.id as number));
 
       // ==== IP NETWORKS ====
+      case 'glpi_addressing_get_report':
+        return text(await addressingSyncService.report(addressingReportSchema.parse(args)));
+      case 'glpi_addressing_set_ip_comment':
+        return text(await addressingSyncService.setComment(addressingCommentSchema.parse(args)));
+      case 'glpi_addressing_preview_ip_reservation':
+        return text(await addressingSyncService.previewReservation(addressingReservationPreviewSchema.parse(args)));
+      case 'glpi_addressing_reserve_ip':
+        return text(await addressingSyncService.reserve(addressingReservationApplySchema.parse(args)));
       case 'glpi_addressing_list_ranges':
         return text(await addressingSyncService.list(addressingListSchema.parse(args)));
       case 'glpi_addressing_get_range': {

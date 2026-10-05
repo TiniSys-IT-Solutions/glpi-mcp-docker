@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 270 tools currently registered by `src/index.ts` on
+This catalogue lists the 274 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -25,7 +25,16 @@ business update requires a durable field contract, null/omission semantics,
 reference validation and explicit Legacy/High-Level/Hybrid routing. Domains
 that do not yet meet those conditions remain without an unsafe raw update tool.
 
-## IP Addressing synchronization
+## IP Addressing reports and synchronization
+
+- `glpi_addressing_get_report` reads a paginated per-IP inventory report with comments and visible reservations, without ping.
+- `glpi_addressing_set_ip_comment` adds, replaces or clears the native report-row comment; requires `expected_comment` from a fresh read.
+- `glpi_addressing_preview_ip_reservation` previews a reservation on an existing asset in the range entity and checks visible conflicts.
+- `glpi_addressing_reserve_ip` applies the exact preview fingerprint and `I_HAVE_VERIFIED_THE_ADDRESSING_RESERVATION` confirmation; verifies the native reservation port/IP children.
+
+See [Addressing capabilities and examples](ADDRESSING.md) for version restrictions,
+permissions, partial writes and inventory visibility limits.
+
 
 - `glpi_addressing_list_ranges` lists plugin ranges and relationship ids.
 - `glpi_addressing_get_range` returns one complete range and its raw REST fields.

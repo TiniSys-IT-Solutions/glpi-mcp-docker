@@ -1,7 +1,7 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **270 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **274 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
@@ -15,16 +15,22 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 270 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 274 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |
+| Rapports, commentaires et réservations IP Addressing | [IP Addressing](docs/ADDRESSING.md) |
 | Architecture et routage | [Architecture](docs/ARCHITECTURE.md) |
 | Audit des capacités GLPI 11 / GLPI Inventory et feuille de route CRUD | [Audit des sources](docs/GLPI_SOURCE_TOOL_AUDIT.md) |
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.4.3
+## État de la version 0.4.4
+
+La version 0.4.4 porte le catalogue à **274 outils**. Elle ajoute la lecture du
+rapport IP Addressing, les commentaires par IP et les réservations sur un actif
+existant, avec prévisualisation et contrôle des conflits visibles. Voir
+[les opérations Addressing et exemples](docs/ADDRESSING.md).
 
 La version 0.4.3 consolide la gestion métier à **270 outils**. Elle ajoute les
 catalogues allowlistés d'actifs, composants, intitulés et objets de gestion,
@@ -119,7 +125,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.3
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.4
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4
 ```
 
@@ -156,7 +162,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.4.3**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.4.4**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité

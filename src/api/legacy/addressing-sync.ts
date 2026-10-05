@@ -5,6 +5,8 @@ import {
   AddressingRangeRecord, IPNetworkRecord, LegacyIPNetworkRestRecord,
 } from '../../core/addressing-sync/types.js';
 import { isIP } from 'node:net';
+import { LegacyAddressingReportService } from './addressing-report.js';
+import type { AddressingCommentRequest, AddressingReportRequest, AddressingReservationApplyRequest, AddressingReservationPreviewRequest } from '../../core/addressing-sync/report-schemas.js';
 
 // GLPI 11 plugins use namespaced class itemtypes. Older plugin releases used
 // the pre-namespace form. Both are probed explicitly through the official REST
@@ -80,9 +82,14 @@ export function normalizeLegacyIPNetwork(raw: LegacyIPNetworkRestRecord): IPNetw
 }
 
 export class LegacyAddressingSyncService implements AddressingSyncService {
+  private readonly reports: LegacyAddressingReportService;
+  report(input: AddressingReportRequest) { return this.reports.report(input); }
+  setComment(input: AddressingCommentRequest) { return this.reports.setComment(input); }
+  previewReservation(input: AddressingReservationPreviewRequest) { return this.reports.previewReservation(input); }
+  reserve(input: AddressingReservationApplyRequest) { return this.reports.reserve(input); }
   private resolvedItemtype?: string;
 
-  constructor(private readonly client: GlpiClient) {}
+  constructor(private readonly client: GlpiClient) { this.reports = new LegacyAddressingReportService(client, this); }
 
   private async itemtype(): Promise<string> {
     if (this.resolvedItemtype) return this.resolvedItemtype;

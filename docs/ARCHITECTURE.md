@@ -216,3 +216,11 @@ launcher
 Each child receives its own `GLPI_API_MODE`. Stable retains the existing
 single-port behavior by default, while Preview must be explicitly enabled.
 See `docs/DUAL_ENDPOINTS.md`.
+
+Addressing reports and annotations follow the same service contract. The Legacy
+adapter delegates report/comment/reservation operations to
+`LegacyAddressingReportService`, which uses native IpComment and NetworkPort
+resources. Reservation previews fingerprint the source range, asset, visible
+allocations and payload. Reads join paginated inventory resources; writes
+verify the resulting comment or port/IP children and preserve partial writes.
+See [Addressing operations](ADDRESSING.md).

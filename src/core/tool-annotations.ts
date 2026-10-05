@@ -6,6 +6,9 @@ export interface ToolAnnotations {
 }
 
 export function toolAnnotations(name: string): ToolAnnotations {
+  if (name === 'glpi_addressing_get_report' || name === 'glpi_addressing_preview_ip_reservation') return { readOnlyHint: true, openWorldHint: false };
+  if (name === 'glpi_addressing_set_ip_comment') return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  if (name === 'glpi_addressing_reserve_ip') return { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
   if (/^glpi_(export_|diff_|preview_|simulate_|analyze_|classify_)/.test(name)) {
     return { readOnlyHint: true, openWorldHint: false };
   }

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { AddressingCommentRequest, AddressingReportRequest, AddressingReservationApplyRequest, AddressingReservationPreviewRequest } from './report-schemas.js';
 import {
   AddressingApplyRequest, AddressingListRequest, AddressingPlanItem,
   AddressingPreviewRequest, AddressingPreviewResult, AddressingRangeRecord,
@@ -9,6 +10,10 @@ export const ADDRESSING_SYNC_MARKER = /\[mcp-ipnetwork-sync:v1 ipnetwork_id=(\d+
 export const ADDRESSING_MAX_ADDRESSES = 65536n;
 
 export interface AddressingSyncService {
+  report(input: AddressingReportRequest): Promise<unknown>;
+  setComment(input: AddressingCommentRequest): Promise<unknown>;
+  previewReservation(input: AddressingReservationPreviewRequest): Promise<unknown>;
+  reserve(input: AddressingReservationApplyRequest): Promise<unknown>;
   list(input: AddressingListRequest): Promise<unknown>;
   get(rangeId: number): Promise<unknown>;
   preview(input: AddressingPreviewRequest): Promise<AddressingPreviewResult>;
