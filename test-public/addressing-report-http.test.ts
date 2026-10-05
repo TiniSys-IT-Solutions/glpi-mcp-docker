@@ -60,7 +60,7 @@ test('native authenticated REST report/comment routes preserve preconditions and
   assert.ok(f.requests.every(request => !/ajax|NetworkPort|Mcpaddressing/.test(request.path)));
 });
 
-test('GenBio 3.2.14 HTTP 403 is diagnosed for both tools and never triggers a write/fallback', async (t) => {
+test('Addressing 3.2.14 HTTP 403 is diagnosed for both tools and never triggers a write/fallback', async (t) => {
   const f = fixture(t, true);
   await assert.rejects(() => f.service.report({ range_id: 7, start: 0, limit: 10 }), /3\.2\.14.*403.*Super-Admin/);
   await assert.rejects(() => f.service.setComment({ range_id: 7, ip: '192.0.2.10', comment: 'Printer', expected_comment: '' }), /assumed empty/);

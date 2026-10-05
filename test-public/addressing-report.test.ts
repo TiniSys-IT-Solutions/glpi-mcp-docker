@@ -225,7 +225,7 @@ test('an inactive/unsupported plugin refuses report/comment operations before wr
   assert.equal(f.writes.length, 0);
 });
 
-test('GenBio helper 403 explains class denial despite Super-Admin without falling back or guessing empty comments', async () => {
+test('Addressing helper 403 explains class denial despite Super-Admin without falling back or guessing empty comments', async () => {
   const f = fixture(); f.rows.Plugin[0].version = '3.2.14';
   f.client.getItems = async (type) => {
     if (type === 'Plugin') return f.rows.Plugin as never;

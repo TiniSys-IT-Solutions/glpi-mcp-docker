@@ -7,8 +7,8 @@ explicitly to Legacy. Pure High-Level returns a not-supported error.
 
 ## Native API access and the 3.2.14 denial
 
-GenBio diagnostics confirmed active Addressing **3.2.14** and
-`plugin_addressing=31` in the Super-Admin profile. Its official `IpComment` and
+The official Addressing **3.2.14** source blocks report resources even when
+`plugin_addressing=31` in the Super-Admin profile. Its `IpComment` and
 `PingInfo` classes return `false` from `canView`, `canCreate`, `canUpdate`,
 `canDelete` and `canPurge`. GLPI checks `canView()` before listing even a nested
 resource. Super-Admin does not override this deliberate class-level restriction.
@@ -168,7 +168,6 @@ with the same reservation name. Nothing is silently purged or rolled back.
 
 Validation uses unit and mocked authenticated HTTP regressions, covering
 version checks, active profile UPDATE, 403 denials, stored ping selection,
-expected text, duplicate rejection and post-write verification. GenBio range
-reading succeeds but its report 403 was reproduced; the requested live comment
-was not written because its current text cannot be read through the authorized
-native API. Successful live report/comment validation remains blocked.
+expected text, duplicate rejection and post-write verification. Native report
+and comment operations require readable resources through the authorized API.
+When the plugin denies access, MCP reports the restriction and does not write.

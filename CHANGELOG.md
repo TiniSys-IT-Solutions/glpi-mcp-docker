@@ -6,7 +6,7 @@
 - Explain the deliberate IpComment/PingInfo class denial in active Addressing 3.2.14, even with Super-Admin; never assume that an unreadable comment is empty.
 - Require active-profile Addressing UPDATE for IP comments, retain expected-text checks and verify written text/parent/IP afterward.
 - Expose stored ping state/date and selection reasons for replies without visible equipment and Unmanaged equipment, without launching probes.
-- Add unit and authenticated HTTP regressions. Docker/MCP architecture and the 288-tool catalogue are retained; no GLPI-side plugin is added. Stock GenBio 3.2.14 report/comment success remains blocked by its native API permissions.
+- Add unit and authenticated HTTP regressions. Docker/MCP architecture and the 288-tool catalogue are retained; no GLPI-side plugin is added. Stock Addressing 3.2.14 report/comment success remains blocked by its native API permissions.
 
 ## 0.4.5 — 2026-10-05
 

@@ -8,6 +8,9 @@ dist
 coverage
 uploads
 test
+.local
+audit-results
+upstream
 
 *.log
 *.tmp
