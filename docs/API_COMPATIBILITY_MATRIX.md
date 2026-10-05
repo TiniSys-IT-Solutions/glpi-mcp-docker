@@ -13,7 +13,8 @@ Status values:
 
 | MCP capability | Legacy | High-Level | Hybrid | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Addressing ranges and IPNetwork sync | PARTIAL | BLOCKED | OK VIA LEGACY | Pure planner + routing | List/get/sync preview/apply; report reads, per-IP comments and reservation preview/apply via Legacy REST; Addressing 3.2.11 required for report writes. Equipment/rule/name inference awaits target-instance REST validation. |
+| Phone lines and equipment/SIM associations | OK | PARTIAL | OK VIA LEGACY | PhoneLineService + adapters/routing | All 14 tools in Legacy; confirmed High-Level line list/create/update/comment/stats. Composite views and relations explicitly blocked in pure High-Level. |
+| Addressing ranges and IPNetwork sync | PARTIAL | BLOCKED | PARTIAL VIA LEGACY | Planner, routing, HTTP regressions | Ranges/sync via Legacy. Reports/comments admit stable >=3.2.0 only with authorized compatible native resources; stock 3.2.14 deliberately denies IpComment/PingInfo and remains blocked. Reservations retain their separate 3.2.11 payload audit. No GLPI companion or AJAX fallback. |
 | Create ticket | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Supports friendly fields and Legacy mapping. |
 | Update ticket | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Supports `location_id`, `entity_id`, `category_id`, requester, assignment, priority fields, and `time_to_resolve`. |
 | Ticket location | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Create and update map `location_id -> locations_id`. |

@@ -219,8 +219,21 @@ See `docs/DUAL_ENDPOINTS.md`.
 
 Addressing reports and annotations follow the same service contract. The Legacy
 adapter delegates report/comment/reservation operations to
-`LegacyAddressingReportService`, which uses native IpComment and NetworkPort
-resources. Reservation previews fingerprint the source range, asset, visible
+`LegacyAddressingReportService`, using only native Legacy REST resources.
+Reports/comments admit stable Addressing >=3.2.0 with schema and permission
+checks. Native 3.2.14 disables generic IpComment/PingInfo access; MCP reports
+this as a backend restriction, without adding a GLPI-side plugin or unaudited
+route. Stored ping state/date and Unmanaged selection are available only when
+GLPI authorizes the resources. IP comments require active-profile UPDATE and
+an expected-text precondition before native creation/update.
+Reservation previews fingerprint the source range, asset, visible
 allocations and payload. Reads join paginated inventory resources; writes
 verify the resulting comment or port/IP children and preserve partial writes.
 See [Addressing operations](ADDRESSING.md).
+
+Phone lines follow `MCP -> PhoneLineService -> BusinessPhoneLineService ->
+PhoneLineBackend`, with separate Legacy and High-Level backend adapters.
+Business field mapping, entity ancestry checks, preview fingerprints and SIM
+redaction live in the domain service. High-Level uses only confirmed routes and
+normalizes nested references; unsupported relation operations fail explicitly.
+See [phone line capabilities](PHONE_LINES.md).

@@ -71,6 +71,8 @@ import { assetInventoryLockSchema, assetTagChangeSchema, assetTagDetachSchema, a
 import { InventoryInsightsService } from './core/inventory-insights/service.js';
 import { assetNetworkIdentitySchema, discoveryClassifySchema, fortigateAuditSchema, provenanceSchema, rawPayloadSchema, taskIdSchema, taskPrepareOnceSchema, taskReprepareSchema, taskTimelineSchema } from './core/inventory-insights/schemas.js';
 import { CatalogService } from './core/catalog/service.js';
+import { PhoneLineService } from './core/phone-lines/service.js';
+import { phoneLineListSchema, phoneLineIdSchema, phoneLineCreateSchema, phoneLineUpdateSchema, phoneLineCommentSchema, phoneLineItemSchema, phoneLineAttachSchema, phoneLineDetachPreviewSchema, phoneLineDetachSchema, phoneLineSimPreviewSchema, phoneLineSimApplySchema, phoneLineAuditSchema } from './core/phone-lines/schemas.js';
 import { CATALOG_DOMAINS, CATALOG_ITEMTYPES } from './core/catalog/types.js';
 import { catalogCreateSchema, catalogDeletePreviewSchema, catalogDeleteSchema, catalogGetSchema, catalogListSchema, catalogUpdateSchema } from './core/catalog/schemas.js';
 import { GovernanceService } from './core/governance/service.js';
@@ -357,6 +359,7 @@ let addressingSyncService: AddressingSyncService;
 let assetImportRuleService: AssetImportRuleService;
 let inventoryInsightsService: InventoryInsightsService;
 let catalogService: CatalogService;
+let phoneLineService: PhoneLineService;
 let governanceService: GovernanceService;
 let networkTopologyService: NetworkTopologyService;
 let componentRelationService: ComponentRelationService;
@@ -450,6 +453,7 @@ const INVENTORY_INSIGHTS_TOOLS = new Set([
   'glpi_inventory_prepare_task_once', 'glpi_inventory_get_task_execution_timeline', 'glpi_classify_unmanaged_discovery',
   'glpi_get_asset_network_identity',
 ]);
+const PHONE_LINE_TOOLS = new Set(['glpi_list_phone_lines', 'glpi_get_phone_line_overview', 'glpi_create_phone_line', 'glpi_update_phone_line', 'glpi_append_phone_line_comment', 'glpi_list_phone_line_items', 'glpi_list_item_phone_lines', 'glpi_attach_phone_line_to_item', 'glpi_preview_detach_phone_line_from_item', 'glpi_detach_phone_line_from_item', 'glpi_preview_set_simcard_phone_line', 'glpi_set_simcard_phone_line', 'glpi_audit_phone_lines', 'glpi_phone_lines_stats']);
 const CATALOG_TOOLS = new Set(['glpi_list_catalog_items', 'glpi_get_catalog_item', 'glpi_create_catalog_item', 'glpi_update_catalog_item', 'glpi_preview_delete_catalog_item', 'glpi_delete_catalog_item']);
 const GOVERNANCE_TOOLS = new Set(['glpi_list_asset_relations', 'glpi_attach_asset_relation', 'glpi_preview_detach_asset_relation', 'glpi_detach_asset_relation', 'glpi_get_dropdown_usage', 'glpi_run_governance_audit']);
 const NETWORK_TOPOLOGY_TOOLS = new Set(['glpi_list_asset_network_ports', 'glpi_get_network_port', 'glpi_create_network_port', 'glpi_update_network_port', 'glpi_attach_vlan_to_port', 'glpi_connect_network_ports', 'glpi_preview_remove_network_link', 'glpi_remove_network_link', 'glpi_attach_ip_address', 'glpi_move_ip_address', 'glpi_preview_delete_network_object', 'glpi_delete_network_object']);
@@ -473,6 +477,7 @@ function isBackendServiceTool(toolName: string): boolean {
     ADDRESSING_SYNC_TOOLS.has(toolName) ||
     ASSET_IMPORT_RULE_TOOLS.has(toolName) ||
     INVENTORY_INSIGHTS_TOOLS.has(toolName) ||
+    PHONE_LINE_TOOLS.has(toolName) ||
     CATALOG_TOOLS.has(toolName) ||
     GOVERNANCE_TOOLS.has(toolName) ||
     NETWORK_TOPOLOGY_TOOLS.has(toolName) ||
@@ -1212,10 +1217,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
+    { name: 'glpi_list_phone_lines', description: 'Search visible phone lines using friendly number, operator, entity, location, type, status and assignee filters.', inputSchema: { ...z.toJSONSchema(phoneLineListSchema), type: 'object' as const } },
+    { name: 'glpi_get_phone_line_overview', description: 'Read a phone line with direct equipment links, installed SIMs, contracts, documents, financial information, notes and history. SIM secrets are excluded.', inputSchema: { ...z.toJSONSchema(phoneLineIdSchema), type: 'object' as const } },
+    { name: 'glpi_create_phone_line', description: 'Create a phone line using confirmed native fields and validated references; preserve internal extension and caller number formatting.', inputSchema: { ...z.toJSONSchema(phoneLineCreateSchema), type: 'object' as const } },
+    { name: 'glpi_update_phone_line', description: 'Partially update a phone line and its assignments. Linked equipment/SIMs block entity changes.', inputSchema: { ...z.toJSONSchema(phoneLineUpdateSchema), type: 'object' as const } },
+    { name: 'glpi_append_phone_line_comment', description: 'Append text to a phone line comment using expected_comment as a concurrency precondition.', inputSchema: { ...z.toJSONSchema(phoneLineCommentSchema), type: 'object' as const } },
+    { name: 'glpi_list_phone_line_items', description: 'List direct Item_Line associations separately from installed SIM associations.', inputSchema: { ...z.toJSONSchema(phoneLineIdSchema), type: 'object' as const } },
+    { name: 'glpi_list_item_phone_lines', description: 'List equipment phone lines through direct links and installed SIMs without exposing PIN/PUK.', inputSchema: { ...z.toJSONSchema(phoneLineItemSchema), type: 'object' as const } },
+    { name: 'glpi_attach_phone_line_to_item', description: 'Idempotently attach a phone line to existing equipment within its entity or recursive child-entity scope.', inputSchema: { ...z.toJSONSchema(phoneLineAttachSchema), type: 'object' as const } },
+    { name: 'glpi_preview_detach_phone_line_from_item', description: 'Fingerprint one direct phone line association before removing it; never detaches a SIM.', inputSchema: { ...z.toJSONSchema(phoneLineDetachPreviewSchema), type: 'object' as const } },
+    { name: 'glpi_detach_phone_line_from_item', description: 'Remove only a fingerprinted direct line/equipment association after confirmation, preserving both objects and installed SIMs.', inputSchema: { ...z.toJSONSchema(phoneLineDetachSchema), type: 'object' as const } },
+    { name: 'glpi_preview_set_simcard_phone_line', description: 'Preview setting, replacing or clearing the line of an installed SIM. line_id=0 clears only that association.', inputSchema: { ...z.toJSONSchema(phoneLineSimPreviewSchema), type: 'object' as const } },
+    { name: 'glpi_set_simcard_phone_line', description: 'Apply an exact previewed installed-SIM line change after literal confirmation; preserve the SIM, equipment and PIN/PUK.', inputSchema: { ...z.toJSONSchema(phoneLineSimApplySchema), type: 'object' as const } },
+    { name: 'glpi_audit_phone_lines', description: 'Read-only audit of missing numbers/operators, absent equipment associations, potential duplicate numbers and unresolvable line links.', inputSchema: { ...z.toJSONSchema(phoneLineAuditSchema), type: 'object' as const } },
+    { name: 'glpi_phone_lines_stats', description: 'Read-only phone line counts grouped by entity, operator, type, status and location.', inputSchema: { ...z.toJSONSchema(phoneLineAuditSchema), type: 'object' as const } },
+
     // ============== IP NETWORKS ==============
     {
       name: 'glpi_addressing_get_report',
-      description: 'Read a paginated Addressing range report with per-IP comments and visible inventory reservations/assignments. Never pings; unassigned does not prove an IP is free on the network.',
+      description: 'Read a paginated Addressing report with current per-IP comments, stored ping state/date, visible allocations and selection_reason for ping replies without visible equipment or Unmanaged equipment. Never pings. Requires stable Addressing >=3.2.0 and authorized compatible native REST resources; protected IpComment/PingInfo routes on 3.2.14 remain unsupported. Absence of equipment is limited to API visibility.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {
         range_id: { type: 'integer', minimum: 1 }, start: { type: 'integer', minimum: 0, default: 0 }, limit: { type: 'integer', minimum: 1, maximum: 1000, default: 50 },
       }, required: ['range_id'] },
@@ -1875,8 +1895,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     { name: 'glpi_update_catalog_item', description: 'Partially update an allowlisted catalog object with before/after state and post-write verification.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, fields: { type: 'object', minProperties: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['domain', 'itemtype', 'id', 'fields', 'correlation_id'] } },
     { name: 'glpi_preview_delete_catalog_item', description: 'Read-only delete preview with current state, recoverability warning, reference-scan completeness and fingerprint.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, purge: { type: 'boolean', default: false } }, required: ['domain', 'itemtype', 'id'] } },
     { name: 'glpi_delete_catalog_item', description: 'Destructive fingerprinted catalog deletion. Purge remains blocked until a complete polymorphic reference scan is available.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, purge: { type: 'boolean', default: false }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_CATALOG_DELETE', 'I_HAVE_VERIFIED_THE_CATALOG_PURGE'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['domain', 'itemtype', 'id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
-    { name: 'glpi_list_asset_relations', description: 'List source-audited contract, document, certificate or domain relations attached to an asset.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] } }, required: ['itemtype', 'asset_id', 'relation'] } },
-    { name: 'glpi_attach_asset_relation', description: 'Idempotently attach an existing contract, document, certificate or domain to an asset and verify the relation.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] }, related_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['itemtype', 'asset_id', 'relation', 'related_id', 'correlation_id'] } },
+    { name: 'glpi_list_asset_relations', description: 'List source-audited contract, document, certificate or domain relations attached to an asset.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: ['Line', ...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] } }, required: ['itemtype', 'asset_id', 'relation'] } },
+    { name: 'glpi_attach_asset_relation', description: 'Idempotently attach an existing contract, document, certificate or domain to an asset and verify the relation.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: ['Line', ...RELATION_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, relation: { type: 'string', enum: [...ASSET_RELATION_KINDS] }, related_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['itemtype', 'asset_id', 'relation', 'related_id', 'correlation_id'] } },
     { name: 'glpi_list_tags', description: 'List or search existing active tags from the official GLPI TAG plugin. Never creates a tag.', inputSchema: { type: 'object', additionalProperties: false, properties: { query: { type: 'string', minLength: 1 }, active_only: { type: 'boolean', default: true }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 1000, default: 100 } } } },
     { name: 'glpi_list_asset_tags', description: 'List TAG-plugin associations for a Printer, Computer or NetworkEquipment.', inputSchema: { type: 'object', additionalProperties: false, properties: { asset_type: { type: 'string', enum: [...TAGGABLE_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 } }, required: ['asset_type', 'asset_id'] } },
     { name: 'glpi_attach_tag_to_asset', description: 'Idempotently attach an existing TAG-plugin tag to a supported asset and verify the exact relation. Never creates a tag.', inputSchema: { type: 'object', additionalProperties: false, properties: { asset_type: { type: 'string', enum: [...TAGGABLE_ASSET_TYPES] }, asset_id: { type: 'number', minimum: 1 }, tag_id: { type: 'number', minimum: 1 } }, required: ['asset_type', 'asset_id', 'tag_id'] } },
@@ -2229,6 +2249,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     switch (name) {
+      case 'glpi_list_phone_lines': return text(await phoneLineService.list(phoneLineListSchema.parse(args)));
+      case 'glpi_get_phone_line_overview': return text(await phoneLineService.overview(phoneLineIdSchema.parse(args).line_id));
+      case 'glpi_create_phone_line': return text(await phoneLineService.create(phoneLineCreateSchema.parse(args)));
+      case 'glpi_update_phone_line': return text(await phoneLineService.update(phoneLineUpdateSchema.parse(args)));
+      case 'glpi_append_phone_line_comment': return text(await phoneLineService.appendComment(phoneLineCommentSchema.parse(args)));
+      case 'glpi_list_phone_line_items': return text(await phoneLineService.listItems(phoneLineIdSchema.parse(args).line_id));
+      case 'glpi_list_item_phone_lines': return text(await phoneLineService.listItemLines(phoneLineItemSchema.parse(args)));
+      case 'glpi_attach_phone_line_to_item': return text(await phoneLineService.attach(phoneLineAttachSchema.parse(args)));
+      case 'glpi_preview_detach_phone_line_from_item': return text(await phoneLineService.previewDetach(phoneLineDetachPreviewSchema.parse(args).relation_id));
+      case 'glpi_detach_phone_line_from_item': return text(await phoneLineService.detach(phoneLineDetachSchema.parse(args)));
+      case 'glpi_preview_set_simcard_phone_line': return text(await phoneLineService.previewSim(phoneLineSimPreviewSchema.parse(args)));
+      case 'glpi_set_simcard_phone_line': return text(await phoneLineService.setSim(phoneLineSimApplySchema.parse(args)));
+      case 'glpi_audit_phone_lines': return text(await phoneLineService.audit(phoneLineAuditSchema.parse(args)));
+      case 'glpi_phone_lines_stats': return text(await phoneLineService.stats(phoneLineAuditSchema.parse(args)));
       case 'glpi_list_catalog_items': {
         const input = catalogListSchema.parse(args); return text(await catalogService.list({ domain: input.domain, itemtype: input.itemtype, start: input.start, limit: input.limit, fetchAll: input.fetch_all, includeDeleted: input.include_deleted }));
       }
@@ -3660,6 +3694,7 @@ async function main() {
     assetImportRuleService = apiRouter.services.assetImportRules;
     inventoryInsightsService = apiRouter.services.inventoryInsights;
     catalogService = apiRouter.services.catalog;
+    phoneLineService = apiRouter.services.phoneLines;
     governanceService = apiRouter.services.governance;
     networkTopologyService = apiRouter.services.networkTopology;
     componentRelationService = apiRouter.services.componentRelations;

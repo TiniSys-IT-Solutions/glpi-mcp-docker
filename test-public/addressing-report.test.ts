@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LegacyAddressingReportService, addressingIpNumber } from '../src/api/legacy/addressing-report.js';
+import { LegacyAddressingReportService, addressingIpNumber, supportsAddressingReports } from '../src/api/legacy/addressing-report.js';
+import { GlpiError } from '../src/api/legacy/http.js';
 import { HighLevelAddressingSyncService } from '../src/api/highlevel/addressing-sync.js';
 import { GlpiClient } from '../src/api/legacy/glpi-client.js';
 import { addressingCommentSchema, addressingReservationApplySchema } from '../src/core/addressing-sync/report-schemas.js';
@@ -8,19 +9,21 @@ import { toolAnnotations } from '../src/core/tool-annotations.js';
 
 type Row = Record<string, unknown>;
 const commentType = 'GlpiPlugin\\Addressing\\IpComment';
+const pingType = 'GlpiPlugin\\Addressing\\PingInfo';
 function fixture() {
   const range: Row = { id: 7, entities_id: 2, begin_ip: '192.0.2.1', end_ip: '192.0.2.254', fqdns_id: 0, reserved_ip: 1, is_deleted: 0 };
   const rows: Record<string, Row[]> = {
     Plugin: [{ id: 1, directory: 'addressing', version: '3.2.11', state: 1 }],
     Computer: [{ id: 9, entities_id: 2, name: 'Server', is_deleted: 0 }],
     NetworkEquipment: [{ id: 9, entities_id: 2, name: 'Switch', is_deleted: 0 }],
-    [commentType]: [], IPAddress: [], NetworkName: [], NetworkPort: [],
+    [commentType]: [], [pingType]: [], IPAddress: [], NetworkName: [], NetworkPort: [],
   };
   const writes: Array<{ type: string; payload: Row }> = [];
   const reads: Array<{ type: string; range: string }> = [];
   let createChildren = true;
   let failReadback = false;
   const client = {
+    getActiveProfile: async () => ({ active_profile: { plugin_addressing: 31 } }),
     getItems: async (type: string, options: { range: string }) => {
       reads.push({ type, range: options.range });
       const [start, end] = options.range.split('-').map(Number);
@@ -48,7 +51,7 @@ function fixture() {
     },
   } as unknown as GlpiClient;
   const service = new LegacyAddressingReportService(client, { get: async () => ({ raw: range }) });
-  return { service, range, rows, writes, reads, omitChildren: () => { createChildren = false; }, failReadback: () => { failReadback = true; } };
+  return { service, client, range, rows, writes, reads, omitChildren: () => { createChildren = false; }, failReadback: () => { failReadback = true; } };
 }
 const request = { range_id: 7, ip: '192.0.2.10', asset_type: 'Computer' as const, asset_id: 9 };
 const apply = (fingerprint: string) => ({ ...request, preview_fingerprint: fingerprint, confirmation: 'I_HAVE_VERIFIED_THE_ADDRESSING_RESERVATION' as const });
@@ -156,7 +159,10 @@ test('a safety-capped comment scan refuses to report incomplete data', async () 
   const range: Row = { id: 7, entities_id: 2, begin_ip: '192.0.2.1', end_ip: '192.0.2.254' };
   const fullPage = Array.from({ length: 1000 }, (_, id) => ({ id, plugin_addressing_addressings_id: 7, ipname: `IP${id}`, comments: '' }));
   let pages = 0;
-  const service = new LegacyAddressingReportService({ getItems: async () => { pages++; return fullPage; } } as unknown as GlpiClient, { get: async () => ({ raw: range }) });
+  const service = new LegacyAddressingReportService({ getItems: async (type: string) => {
+    if (type === 'Plugin') return [{ directory: 'addressing', version: '3.2.11', state: 1 }];
+    pages++; return fullPage;
+  } } as unknown as GlpiClient, { get: async () => ({ raw: range }) });
   await assert.rejects(() => service.report({ range_id: 7, start: 0, limit: 1 }), /incomplete/);
   assert.equal(pages, 100);
 });
@@ -197,4 +203,96 @@ test('High-Level fails explicitly and report tool annotations are accurate', asy
   assert.equal(toolAnnotations('glpi_addressing_preview_ip_reservation').readOnlyHint, true);
   assert.equal(toolAnnotations('glpi_addressing_set_ip_comment').idempotentHint, true);
   assert.equal(toolAnnotations('glpi_addressing_reserve_ip').readOnlyHint, false);
+});
+
+test('report/comment version guard accepts stable >=3.2.0 rather than exactly 3.2.11', async () => {
+  for (const version of ['3.2.0', '3.2.11', '3.2.14', '3.2.99', '3.3.0', '4.0.0', '3.2.14+patched']) {
+    assert.equal(supportsAddressingReports(version), true, version);
+    const f = fixture(); f.rows.Plugin[0].version = version;
+    // These mocks explicitly expose compatible/authorized resources; they do
+    // not claim that the stock 3.2.14 plugin permits this access.
+    assert.equal((await f.service.report({ range_id: 7, start: 0, limit: 1 })).plugin_version, version);
+    assert.equal((await f.service.setComment({ range_id: 7, ip: request.ip, comment: 'Printer', expected_comment: '' })).verification_status, 'verified');
+  }
+  for (const version of ['3.1.99', '2.9.0', '3.2.*', '3.2.14-rc.1', '', 'v3.2.14']) assert.equal(supportsAddressingReports(version), false, version);
+});
+
+test('an inactive/unsupported plugin refuses report/comment operations before writes', async () => {
+  const f = fixture(); f.rows.Plugin[0].version = '3.1.99';
+  await assert.rejects(() => f.service.report({ range_id: 7, start: 0, limit: 1 }), /stable version >= 3\.2\.0/);
+  f.rows.Plugin[0].version = '3.2.14'; f.rows.Plugin[0].state = 4;
+  await assert.rejects(() => f.service.setComment({ range_id: 7, ip: request.ip, comment: 'x', expected_comment: '' }), /active Addressing/);
+  assert.equal(f.writes.length, 0);
+});
+
+test('GenBio helper 403 explains class denial despite Super-Admin without falling back or guessing empty comments', async () => {
+  const f = fixture(); f.rows.Plugin[0].version = '3.2.14';
+  f.client.getItems = async (type) => {
+    if (type === 'Plugin') return f.rows.Plugin as never;
+    assert.equal(type, commentType);
+    throw new GlpiError({ status: 403, glpiCode: 'ERROR_RIGHT_MISSING', glpiMessage: 'Denied', body: '', method: 'GET', url: '/apirest.php/IpComment' });
+  };
+  for (const operation of [() => f.service.report({ range_id: 7, start: 0, limit: 10 }),
+    () => f.service.setComment({ range_id: 7, ip: request.ip, comment: 'Printer', expected_comment: '' })]) {
+    await assert.rejects(operation, /3\.2\.14.*403.*Super-Admin.*assumed empty/);
+  }
+  assert.equal(f.writes.length, 0);
+});
+
+test('CREATE without Addressing UPDATE cannot create an IP comment', async () => {
+  const f = fixture();
+  f.client.getActiveProfile = async () => ({ active_profile: { plugin_addressing: 5 } });
+  await assert.rejects(() => f.service.setComment({ range_id: 7, ip: request.ip, comment: 'Printer', expected_comment: '' }), /UPDATE/);
+  assert.equal(f.writes.length, 0); assert.ok(f.reads.every(read => read.type === 'Plugin'));
+});
+
+test('stored ping replies and Unmanaged equipment are the only selection reasons', async () => {
+  const f = fixture();
+  for (const [offset, response] of [[10, 1], [11, 0], [12, 1]]) f.rows[pingType].push({ id: offset, plugin_addressing_addressings_id: 7, ipname: `IP${addressingIpNumber(`192.0.2.${offset}`)}`, ping_response: response, ping_date: '2026-01-01 12:00:00' });
+  f.rows.IPAddress.push({ id: 1, name: '192.0.2.12', itemtype: 'NetworkName', items_id: 1, entities_id: 2 });
+  f.rows.NetworkName.push({ id: 1, itemtype: 'NetworkPort', items_id: 1 });
+  f.rows.NetworkPort.push({ id: 1, itemtype: 'Unmanaged', items_id: 5, entities_id: 2, name: 'Unknown printer' });
+  f.rows[commentType].push({ id: 1, plugin_addressing_addressings_id: 7, ipname: 'IP3221225994', comments: 'Current note' });
+  const report = await f.service.report({ range_id: 7, start: 9, limit: 4 });
+  assert.equal(report.rows[0].selection_reason, 'ping_without_linked_equipment');
+  assert.equal(report.rows[0].comment, 'Current note'); assert.equal(report.rows[0].ping_date, '2026-01-01 12:00:00');
+  assert.equal(report.rows[1].selection_reason, null);
+  assert.equal(report.rows[2].selection_reason, 'unmanaged_equipment'); assert.equal(report.rows[2].has_unmanaged_equipment, true);
+  assert.equal(report.rows[3].ping_state, 'unknown'); assert.equal(report.rows[3].selection_reason, null);
+  assert.equal(report.ping_performed, false); assert.equal(f.writes.length, 0);
+});
+
+test('unresolved visible allocations prevent selection as a ping reply without equipment', async () => {
+  const f = fixture();
+  f.rows[pingType].push({ id: 1, plugin_addressing_addressings_id: 7, ipname: 'IP3221225994', ping_response: 1, ping_date: '2026-01-01 12:00:00' });
+  f.rows.IPAddress.push({ id: 1, name: request.ip, itemtype: 'Other', items_id: 9 });
+  const report = await f.service.report({ range_id: 7, start: 9, limit: 1 });
+  assert.equal(report.rows[0].ping_state, 'ok'); assert.equal(report.rows[0].selection_reason, null);
+});
+
+test('contradictory simultaneous pings are unknown; foreign-range pings are excluded', async () => {
+  const f = fixture();
+  f.rows[pingType].push(...[0, 1].map((ping_response, id) => ({ id: id + 1, plugin_addressing_addressings_id: 7, ipname: 'IP3221225994', ping_response, ping_date: '2026-01-01 12:00:00' })));
+  f.rows[pingType].push({ id: 3, plugin_addressing_addressings_id: 8, ipname: 'IP3221225994', ping_response: 1, ping_date: '2026-01-02 12:00:00' });
+  const report = await f.service.report({ range_id: 7, start: 9, limit: 1 });
+  assert.equal(report.rows[0].ping_state, 'unknown'); assert.equal(report.rows[0].ping_ambiguous, true);
+  assert.equal(report.rows[0].selection_reason, null);
+});
+
+test('comment write does not depend on ping access but reports require authorized ping results', async () => {
+  const f = fixture(); const original = f.client.getItems.bind(f.client);
+  f.client.getItems = async (...args) => {
+    if (args[0] === pingType) throw new GlpiError({ status: 403, glpiCode: 'ERROR_RIGHT_MISSING', body: '', url: '/apirest.php/PingInfo', method: 'GET' });
+    return original(...args);
+  };
+  assert.equal((await f.service.setComment({ range_id: 7, ip: request.ip, comment: 'Printer', expected_comment: '' })).success, true);
+  await assert.rejects(() => f.service.report({ range_id: 7, start: 0, limit: 10 }), /PingInfo.*403/);
+});
+
+test('failed post-write text verification never claims comment success', async () => {
+  const f = fixture(); const original = f.client.getItem.bind(f.client);
+  f.client.getItem = async (...args) => ({ ...await original(...args), comments: 'Concurrent edit' }) as never;
+  const result = await f.service.setComment({ range_id: 7, ip: request.ip, comment: 'Printer', expected_comment: '' });
+  assert.equal(result.success, false); assert.equal(result.verification_status, 'failed'); assert.equal(result.write_completed, true);
+  assert.equal(result.comment_id, 101);
 });

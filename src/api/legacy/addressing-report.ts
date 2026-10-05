@@ -1,14 +1,21 @@
 import { isIP } from 'node:net';
 import { GlpiClient } from './glpi-client.js';
+import { GlpiError } from './http.js';
 import { stableFingerprint, type AddressingSyncService } from '../../core/addressing-sync/service.js';
 import { addressingCommentSchema, addressingReportSchema, addressingReservationApplySchema, addressingReservationPreviewSchema,
   type AddressingCommentRequest, type AddressingReportRequest, type AddressingReservationApplyRequest, type AddressingReservationPreviewRequest } from '../../core/addressing-sync/report-schemas.js';
 
 type Row = Record<string, unknown>;
 const COMMENT_TYPE = 'GlpiPlugin\\Addressing\\IpComment';
+const PING_TYPE = 'GlpiPlugin\\Addressing\\PingInfo';
 const PAGE_SIZE = 1000;
 const MAX_ROWS = 100000;
 const n = (value: unknown) => Number(value);
+
+export function supportsAddressingReports(version: string): boolean {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:\+[\w.-]+)?$/.exec(version);
+  return Boolean(match && (Number(match[1]) > 3 || Number(match[1]) === 3 && Number(match[2]) >= 2));
+}
 
 export function addressingIpNumber(ip: string): number {
   if (isIP(ip) !== 4) throw new Error('A canonical IPv4 address is required');
@@ -18,7 +25,9 @@ function ipString(value: number): string {
   return [24, 16, 8, 0].map((shift) => (value >>> shift) & 255).join('.');
 }
 
-/** Native report storage, audited against Addressing 3.2.11 and GLPI 11.0.11. */
+/** Native storage: reviewed against Addressing 3.2.11/3.2.14 and GLPI 11.0.11.
+ *  A compatible schema never overrides the GLPI resource's permission checks.
+ */
 export class LegacyAddressingReportService {
   constructor(private readonly client: GlpiClient, private readonly ranges: Pick<AddressingSyncService, 'get'>) {}
 
@@ -44,17 +53,64 @@ export class LegacyAddressingReportService {
     return range;
   }
 
-  private async auditedPlugin(): Promise<void> {
+  private async activePlugin(): Promise<string> {
     const plugins = await this.all('Plugin');
-    if (!plugins.some((row) => row.directory === 'addressing' && row.version === '3.2.11' && n(row.state) === 1)) {
-      throw new Error('Addressing report writes require active source-audited plugin version 3.2.11');
+    const active = plugins.filter((row) => row.directory === 'addressing' && n(row.state) === 1);
+    if (active.length !== 1) throw new Error('Exactly one active Addressing plugin must be visible through REST');
+    const version = String(active[0].version);
+    if (!supportsAddressingReports(version)) throw new Error(`Addressing ${version} is unsupported; reports/comments require a stable version >= 3.2.0 and compatible REST resources`);
+    return version;
+  }
+
+  private async reportResource(itemtype: string, version: string): Promise<Row[]> {
+    try {
+      return await this.all(itemtype);
+    } catch (error) {
+      if (error instanceof GlpiError && error.status === 403) {
+        throw new Error(`Addressing ${version} is active, but GLPI denied GET ${error.url} (HTTP 403, ${error.glpiCode ?? 'permission denied'}). Addressing 3.2.14 deliberately disables generic REST access to IpComment and PingInfo via canView(); Super-Admin and plugin_addressing=31 do not override it. Range access does not grant report/comment API access. The MCP cannot read or write a comment without an authorized native route; expected_comment is never replaced by an assumed empty value.`, { cause: error });
+      }
+      throw error;
     }
   }
 
-  private async comments(rangeId: number): Promise<Row[]> {
-    const rows = await this.all(COMMENT_TYPE);
+  private async requireCommentUpdate(): Promise<void> {
+    // The native AJAX comment action requires UPDATE, including when it adds
+    // the first row. Generic REST CREATE alone must not broaden that right.
+    const response = await this.client.getActiveProfile() as Row;
+    const profile = response?.active_profile as Row | undefined;
+    const rights = n(profile?.plugin_addressing);
+    if (!Number.isSafeInteger(rights) || (rights & 2) !== 2) throw new Error('Addressing IP comments require plugin_addressing UPDATE in the active GLPI profile');
+  }
+
+  private async auditedPlugin(): Promise<void> {
+    // Reservations have a separate payload audit from report/comment storage.
+    const plugins = await this.all('Plugin');
+    if (!plugins.some((row) => row.directory === 'addressing' && row.version === '3.2.11' && n(row.state) === 1)) {
+      throw new Error('Addressing reservations require active source-audited plugin version 3.2.11');
+    }
+  }
+
+  private async comments(rangeId: number, version: string): Promise<Row[]> {
+    const rows = await this.reportResource(COMMENT_TYPE, version);
     if (rows.some((row) => !['id', 'plugin_addressing_addressings_id', 'ipname', 'comments'].every((field) => Object.hasOwn(row, field)))) throw new Error('Unsupported Addressing IpComment REST schema');
     return rows.filter((row) => n(row.plugin_addressing_addressings_id) === rangeId);
+  }
+
+  private async pings(rangeId: number, version: string): Promise<Row[]> {
+    const rows = await this.reportResource(PING_TYPE, version);
+    if (rows.some((row) => !['id', 'plugin_addressing_addressings_id', 'ipname', 'ping_response', 'ping_date'].every((field) => Object.hasOwn(row, field)))) throw new Error('Unsupported Addressing PingInfo REST schema');
+    return rows.filter((row) => n(row.plugin_addressing_addressings_id) === rangeId);
+  }
+
+  private pingFor(rows: Row[], ip: string) {
+    const matches = rows.filter((row) => row.ipname === `IP${addressingIpNumber(ip)}`)
+      .sort((a, b) => String(b.ping_date ?? '').localeCompare(String(a.ping_date ?? '')) || n(b.id) - n(a.id));
+    const latest = matches[0];
+    const ambiguous = latest && matches.some((row) => row.ping_date === latest.ping_date && n(row.ping_response) !== n(latest.ping_response));
+    const valid = latest && typeof latest.ping_date === 'string' && latest.ping_date
+      && [0, 1, '0', '1'].includes(latest.ping_response as string | number) && !ambiguous;
+    return { ping_state: valid ? n(latest.ping_response) === 1 ? 'ok' : 'ko' : 'unknown',
+      ping_date: latest?.ping_date ?? null, ping_ambiguous: Boolean(ambiguous) };
   }
 
   private commentFor(rows: Row[], ip: string): Row | undefined {
@@ -92,9 +148,11 @@ export class LegacyAddressingReportService {
   async report(input: AddressingReportRequest) {
     const request = addressingReportSchema.parse(input);
     const range = await this.range(request.range_id);
+    const version = await this.activePlugin();
     const begin = addressingIpNumber(String(range.begin_ip));
     const total = addressingIpNumber(String(range.end_ip)) - begin + 1;
-    const comments = await this.comments(request.range_id);
+    const comments = await this.comments(request.range_id, version);
+    const pings = await this.pings(request.range_id, version);
     const allocations = await this.allocations((ip) => {
       const offset = addressingIpNumber(ip) - begin;
       return offset >= request.start && offset < Math.min(total, request.start + request.limit);
@@ -104,30 +162,39 @@ export class LegacyAddressingReportService {
       const ip = ipString(begin + offset);
       const matches = allocations.filter((row) => row.ip === ip && n(row.entity_id) === n(range.entities_id));
       const comment = this.commentFor(comments, ip);
+      const ping = this.pingFor(pings, ip);
+      const unmanaged = matches.some((row) => row.asset_type === 'Unmanaged');
+      // Any visible allocation, including an unresolved one, prevents claiming
+      // that a ping reply has no linked equipment.
+      const hasVisibleAllocation = allocations.some((row) => row.ip === ip);
       rows.push({ ip, comment: String(comment?.comments ?? ''), comment_id: comment?.id,
+        ...ping, has_unmanaged_equipment: unmanaged,
+        selection_reason: unmanaged ? 'unmanaged_equipment' : ping.ping_state === 'ok' && !hasVisibleAllocation ? 'ping_without_linked_equipment' : null,
         status: matches.length > 1 ? 'multiple_assignments' : matches[0]?.reserved ? 'reserved' : matches.length ? 'assigned' : 'unassigned_in_visible_inventory', allocations: matches });
     }
     return { range_id: request.range_id, entity_id: n(range.entities_id), total, start: request.start, limit: request.limit,
-      rows, inventory_scope: 'REST-visible records only; unassigned does not prove an IP is unused on the network', ping_performed: false };
+      rows, plugin_version: version, inventory_scope: 'REST-visible records only; absence of equipment is limited to this visibility',
+      ping_source: 'persisted Addressing results; dates may be stale', ping_performed: false };
   }
 
   async setComment(input: AddressingCommentRequest) {
     const request = addressingCommentSchema.parse(input);
     await this.range(request.range_id, request.ip);
-    await this.auditedPlugin();
-    const before = this.commentFor(await this.comments(request.range_id), request.ip);
+    const version = await this.activePlugin();
+    await this.requireCommentUpdate();
+    const before = this.commentFor(await this.comments(request.range_id, version), request.ip);
     const current = String(before?.comments ?? '');
-    if (current === request.comment) return { success: true, idempotent: true, comment_id: before?.id, comment: current };
+    if (current === request.comment) return { success: true, idempotent: true, comment_id: before?.id, range_id: request.range_id, ip: request.ip, comment: current, verification_status: 'verified', write_completed: false };
     if (current !== request.expected_comment) throw new Error('Report comment changed; read the report again before replacing it');
     const payload = { plugin_addressing_addressings_id: request.range_id, ipname: `IP${addressingIpNumber(request.ip)}`, comments: request.comment };
     const id = before ? n(before.id) : (await this.client.createItem(COMMENT_TYPE, payload)).id;
-    if (before) await this.client.updateItem(COMMENT_TYPE, id, { comments: request.comment });
+    if (before) await this.client.updateItem(COMMENT_TYPE, id, { id, comments: request.comment });
     try {
       const after = await this.client.getItem<Row>(COMMENT_TYPE, id, { expand_dropdowns: false });
       const verified = after.comments === request.comment && n(after.plugin_addressing_addressings_id) === request.range_id && after.ipname === payload.ipname;
       return { success: verified, comment_id: id, range_id: request.range_id, ip: request.ip, comment: after.comments, verification_status: verified ? 'verified' : 'failed', write_completed: true };
     } catch (error) {
-      return { success: false, comment_id: id, write_completed: true, verification_status: 'unavailable', error: error instanceof Error ? error.message : String(error) };
+      return { success: false, comment_id: id, range_id: request.range_id, ip: request.ip, write_completed: true, verification_status: 'unavailable', error: error instanceof Error ? error.message : String(error) };
     }
   }
 

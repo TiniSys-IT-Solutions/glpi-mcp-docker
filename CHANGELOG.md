@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.6 — 2026-10-05
+
+- Replace the exact report/comment version pin with stable Addressing >=3.2.0 plus compatible native REST schemas and permissions.
+- Explain the deliberate IpComment/PingInfo class denial in active Addressing 3.2.14, even with Super-Admin; never assume that an unreadable comment is empty.
+- Require active-profile Addressing UPDATE for IP comments, retain expected-text checks and verify written text/parent/IP afterward.
+- Expose stored ping state/date and selection reasons for replies without visible equipment and Unmanaged equipment, without launching probes.
+- Add unit and authenticated HTTP regressions. Docker/MCP architecture and the 288-tool catalogue are retained; no GLPI-side plugin is added. Stock GenBio 3.2.14 report/comment success remains blocked by its native API permissions.
+
+## 0.4.5 — 2026-10-05
+
+- Add 14 business tools for phone lines: filtered search, overview, typed creation/update, comment append, equipment links, installed SIM line changes, audits and statistics.
+- Distinguish direct links from SIM associations; fingerprint removals and SIM reassignment, respect recursive entity scope and exclude SIM authentication secrets.
+- Extend dropdown catalogues to line types/operators and existing relation/metadata tools to line contracts, documents, financial information and notes.
+- Implement confirmed High-Level line operations with explicit errors for unsupported relations/fields; Hybrid uses Legacy routing. The catalogue now contains 288 tools.
+
 ## 0.4.4 — 2026-10-05
 
 - Add paginated IP Addressing reports with per-IP comments and visible inventory assignments.

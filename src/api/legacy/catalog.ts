@@ -11,12 +11,15 @@ function stable(value: unknown): unknown {
 }
 function fingerprint(value: unknown): string { return createHash('sha256').update(JSON.stringify(stable(value))).digest('hex'); }
 const ITEMTYPE_FIELDS: Partial<Record<string, ReadonlySet<string>>> = {
+  LineType: new Set(['name', 'comment']),
+  LineOperator: new Set(['name', 'comment', 'mcc', 'mnc', 'entities_id', 'is_recursive']),
   DeviceMemory: new Set(['designation', 'manufacturers_id', 'devicememorytypes_id', 'frequence', 'size_default', 'comment']),
 };
 function safeFields(itemtype: string, fields: Record<string, unknown>): Record<string, unknown> {
   for (const key of Object.keys(fields)) if (FORBIDDEN_FIELD.test(key)) throw new Error(`Field ${key} is controlled by GLPI or secret and cannot be written through the generic catalog tool`);
   const allowed = ITEMTYPE_FIELDS[itemtype];
   if (allowed) for (const key of Object.keys(fields)) if (!allowed.has(key)) throw new Error(`Field ${key} is not a confirmed writable field for ${itemtype}`);
+  if (itemtype === 'LineOperator') for (const key of ['mcc', 'mnc']) if (fields[key] !== undefined && (typeof fields[key] !== 'number' || !Number.isSafeInteger(fields[key]))) throw new Error(`LineOperator ${key} must be an integer`);
   return fields;
 }
 function equal(left: unknown, right: unknown): boolean {
@@ -67,12 +70,14 @@ export class LegacyCatalogService implements CatalogService {
     const plan = { domain: input.domain, itemtype: input.itemtype, id: input.id, purge: input.purge, current,
       reference_scan: { complete: false, reason: 'generic Legacy item reads do not prove absence of every polymorphic relation' },
       recoverability: input.purge ? 'not_recoverable' : 'depends_on_itemtype_soft_delete_support' };
-    return { ...plan, preview_fingerprint: fingerprint(plan), applicable: !input.purge, blocked_reasons: input.purge ? ['purge_requires_complete_reference_scan'] : [], modifies_data: false };
+    const noTrash = input.itemtype === 'LineType' || input.itemtype === 'LineOperator';
+    return { ...plan, preview_fingerprint: fingerprint(plan), applicable: !input.purge && !noTrash, blocked_reasons: input.purge ? ['purge_requires_complete_reference_scan'] : noTrash ? ['line_dropdown_has_no_soft_delete_support'] : [], modifies_data: false };
   }
   async delete(input: CatalogSelection & { id: number; purge: boolean; previewFingerprint: string; confirmation: string; correlationId: string }): Promise<unknown> {
     const preview = await this.previewDelete(input) as Record<string, unknown>;
     if (preview.preview_fingerprint !== input.previewFingerprint) throw new Error('Delete preview is stale');
     if (input.purge) throw new Error('Purge blocked: reference scan is incomplete');
+    if (preview.applicable !== true) throw new Error('Deletion blocked: line dropdown has no soft-delete support or complete reference scan');
     const before = preview.current;
     await this.client.deleteItem(input.itemtype, input.id, false, false);
     let after: unknown = null;

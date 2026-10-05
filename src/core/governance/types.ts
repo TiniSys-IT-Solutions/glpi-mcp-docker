@@ -12,3 +12,5 @@ export const RELATION_ASSET_TYPES = [
   'Computer', 'NetworkEquipment', 'Printer', 'Monitor', 'Phone', 'Peripheral',
   'Appliance', 'Rack', 'Enclosure', 'PDU', 'PassiveDCEquipment', 'Unmanaged',
 ] as const;
+
+export const RELATION_ITEMTYPES = ['Line', ...RELATION_ASSET_TYPES] as const;

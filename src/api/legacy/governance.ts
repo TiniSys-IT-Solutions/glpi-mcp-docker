@@ -18,6 +18,8 @@ const DROPDOWN_REFERENCES: Record<string, Array<{ itemtype: string; field: strin
   RequestType: ['Ticket', 'Problem', 'Change'].map((itemtype) => ({ itemtype, field: 'requesttypes_id' })),
   SupplierType: [{ itemtype: 'Supplier', field: 'suppliertypes_id' }],
   ContractType: [{ itemtype: 'Contract', field: 'contracttypes_id' }],
+  LineType: [{ itemtype: 'Line', field: 'linetypes_id' }],
+  LineOperator: [{ itemtype: 'Line', field: 'lineoperators_id' }],
   DocumentType: [{ itemtype: 'Document', field: 'documenttypes_id' }],
   SoftwareCategory: [{ itemtype: 'Software', field: 'softwarecategories_id' }],
 };
@@ -39,12 +41,14 @@ export class LegacyGovernanceService implements GovernanceService {
     return rows;
   }
   async listAssetRelations(input: { itemtype: string; assetId: number; kind: AssetRelationKind }): Promise<unknown> {
+    if (input.itemtype === 'Line' && !['contract', 'document'].includes(input.kind)) throw new Error('Phone lines support only contract and document associations');
     await this.client.getItem(input.itemtype, input.assetId, { expand_dropdowns: false });
     const config = RELATIONS[input.kind];
     const relations = (await this.all(config.itemtype)).filter((row) => row.itemtype === input.itemtype && numberValue(row.items_id) === input.assetId);
     return { itemtype: input.itemtype, asset_id: input.assetId, relation: input.kind, relations, returned: relations.length, complete: true, modifies_data: false };
   }
   async attachAssetRelation(input: { itemtype: string; assetId: number; kind: AssetRelationKind; relatedId: number; correlationId: string }): Promise<unknown> {
+    if (input.itemtype === 'Line' && !['contract', 'document'].includes(input.kind)) throw new Error('Phone lines support only contract and document associations');
     const config = RELATIONS[input.kind];
     await Promise.all([this.client.getItem(input.itemtype, input.assetId, { expand_dropdowns: false }), this.client.getItem(config.relatedType, input.relatedId, { expand_dropdowns: false })]);
     const existing = (await this.listAssetRelations(input) as { relations: Record<string, unknown>[] }).relations.find((row) => numberValue(row[config.relatedField]) === input.relatedId);
@@ -55,6 +59,7 @@ export class LegacyGovernanceService implements GovernanceService {
   }
   async previewDetachAssetRelation(input: { relationId: number; kind: AssetRelationKind }): Promise<unknown> {
     const current = await this.client.getItem(RELATIONS[input.kind].itemtype, input.relationId, { expand_dropdowns: false });
+    if ((current as Record<string, unknown>).itemtype === 'Line' && !['contract', 'document'].includes(input.kind)) throw new Error('Unsupported phone line relation');
     const plan = { relation: input.kind, relation_id: input.relationId, current, operation: 'detach_relation_only' };
     return { ...plan, preview_fingerprint: hash(plan), applicable: true, modifies_data: false };
   }

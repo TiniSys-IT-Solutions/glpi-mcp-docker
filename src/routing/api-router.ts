@@ -24,6 +24,8 @@ import { HighLevelLocationIntegrityService } from '../api/highlevel/location-int
 import { LegacyUnmanagedReconciliationService } from '../api/legacy/unmanaged-reconciliation.js';
 import { HighLevelUnmanagedReconciliationService } from '../api/highlevel/unmanaged-reconciliation.js';
 import { LegacyAddressingSyncService } from '../api/legacy/addressing-sync.js';
+import { LegacyPhoneLineService } from '../api/legacy/phone-lines.js';
+import { HighLevelPhoneLineService } from '../api/highlevel/phone-lines.js';
 import { HighLevelAddressingSyncService } from '../api/highlevel/addressing-sync.js';
 import { LegacySiteNetworkProvisioningService } from '../api/legacy/site-network-provisioning.js';
 import { HighLevelSiteNetworkProvisioningService } from '../api/highlevel/site-network-provisioning.js';
@@ -127,6 +129,20 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_create_asset_import_rule: 'legacy',
   glpi_reorder_asset_import_rules: 'legacy',
   glpi_addressing_list_ranges: 'legacy',
+  glpi_list_phone_lines: 'legacy',
+  glpi_get_phone_line_overview: 'legacy',
+  glpi_create_phone_line: 'legacy',
+  glpi_update_phone_line: 'legacy',
+  glpi_append_phone_line_comment: 'legacy',
+  glpi_list_phone_line_items: 'legacy',
+  glpi_list_item_phone_lines: 'legacy',
+  glpi_attach_phone_line_to_item: 'legacy',
+  glpi_preview_detach_phone_line_from_item: 'legacy',
+  glpi_detach_phone_line_from_item: 'legacy',
+  glpi_preview_set_simcard_phone_line: 'legacy',
+  glpi_set_simcard_phone_line: 'legacy',
+  glpi_audit_phone_lines: 'legacy',
+  glpi_phone_lines_stats: 'legacy',
   glpi_addressing_get_report: 'legacy',
   glpi_addressing_set_ip_comment: 'legacy',
   glpi_addressing_preview_ip_reservation: 'legacy',
@@ -369,6 +385,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
     const highlevel = highLevelClient(config);
     return {
       services: {
+        phoneLines: new HighLevelPhoneLineService(highlevel),
         tickets: new HighLevelTicketService(highlevel),
         session: new HighLevelSessionService(highlevel),
         importEntityRules: new HighLevelImportEntityRuleService(highlevel),
@@ -400,6 +417,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
   return {
     legacyClient: client,
     services: {
+      phoneLines: new LegacyPhoneLineService(client),
       tickets: new LegacyTicketService(client),
       ipNetworks: new LegacyIPNetworkService(client),
       inventoryPlugin: new LegacyInventoryPluginService(client),

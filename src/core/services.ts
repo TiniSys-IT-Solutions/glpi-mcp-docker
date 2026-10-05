@@ -1,4 +1,5 @@
 import { IPNetworkService } from './ip-networks/service.js';
+import { PhoneLineService } from './phone-lines/service.js';
 import { TicketService } from './tickets/service.js';
 import { InventoryPluginService } from './inventory-plugin/service.js';
 import { SessionService } from './session/service.js';
@@ -22,6 +23,7 @@ import { SiteNetworkProvisioningService } from './site-network-provisioning/serv
 import { AssetControlService } from './asset-controls/service.js';
 
 export interface GlpiServices {
+  phoneLines: PhoneLineService;
   tickets: TicketService;
   ipNetworks?: IPNetworkService;
   inventoryPlugin?: InventoryPluginService;

@@ -1,7 +1,7 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **274 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **288 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
@@ -15,17 +15,30 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 274 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 288 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |
+| Lignes téléphoniques et associations SIM | [Lignes téléphoniques](docs/PHONE_LINES.md) |
 | Rapports, commentaires et réservations IP Addressing | [IP Addressing](docs/ADDRESSING.md) |
 | Architecture et routage | [Architecture](docs/ARCHITECTURE.md) |
 | Audit des capacités GLPI 11 / GLPI Inventory et feuille de route CRUD | [Audit des sources](docs/GLPI_SOURCE_TOOL_AUDIT.md) |
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.4.4
+## État de la version 0.4.6
+
+La version 0.4.6 remplace le garde-fou Addressing strict par **>=3.2.0**,
+expose les résultats de ping enregistrés lorsque l’API les autorise et explique
+les refus REST du plugin `3.2.14`. `expected_comment` reste obligatoire et
+l’écriture est relue. La distribution reste le MCP Docker existant ; aucun
+plugin GLPI supplémentaire n’est ajouté. Voir [les limites Addressing](docs/ADDRESSING.md).
+
+Les **14 outils métier pour les lignes téléphoniques** préparés en 0.4.5 couvrent :
+recherche, vue complète, création/modification, commentaires, liens équipements,
+affectation des SIM, audits et statistiques. Les outils génériques couvrent aussi
+les types/opérateurs, contrats, documents, notes et informations financières des
+lignes. Voir [les exemples et la compatibilité](docs/PHONE_LINES.md).
 
 La version 0.4.4 porte le catalogue à **274 outils**. Elle ajoute la lecture du
 rapport IP Addressing, les commentaires par IP et les réservations sur un actif
@@ -125,7 +138,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.4
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.6
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4
 ```
 
@@ -162,7 +175,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.4.4**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.4.6**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité
