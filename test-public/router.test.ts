@@ -25,6 +25,18 @@ function config(apiMode: AppConfig['apiMode']): AppConfig {
   };
 }
 
+for (const mode of ['legacy', 'hybrid'] as const) {
+  test(`${mode} passes explicit native Addressing transport to its Legacy adapter only`, () => {
+    const input = config(mode);
+    input.legacy.addressingReportTransport = 'native_web';
+    const router = createApiRouter(input);
+    assert.equal(router.legacyClient?.http.config.addressingReportTransport, 'native_web');
+    assert.equal(router.backendForTool('glpi_addressing_get_report'), 'legacy');
+    assert.equal(router.backendForTool('glpi_addressing_set_ip_comment'), 'legacy');
+    assert.equal(router.backendForTool('glpi_addressing_reserve_ip'), 'legacy');
+  });
+}
+
 test('legacy mode routes every tool to legacy', () => {
   const router = createApiRouter(config('legacy'));
   assert.equal(router.backendForTool('glpi_create_ticket'), 'legacy');

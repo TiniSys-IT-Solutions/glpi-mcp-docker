@@ -14,6 +14,7 @@ export interface AppConfig {
     userToken?: string;
     username?: string;
     password?: string;
+    addressingReportTransport?: 'legacy_rest' | 'native_web';
   };
   highlevel: {
     oauthClientId?: string;
@@ -87,6 +88,7 @@ export function loadConfig(): AppConfig {
     userToken: optionalEnv('GLPI_USER_TOKEN'),
     username: optionalEnv('GLPI_USERNAME'),
     password: optionalEnv('GLPI_PASSWORD'),
+    addressingReportTransport: parseEnum('GLPI_ADDRESSING_REPORT_TRANSPORT', optionalEnv('GLPI_ADDRESSING_REPORT_TRANSPORT'), ['legacy_rest', 'native_web'] as const, 'legacy_rest'),
   };
 
   if ((apiMode === 'legacy' || apiMode === 'hybrid') && authMode === 'service_account') {

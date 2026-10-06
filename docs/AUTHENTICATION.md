@@ -18,6 +18,15 @@ GLPI_USER_TOKEN=
 `GLPI_USERNAME + GLPI_PASSWORD` remain supported by the imported Legacy client,
 but token-based service-account auth is preferred.
 
+Addressing reports/comments can explicitly use
+`GLPI_ADDRESSING_REPORT_TRANSPORT=native_web`. The GLPI 11 browser login reuses
+these same service-account credentials with native cookies and CSRF, in memory
+only. GLPI must allow personal-token login when `GLPI_USER_TOKEN` is used;
+interactive MFA/SSO is not bypassed. The REST profile and authorized range
+entity are selected in the separate web session through GLPI's own checks.
+All other operations retain their existing API routing. See
+[Addressing configuration and limits](ADDRESSING.md).
+
 ## Per-User Mode
 
 The planned mode is:

@@ -1,6 +1,7 @@
 import { isIP } from 'node:net';
 import { GlpiClient } from './glpi-client.js';
 import { GlpiError } from './http.js';
+import { AddressingWebSession, type NativeReportRow } from './addressing-web.js';
 import { stableFingerprint, type AddressingSyncService } from '../../core/addressing-sync/service.js';
 import { addressingCommentSchema, addressingReportSchema, addressingReservationApplySchema, addressingReservationPreviewSchema,
   type AddressingCommentRequest, type AddressingReportRequest, type AddressingReservationApplyRequest, type AddressingReservationPreviewRequest } from '../../core/addressing-sync/report-schemas.js';
@@ -29,7 +30,74 @@ function ipString(value: number): string {
  *  A compatible schema never overrides the GLPI resource's permission checks.
  */
 export class LegacyAddressingReportService {
+  private readonly webWrites = new Map<string, Promise<unknown>>();
   constructor(private readonly client: GlpiClient, private readonly ranges: Pick<AddressingSyncService, 'get'>) {}
+
+  private get nativeWeb(): boolean { return this.client.http?.config?.addressingReportTransport === 'native_web'; }
+
+  private async withWeb<T>(range: Row, action: (web: AddressingWebSession) => Promise<T>): Promise<T> {
+    const response = await this.client.getActiveProfile() as Row;
+    const profile = response?.active_profile as Row | undefined;
+    const rights = n(profile?.plugin_addressing);
+    if (!Number.isSafeInteger(rights) || (rights & 1) !== 1) throw new Error('Native Addressing reports require plugin_addressing READ in the active GLPI profile');
+    const full = await this.client.getFullSession() as Row;
+    const userId = n((full?.session as Row | undefined)?.glpiID);
+    const web = new AddressingWebSession(this.client.http.config);
+    try { await web.login(userId, n(profile?.id), n(range.entities_id)); return await action(web); }
+    finally { await web.close(); }
+  }
+
+  private async nativeRows(range: Row, start: number, limit: number): Promise<NativeReportRow[]> {
+    const begin = addressingIpNumber(String(range.begin_ip));
+    const end = addressingIpNumber(String(range.end_ip));
+    const stop = Math.min(end - begin + 1, start + limit);
+    if (start >= stop) return [];
+    return this.withWeb(range, async web => {
+      const found = new Map<string, NativeReportRow>();
+      for (let offset = start; offset < stop;) {
+        const page = await web.page(n(range.id), offset);
+        for (const row of page.rows) {
+          const value = addressingIpNumber(row.ip);
+          if (value < begin || value > end) throw new Error('Native Addressing report returned an IP outside its range');
+          if (value >= begin + start && value < begin + stop) found.set(row.ip, row);
+        }
+        const previous = offset;
+        while (offset < stop && found.has(ipString(begin + offset))) offset++;
+        if (offset === previous) throw new Error('Native Addressing report is filtered or incomplete; unreadable IP comments are never assumed empty');
+      }
+      return Array.from({ length: stop - start }, (_, offset) => found.get(ipString(begin + start + offset))!);
+    });
+  }
+
+  private async setWebComment(range: Row, request: AddressingCommentRequest) {
+    const key = `${request.range_id}:${request.ip}`;
+    const previous = this.webWrites.get(key) ?? Promise.resolve();
+    const pending = previous.catch(() => undefined).then(() => this.withWeb(range, async web => {
+      const offset = addressingIpNumber(request.ip) - addressingIpNumber(String(range.begin_ip));
+      const page = await web.page(request.range_id, offset);
+      const before = page.rows.find(row => row.ip === request.ip);
+      if (!before) throw new Error('Native Addressing IP row is unreadable or filtered; expected_comment cannot be checked');
+      if (before.comment === request.comment) return { success: true, idempotent: true, range_id: request.range_id, ip: request.ip,
+        comment: before.comment, comment_id: undefined, verification_status: 'verified', write_completed: false, transport: 'native_web' };
+      if (before.comment !== request.expected_comment) throw new Error('Report comment changed; read the report again before replacing it');
+      try { await web.save(page, request.range_id, request.ip, request.comment); }
+      catch (error) { return { success: false, range_id: request.range_id, ip: request.ip, comment_id: undefined, write_completed: null,
+        verification_status: 'unavailable', transport: 'native_web', error: error instanceof Error ? error.message : 'Native comment write unavailable',
+        recovery: 'Write outcome is unknown. Read the current comment before retrying; this MCP never replays the POST.' }; }
+      try {
+        const after = (await web.page(request.range_id, offset)).rows.find(row => row.ip === request.ip);
+        if (!after) throw new Error('Native comment readback is unavailable');
+        const verified = after.comment === request.comment;
+        return { success: verified, range_id: request.range_id, ip: request.ip, comment: after.comment, comment_id: undefined,
+          verification_status: verified ? 'verified' : 'failed', write_completed: true, transport: 'native_web',
+          concurrency: 'Preflight expected_comment and MCP-local serialization; native GLPI has no atomic compare-and-set.' };
+      } catch (error) { return { success: false, range_id: request.range_id, ip: request.ip, comment_id: undefined, write_completed: true,
+        verification_status: 'unavailable', transport: 'native_web', error: error instanceof Error ? error.message : 'Native comment readback unavailable' }; }
+    }));
+    this.webWrites.set(key, pending);
+    try { return await pending; }
+    finally { if (this.webWrites.get(key) === pending) this.webWrites.delete(key); }
+  }
 
   private async all(itemtype: string): Promise<Row[]> {
     const rows: Row[] = [];
@@ -151,8 +219,9 @@ export class LegacyAddressingReportService {
     const version = await this.activePlugin();
     const begin = addressingIpNumber(String(range.begin_ip));
     const total = addressingIpNumber(String(range.end_ip)) - begin + 1;
-    const comments = await this.comments(request.range_id, version);
-    const pings = await this.pings(request.range_id, version);
+    const native = this.nativeWeb ? await this.nativeRows(range, request.start, request.limit) : undefined;
+    const comments = native ? [] : await this.comments(request.range_id, version);
+    const pings = native ? [] : await this.pings(request.range_id, version);
     const allocations = await this.allocations((ip) => {
       const offset = addressingIpNumber(ip) - begin;
       return offset >= request.start && offset < Math.min(total, request.start + request.limit);
@@ -161,12 +230,13 @@ export class LegacyAddressingReportService {
     for (let offset = request.start; offset < Math.min(total, request.start + request.limit); offset++) {
       const ip = ipString(begin + offset);
       const matches = allocations.filter((row) => row.ip === ip && n(row.entity_id) === n(range.entities_id));
-      const comment = this.commentFor(comments, ip);
-      const ping = this.pingFor(pings, ip);
+      const nativeRow = native?.find(row => row.ip === ip);
+      const comment = nativeRow ? { comments: nativeRow.comment, id: undefined } : this.commentFor(comments, ip);
+      const ping = nativeRow ? { ping_state: nativeRow.ping_state, ping_date: nativeRow.ping_date, ping_ambiguous: false } : this.pingFor(pings, ip);
       const unmanaged = matches.some((row) => row.asset_type === 'Unmanaged');
       // Any visible allocation, including an unresolved one, prevents claiming
       // that a ping reply has no linked equipment.
-      const hasVisibleAllocation = allocations.some((row) => row.ip === ip);
+      const hasVisibleAllocation = allocations.some((row) => row.ip === ip) || nativeRow?.has_linked_equipment;
       rows.push({ ip, comment: String(comment?.comments ?? ''), comment_id: comment?.id,
         ...ping, has_unmanaged_equipment: unmanaged,
         selection_reason: unmanaged ? 'unmanaged_equipment' : ping.ping_state === 'ok' && !hasVisibleAllocation ? 'ping_without_linked_equipment' : null,
@@ -174,14 +244,16 @@ export class LegacyAddressingReportService {
     }
     return { range_id: request.range_id, entity_id: n(range.entities_id), total, start: request.start, limit: request.limit,
       rows, plugin_version: version, inventory_scope: 'REST-visible records only; absence of equipment is limited to this visibility',
-      ping_source: 'persisted Addressing results; dates may be stale', ping_performed: false };
+      ping_source: native ? 'persisted Addressing results rendered by GLPI; dates use the GLPI display format and may be stale' : 'persisted Addressing results; dates may be stale', ping_performed: false,
+      transport: this.nativeWeb ? 'native_web' : 'legacy_rest' };
   }
 
   async setComment(input: AddressingCommentRequest) {
     const request = addressingCommentSchema.parse(input);
-    await this.range(request.range_id, request.ip);
+    const range = await this.range(request.range_id, request.ip);
     const version = await this.activePlugin();
     await this.requireCommentUpdate();
+    if (this.nativeWeb) return this.setWebComment(range, request);
     const before = this.commentFor(await this.comments(request.range_id, version), request.ip);
     const current = String(before?.comments ?? '');
     if (current === request.comment) return { success: true, idempotent: true, comment_id: before?.id, range_id: request.range_id, ip: request.ip, comment: current, verification_status: 'verified', write_completed: false };

@@ -13,6 +13,8 @@ export interface GlpiHttpConfig {
   userToken?: string;
   username?: string;
   password?: string;
+  /** Explicit Addressing report/comment transport; never an error fallback. */
+  addressingReportTransport?: 'legacy_rest' | 'native_web';
   /** Max retry attempts for safe GET requests on transient errors (default 2). */
   maxRetries?: number;
   /** Initial backoff in ms (default 300). */

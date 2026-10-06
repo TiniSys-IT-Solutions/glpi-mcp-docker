@@ -355,6 +355,7 @@ function legacyClient(config: AppConfig): GlpiClient {
     userToken: config.legacy.userToken,
     username: config.legacy.username,
     password: config.legacy.password,
+    addressingReportTransport: config.legacy.addressingReportTransport,
     timeoutMs: config.http.timeoutMs,
     maxRetries: config.http.maxRetries,
   });

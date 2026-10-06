@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.7 — 2026-10-06
+
+- Add explicit `GLPI_ADDRESSING_REPORT_TRANSPORT=native_web` for GLPI 11 Addressing reports and per-IP comments, reusing service-account credentials with in-memory cookies and native CSRF.
+- Match the REST profile, select the authorized range entity, parse the native report tab and reject incomplete or incompatible rows; never probe IPs or fall back after denied access.
+- Retain expected-comment checks, serialize writes to one IP within this MCP service, verify saved text and report unknown write outcomes without replaying POSTs. Native GLPI supplies no atomic compare-and-set.
+- Add synthetic HTTP regressions for both authentication methods, report pagination, permissions, CSRF, stale callers, Unicode, MFA, unsafe routes and failed writes/readback. Docker remains the official runtime; no GLPI-side changes are required.
+- Update the locked proxy-addr dependency to 2.0.8 to resolve the audit finding.
+
 ## 0.4.6 — 2026-10-05
 
 - Replace the exact report/comment version pin with stable Addressing >=3.2.0 plus compatible native REST schemas and permissions.

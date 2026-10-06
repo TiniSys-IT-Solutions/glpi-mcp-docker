@@ -26,8 +26,18 @@ test('loadConfig defaults to legacy service_account and highlevel api 2.3', () =
       assert.equal(config.authMode, 'service_account');
       assert.equal(config.apiVersion, '2.3');
       assert.equal(config.legacy.userToken, 'user-token');
+      assert.equal(config.legacy.addressingReportTransport, 'legacy_rest');
     }
   );
+});
+
+test('Addressing native web transport is explicitly configured and rejects misspellings', () => {
+  withEnv({ GLPI_URL: 'https://glpi.example.local', GLPI_USER_TOKEN: 'fake-user-token', GLPI_ADDRESSING_REPORT_TRANSPORT: 'native_web' }, () => {
+    assert.equal(loadConfig().legacy.addressingReportTransport, 'native_web');
+  });
+  withEnv({ GLPI_URL: 'https://glpi.example.local', GLPI_USER_TOKEN: 'fake-user-token', GLPI_ADDRESSING_REPORT_TRANSPORT: 'auto' }, () => {
+    assert.throws(() => loadConfig(), /GLPI_ADDRESSING_REPORT_TRANSPORT must be one of/);
+  });
 });
 
 test('loadConfig accepts highlevel without legacy credentials', () => {
