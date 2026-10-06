@@ -51,7 +51,9 @@ entity scope, redacted SIM output and the exact High-Level support boundary.
 
 See [Addressing capabilities and examples](ADDRESSING.md) for version restrictions,
 permissions, native API denials, partial writes and inventory visibility limits.
-For reports/comments only, `GLPI_ADDRESSING_REPORT_TRANSPORT=native_web`
+For reports/comments only, `GLPI_ADDRESSING_REPORT_TRANSPORT=companion_api`
+selects the OAuth v2 API exposed by `genbiocustom`. Selection is explicit;
+failures never fall back to generic REST or HTML parsing.
 explicitly selects GLPI 11 browser-session access with the configured service
 account. Cookies and CSRF remain in memory; unreadable rows fail closed and
 uncertain POSTs are not replayed. Default `legacy_rest` remains unchanged.

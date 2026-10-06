@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.8 — 2026-10-06
+
+- Add explicit `GLPI_ADDRESSING_REPORT_TRANSPORT=companion_api` for the GenBio Custom GLPI plugin, using OAuth v2 for Addressing reports and comment compare-and-set writes.
+- Preserve the Addressing MCP tool names and keep all other Addressing operations on the Legacy adapter without error fallback.
+
 ## 0.4.7 — 2026-10-06
 
 - Add explicit `GLPI_ADDRESSING_REPORT_TRANSPORT=native_web` for GLPI 11 Addressing reports and per-IP comments, reusing service-account credentials with in-memory cookies and native CSRF.

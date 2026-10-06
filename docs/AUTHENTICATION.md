@@ -19,7 +19,11 @@ GLPI_USER_TOKEN=
 but token-based service-account auth is preferred.
 
 Addressing reports/comments can explicitly use
-`GLPI_ADDRESSING_REPORT_TRANSPORT=native_web`. The GLPI 11 browser login reuses
+`GLPI_ADDRESSING_REPORT_TRANSPORT=companion_api` uses the configured GLPI OAuth
+client and service-account grant for the `genbiocustom` report/comment routes.
+It does not reuse a REST token as a browser cookie and has no error fallback.
+
+The deprecated rollback-only `GLPI_ADDRESSING_REPORT_TRANSPORT=native_web` reuses
 these same service-account credentials with native cookies and CSRF, in memory
 only. GLPI must allow personal-token login when `GLPI_USER_TOKEN` is used;
 interactive MFA/SSO is not bypassed. The REST profile and authorized range

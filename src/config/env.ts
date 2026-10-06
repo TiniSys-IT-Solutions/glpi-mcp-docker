@@ -14,7 +14,7 @@ export interface AppConfig {
     userToken?: string;
     username?: string;
     password?: string;
-    addressingReportTransport?: 'legacy_rest' | 'native_web';
+    addressingReportTransport?: 'legacy_rest' | 'native_web' | 'companion_api';
   };
   highlevel: {
     oauthClientId?: string;
@@ -88,7 +88,7 @@ export function loadConfig(): AppConfig {
     userToken: optionalEnv('GLPI_USER_TOKEN'),
     username: optionalEnv('GLPI_USERNAME'),
     password: optionalEnv('GLPI_PASSWORD'),
-    addressingReportTransport: parseEnum('GLPI_ADDRESSING_REPORT_TRANSPORT', optionalEnv('GLPI_ADDRESSING_REPORT_TRANSPORT'), ['legacy_rest', 'native_web'] as const, 'legacy_rest'),
+    addressingReportTransport: parseEnum('GLPI_ADDRESSING_REPORT_TRANSPORT', optionalEnv('GLPI_ADDRESSING_REPORT_TRANSPORT'), ['legacy_rest', 'native_web', 'companion_api'] as const, 'legacy_rest'),
   };
 
   if ((apiMode === 'legacy' || apiMode === 'hybrid') && authMode === 'service_account') {
@@ -106,6 +106,13 @@ export function loadConfig(): AppConfig {
   const apiVersion = optionalEnv('GLPI_API_VERSION') ?? '2.3';
   if (!/^v?\d+\.\d+$/.test(apiVersion)) {
     throw new Error('GLPI_API_VERSION must use MAJOR.MINOR format, for example 2.3');
+  }
+
+  if (legacy.addressingReportTransport === 'companion_api' && ![
+    optionalEnv('GLPI_OAUTH_CLIENT_ID'), optionalEnv('GLPI_OAUTH_CLIENT_SECRET'),
+    optionalEnv('GLPI_OAUTH_USERNAME'), optionalEnv('GLPI_OAUTH_PASSWORD'),
+  ].every(Boolean)) {
+    throw new Error('GLPI_ADDRESSING_REPORT_TRANSPORT=companion_api requires all GLPI OAuth credentials');
   }
 
   return {

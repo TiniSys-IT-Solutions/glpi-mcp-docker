@@ -27,6 +27,7 @@ import { LegacyAddressingSyncService } from '../api/legacy/addressing-sync.js';
 import { LegacyPhoneLineService } from '../api/legacy/phone-lines.js';
 import { HighLevelPhoneLineService } from '../api/highlevel/phone-lines.js';
 import { HighLevelAddressingSyncService } from '../api/highlevel/addressing-sync.js';
+import { CompanionAddressingSyncService } from '../api/highlevel/companion-addressing.js';
 import { LegacySiteNetworkProvisioningService } from '../api/legacy/site-network-provisioning.js';
 import { HighLevelSiteNetworkProvisioningService } from '../api/highlevel/site-network-provisioning.js';
 import { LegacyAssetImportRuleService } from '../api/legacy/asset-import-rules.js';
@@ -396,7 +397,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         forms: new HighLevelFormService(),
         locationIntegrity: new HighLevelLocationIntegrityService(),
         unmanagedReconciliation: new HighLevelUnmanagedReconciliationService(),
-        addressingSync: new HighLevelAddressingSyncService(),
+        addressingSync: new HighLevelAddressingSyncService(highlevel),
         assetImportRules: new HighLevelAssetImportRuleService(),
         inventoryInsights: new HighLevelInventoryInsightsService(),
         catalog: new HighLevelCatalogService(highlevel),
@@ -415,6 +416,10 @@ export function createApiRouter(config: AppConfig): ApiRouter {
   }
 
   const client = legacyClient(config);
+  const legacyAddressing = new LegacyAddressingSyncService(client);
+  const addressingSync = config.legacy.addressingReportTransport === 'companion_api'
+    ? new CompanionAddressingSyncService(new HighLevelAddressingSyncService(highLevelClient(config)), legacyAddressing)
+    : legacyAddressing;
   return {
     legacyClient: client,
     services: {
@@ -430,7 +435,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       forms: new LegacyFormService(client),
       locationIntegrity: new LegacyLocationIntegrityService(client),
       unmanagedReconciliation: new LegacyUnmanagedReconciliationService(client),
-      addressingSync: new LegacyAddressingSyncService(client),
+      addressingSync,
       assetImportRules: new LegacyAssetImportRuleService(client),
       inventoryInsights: new LegacyInventoryInsightsService(client),
       catalog: new LegacyCatalogService(client),

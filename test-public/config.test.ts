@@ -38,6 +38,10 @@ test('Addressing native web transport is explicitly configured and rejects missp
   withEnv({ GLPI_URL: 'https://glpi.example.local', GLPI_USER_TOKEN: 'fake-user-token', GLPI_ADDRESSING_REPORT_TRANSPORT: 'auto' }, () => {
     assert.throws(() => loadConfig(), /GLPI_ADDRESSING_REPORT_TRANSPORT must be one of/);
   });
+
+  withEnv({ GLPI_URL: 'https://glpi.example.local', GLPI_USER_TOKEN: 'fake-user-token', GLPI_ADDRESSING_REPORT_TRANSPORT: 'companion_api' }, () => {
+    assert.throws(() => loadConfig(), /requires all GLPI OAuth credentials/);
+  });
 });
 
 test('loadConfig accepts highlevel without legacy credentials', () => {

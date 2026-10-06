@@ -13,12 +13,14 @@ For Addressing versions whose report resources deny generic REST, configure
 the existing Docker service with:
 
 ```env
-GLPI_ADDRESSING_REPORT_TRANSPORT=native_web
+GLPI_ADDRESSING_REPORT_TRANSPORT=companion_api
 ```
 
 Recreate the container after changing its environment. The default remains
 `legacy_rest`; there is no automatic fallback after an error. This setting
 affects `glpi_addressing_get_report` and `glpi_addressing_set_ip_comment` only.
+It calls the OAuth-authenticated GLPI v2 routes exposed by `genbiocustom`.
+There is no automatic fallback to generic REST or HTML parsing.
 
 The native transport logs in through GLPI's CSRF-protected `front/login.php`
 using the already configured `GLPI_USER_TOKEN`, or `GLPI_USERNAME` and

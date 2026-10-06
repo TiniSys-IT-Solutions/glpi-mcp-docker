@@ -26,9 +26,9 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.4.7
+## État de la version 0.4.8
 
-La version 0.4.7 ajoute le transport explicite `native_web` pour lire les rapports
+La version 0.4.8 ajoute le transport explicite `companion_api` pour lire les rapports
 Addressing et modifier leurs commentaires via la session web GLPI, avec les
 identifiants du compte de service, ses droits et le jeton CSRF. `expected_comment`
 reste obligatoire ; l’écriture est relue et les POST ne sont jamais rejoués.
@@ -139,7 +139,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.7
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.8
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4
 ```
 
@@ -176,7 +176,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.4.7**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.4.8**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité

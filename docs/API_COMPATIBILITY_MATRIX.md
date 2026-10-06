@@ -14,7 +14,7 @@ Status values:
 | MCP capability | Legacy | High-Level | Hybrid | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
 | Phone lines and equipment/SIM associations | OK | PARTIAL | OK VIA LEGACY | PhoneLineService + adapters/routing | All 14 tools in Legacy; confirmed High-Level line list/create/update/comment/stats. Composite views and relations explicitly blocked in pure High-Level. |
-| Addressing ranges and IPNetwork sync | PARTIAL | BLOCKED | PARTIAL VIA LEGACY | Planner, routing, HTTP regressions | Ranges/sync via Legacy. Reports/comments admit stable >=3.2.0 with compatible resources. Stock 3.2.14 denies generic REST helpers; explicitly selected native_web uses GLPI 11 login, cookies, CSRF and the authorized report tab/comment route. No error fallback or GLPI companion. Reservations retain their separate 3.2.11 payload audit. |
+| Addressing ranges and IPNetwork sync | PARTIAL | REPORTS/COMMENTS VIA COMPANION | PARTIAL VIA LEGACY | Planner, routing, HTTP regressions | Ranges/sync remain Legacy. Explicit `companion_api` uses the OAuth v2 API of `genbiocustom` for reports/comments only, with no fallback. Reservations retain their separate 3.2.11 payload audit. |
 | Create ticket | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Supports friendly fields and Legacy mapping. |
 | Update ticket | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Supports `location_id`, `entity_id`, `category_id`, requester, assignment, priority fields, and `time_to_resolve`. |
 | Ticket location | OK | TODO | OK VIA LEGACY | Mapper + TicketService tests | Create and update map `location_id -> locations_id`. |
