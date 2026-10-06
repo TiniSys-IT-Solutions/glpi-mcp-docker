@@ -1,5 +1,5 @@
 export const PRODUCT_NAME = 'glpi-mcp-docker';
-export const PRODUCT_VERSION = process.env.APP_VERSION ?? '0.4.8';
+export const PRODUCT_VERSION = process.env.APP_VERSION ?? '0.4.10';
 
 export interface BuildInfo {
   product: { name: string; version: string };
@@ -21,7 +21,7 @@ export function getBuildInfo(): BuildInfo {
     components: {
       upstreamLegacy: process.env.UPSTREAM_LEGACY_VERSION ?? 'v3.3.0',
       mcpSdk: process.env.MCP_SDK_VERSION ?? '1.30.0',
-      supergateway: process.env.SUPERGATEWAY_VERSION ?? '3.4.3',
+      supergateway: process.env.SUPERGATEWAY_VERSION ?? '4.1.0',
       zod: process.env.ZOD_VERSION ?? '3.25.76',
       node: process.version,
     },

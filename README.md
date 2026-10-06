@@ -26,14 +26,14 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.4.8
+## État de la version 0.4.10
 
-La version 0.4.8 ajoute le transport explicite `companion_api` pour lire les rapports
-Addressing et modifier leurs commentaires via la session web GLPI, avec les
-identifiants du compte de service, ses droits et le jeton CSRF. `expected_comment`
-reste obligatoire ; l’écriture est relue et les POST ne sont jamais rejoués.
-L’architecture Docker reste inchangée et aucun plugin GLPI supplémentaire n’est
-nécessaire. Voir [la configuration et les limites Addressing](docs/ADDRESSING.md).
+La version 0.4.10 corrige le démarrage Streamable HTTP afin que le handshake MCP
+ne dépende plus de la disponibilité immédiate de GLPI. Elle utilise Supergateway
+4.1.0 et conserve son entrée standard ouverte pendant toute la durée de vie du
+service. Le transport explicite `companion_api` introduit en 0.4.8 reste disponible
+pour les rapports et commentaires Addressing. Voir
+[la configuration et les limites Addressing](docs/ADDRESSING.md).
 
 Les **14 outils métier pour les lignes téléphoniques** préparés en 0.4.5 couvrent :
 recherche, vue complète, création/modification, commentaires, liens équipements,
@@ -139,7 +139,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.8
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.10
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4
 ```
 
@@ -176,7 +176,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.4.8**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.4.10**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité

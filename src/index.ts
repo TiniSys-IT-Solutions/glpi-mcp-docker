@@ -3705,23 +3705,24 @@ async function main() {
     console.error(`[MCP] ${formatBuildInfo()}`);
     console.error(`[MCP] startup ${apiRouter.describeStartup()}`);
 
-    // Try to open the session eagerly, but don't die if GLPI is momentarily
-    // unreachable: the HTTP layer re-authenticates lazily on first request.
-    if (apiRouter.legacyClient) {
-      try {
-        await client.initSession();
-        console.error('GLPI session initialized');
-      } catch (error) {
-        console.error(
-          `Warning: could not reach GLPI at startup (${error instanceof Error ? error.message : error}). ` +
-          'The session will be established on the first request.'
-        );
-      }
-    }
-
+    // The MCP transport must be ready before any upstream GLPI network call.
+    // Stateful HTTP gateways allocate the public session before this stdio child
+    // answers initialize; blocking here makes clients abandon that session.
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error(`[MCP] ${PRODUCT_NAME} v${PRODUCT_VERSION} running on stdio`);
+
+    // Warm the Legacy session in the background. Failure remains non-fatal and
+    // the HTTP layer will authenticate lazily on the first GLPI operation.
+    if (apiRouter.legacyClient) {
+      void client.initSession().then(
+        () => console.error('GLPI session initialized'),
+        (error) => console.error(
+          `Warning: could not reach GLPI at startup (${error instanceof Error ? error.message : error}). ` +
+          'The session will be established on the first request.'
+        )
+      );
+    }
 
     const shutdown = async () => {
       if (apiRouter.legacyClient) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.10 — 2026-10-06
+
+- Connect the MCP stdio transport before warming the upstream GLPI session, so Streamable HTTP `initialize` can complete immediately even when GLPI is slow or unavailable.
+- Upgrade Supergateway from 3.4.3 to 4.1.0 for corrected session recovery, notification delivery, subprocess isolation and connection hardening.
+- Keep the gateway process input open for its full lifetime, as required by Supergateway 4.1.0.
+
 ## 0.4.8 — 2026-10-06
 
 - Add explicit `GLPI_ADDRESSING_REPORT_TRANSPORT=companion_api` for the GenBio Custom GLPI plugin, using OAuth v2 for Addressing reports and comment compare-and-set writes.

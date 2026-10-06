@@ -40,7 +40,6 @@ function start(config: EndpointProcessConfig): void {
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  child.stdin.end();
   children.set(config.name, child);
   pipeLines(child.stdout, config.name);
   pipeLines(child.stderr, config.name);

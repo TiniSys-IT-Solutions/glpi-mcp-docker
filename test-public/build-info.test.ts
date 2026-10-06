@@ -22,7 +22,7 @@ test('build metadata keeps component versions separate from the product version'
   assert.equal(info.product.version, PRODUCT_VERSION);
   assert.equal(info.components.upstreamLegacy, 'v3.3.0');
   assert.equal(info.components.mcpSdk, '1.30.0');
-  assert.equal(info.components.supergateway, '3.4.3');
+  assert.equal(info.components.supergateway, '4.1.0');
   assert.equal(info.components.zod, '3.25.76');
   assert.match(formatBuildInfo(), new RegExp(`^glpi-mcp-docker v${PRODUCT_VERSION.replaceAll('.', '\\.')} \\(upstream-legacy=v3\\.3\\.0, `));
 });
