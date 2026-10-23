@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 288 tools currently registered by `src/index.ts` on
+This catalogue lists the 292 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -231,6 +231,7 @@ GLPI-controlled identifiers/timestamps and secret-like fields.
 | --- | --- | --- |
 | `glpi_list_catalog_items` | Read | List an allowlisted type with pagination, deleted-state selection and a safety cap. |
 | `glpi_get_catalog_item` | Read | Read one object by raw ID. |
+| `glpi_preview_consumable_creation` | Read | Validate native consumable creation fields and references, find visible duplicates including trash, and report readiness without creating stock. |
 | `glpi_create_catalog_item` | Write | Create and reread an object; ambiguous verification explicitly warns against blind retry. |
 | `glpi_update_catalog_item` | Write | Partial update with before/after data and exact field verification. |
 | `glpi_preview_delete_catalog_item` | Read | Fingerprint current state and report reference-scan completeness/recoverability. |
@@ -744,3 +745,18 @@ The following are deliberately not presented as active tools:
 - GLPI Inventory import-configuration writes until an official, versioned API contract confirms the item type and writable fields;
 - per-user OAuth authentication;
 - generic destructive operations outside explicitly registered tools.
+
+Consumable types (`ConsumableItemType`) are supported in the dropdown domain.
+Types and definitions use strict Legacy field validation, duplicate guards and
+post-write verification; see [consumable preparation](CONSUMABLES.md).
+
+## Native consumable stock lifecycle
+
+| Tool | Access | Purpose |
+| --- | --- | --- |
+| `glpi_get_consumable_stock` | Read | Count available/assigned units and show thresholds, targets and paginated unit IDs. |
+| `glpi_preview_consumable_stock_change` | Read | Preview `add_stock`, `assign` or `return_to_stock`, validating exact units and recipient scope. |
+| `glpi_apply_consumable_stock_change` | Destructive | Apply the exact change with a fresh fingerprint and literal confirmation; stop on partial or uncertain outcomes. |
+
+These tools use explicit Legacy routing in Hybrid. High-Level returns not_supported.
+The plugin wizard and approval workflow are not invoked; see [Consommables](CONSUMABLES.md).

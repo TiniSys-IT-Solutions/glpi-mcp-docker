@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.11 — 2026-10-23
+
+- Upgrade the MCP SDK to 1.32.1 and refresh ip-address to resolve the release dependency audit findings.
+
+- Add native consumable type creation/update, strict definition fields, verified references, duplicate guards and read-only creation preview.
+- Add daily stock read/preview/apply tools for replenishment, assignment to scoped users/groups and return to stock, with snapshot guards and explicit partial/uncertain outcomes. Hybrid routes these tools to Legacy; High-Level writes and the plugin wizard remain unsupported.
+- Confirm consumable alert/target fields and fix the High-Level model read path to `Assets/Consumable`; catalogue now exposes 292 tools.
+
+- Validate all enabled endpoint configurations before gateway startup and improve GenBio Addressing companion error diagnostics without exposing upstream response bodies.
+- Add official MCP SDK regressions for startup and native consumable routes; 341 public tests pass.
+- Mise en pause du prototype de plugin GLPI dédié : sources, tests, scripts et fixture conservés dans `.local`, hors du build et de la CI. L’intégration GenBio Custom est conservée ; voir [la décision](docs/PAUSE_PLUGIN_GLPI_DEDIE.md).
+
 ## 0.4.10 — 2026-10-06
 
 - Connect the MCP stdio transport before warming the upstream GLPI session, so Streamable HTTP `initialize` can complete immediately even when GLPI is slow or unavailable.

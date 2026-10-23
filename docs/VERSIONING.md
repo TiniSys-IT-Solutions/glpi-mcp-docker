@@ -25,7 +25,8 @@ copied into the build stage. The corrected Docker build was released as
 The Addressing report, comment and reservation release is `v0.4.4`.
 The phone-line business tools were prepared in `v0.4.5`.
 The Addressing compatibility correction was released as `v0.4.6`.
-The Streamable HTTP startup correction and Supergateway 4.1.0 upgrade are prepared as `v0.4.10`.
+The Streamable HTTP startup correction and Supergateway 4.1.0 upgrade were released as `v0.4.10`.
+Native consumable lifecycle tools and launcher configuration diagnostics are released as `v0.4.11`.
 
 ## Version sources
 
@@ -67,10 +68,10 @@ npm test
 npm run build
 git diff --check
 git add Dockerfile README.md docs package.json package-lock.json src/build-info.ts
-git commit -m "chore(release): prepare version 0.4.10"
-git tag -a v0.4.10 -m "Release glpi-mcp-docker v0.4.10"
+git commit -m "chore(release): prepare version 0.4.11"
+git tag -a v0.4.11 -m "Release glpi-mcp-docker v0.4.11"
 git push origin main
-git push origin v0.4.10
+git push origin v0.4.11
 ```
 
 Do not use `git push --tags`: it may publish unrelated local tags.
@@ -80,7 +81,7 @@ Do not use `git push --tags`: it may publish unrelated local tags.
 GitHub Actions publishes:
 
 - `latest` and a commit-SHA tag after a push to `main`;
-- `0.4.10`, `0.4` and a commit-SHA tag after a push of `v0.4.10`.
+- `0.4.11`, `0.4` and a commit-SHA tag after a push of `v0.4.11`.
 
 Release tags are immutable. If a released version is faulty, fix it in a new
 patch version rather than moving its tag.

@@ -1,11 +1,15 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **288 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **292 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
 Ce projet est une intégration indépendante et non un produit officiel GLPI.
+
+Le prototype de plugin GLPI dédié est mis en pause et conservé localement hors
+du produit actif. L’intégration actuelle avec GenBio Custom reste en place. Voir
+[la décision et le bilan du prototype](docs/PAUSE_PLUGIN_GLPI_DEDIE.md).
 
 La synchronisation optionnelle `IPNetwork` vers les plages IPv4 du plugin
 officiel IP Addressing passe exclusivement par l'API REST GLPI : prévisualisation
@@ -15,18 +19,34 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 288 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 292 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |
 | Lignes téléphoniques et associations SIM | [Lignes téléphoniques](docs/PHONE_LINES.md) |
+| Types et fiches de consommables, préparation Excel et seuils | [Consommables](docs/CONSUMABLES.md) |
 | Rapports, commentaires et réservations IP Addressing | [IP Addressing](docs/ADDRESSING.md) |
 | Architecture et routage | [Architecture](docs/ARCHITECTURE.md) |
 | Audit des capacités GLPI 11 / GLPI Inventory et feuille de route CRUD | [Audit des sources](docs/GLPI_SOURCE_TOOL_AUDIT.md) |
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
 
-## État de la version 0.4.10
+## État de la version 0.4.11
+
+La version 0.4.11 ajoute la gestion quotidienne des consommables : catégories,
+fiches, seuils, stock cible, consultation des unités, ajout, attribution et retour
+en stock. Les mouvements utilisent un aperçu empreinté et une confirmation ; les
+écritures partielles ou incertaines ne sont pas rejouées automatiquement. Les
+routes Hybrid sont explicitement Legacy. Le wizard du plugin reste hors périmètre.
+Voir [les outils et leurs limites](docs/CONSUMABLES.md).
+
+Cette version valide aussi la configuration avant de lancer les passerelles MCP,
+pour éviter un endpoint apparemment sain dont le processus MCP échoue au démarrage,
+et améliore les diagnostics des appels Addressing via GenBio Custom.
+
+Le prototype de plugin GLPI dédié reste en pause, hors de l’image distribuée.
+
+### Correctifs de démarrage conservés depuis 0.4.10
 
 La version 0.4.10 corrige le démarrage Streamable HTTP afin que le handshake MCP
 ne dépende plus de la disponibilité immédiate de GLPI. Elle utilise Supergateway
@@ -139,7 +159,7 @@ Image publiée :
 
 ```text
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:latest
-ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.10
+ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4.11
 ghcr.io/tinisys-it-solutions/glpi-mcp-docker:0.4
 ```
 
@@ -176,7 +196,7 @@ tests génériques résident dans `test-public/`; `test/` est réservé aux donn
 privées de validation et reste ignoré.
 
 Le handshake MCP et la ressource `glpi://server/info` identifient la version
-`glpi-mcp-docker` **0.4.10**. Les versions de l'adaptateur Legacy, du SDK MCP, de
+`glpi-mcp-docker` **0.4.11**. Les versions de l'adaptateur Legacy, du SDK MCP, de
 Supergateway, de Zod et de Node.js sont exposées séparément.
 
 ## Sécurité

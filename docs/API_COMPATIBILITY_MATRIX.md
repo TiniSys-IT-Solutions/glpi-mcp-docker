@@ -69,3 +69,20 @@ src/routing/api-router.ts
 ```
 
 Unknown tools in Hybrid are rejected. They are not routed to Legacy by default.
+
+## Dedicated plugin prototype — paused
+
+The separate per-user `McpBridge` prototype is archived locally and excluded
+from the active build and CI. It is not an available endpoint or an additional
+API mode. The existing GenBio Custom companion transport remains in place.
+See [the pause decision](PAUSE_PLUGIN_GLPI_DEDIE.md).
+
+## Native consumables
+
+Consumable types (`ConsumableItemType`) and definitions (`ConsumableItem`) use
+the catalog tools. `glpi_preview_consumable_creation`, `glpi_get_consumable_stock`,
+`glpi_preview_consumable_stock_change` and `glpi_apply_consumable_stock_change`
+are explicitly routed to Legacy in Hybrid. High-Level stock operations and
+consumable catalog writes return `not_supported`, without Legacy fallback.
+High-Level model reads use the audited `Assets/Consumable` path. The plugin
+wizard remains outside this contract. See [Consommables](CONSUMABLES.md).

@@ -1,5 +1,9 @@
 # Authentication
 
+The dedicated per-user GLPI plugin prototype is paused and archived locally.
+It is excluded from the active build and is not a supported authentication
+entry point. See [the pause decision](PAUSE_PLUGIN_GLPI_DEDIE.md).
+
 ## Current Mode
 
 The initial functional mode is:
@@ -39,7 +43,8 @@ The planned mode is:
 GLPI_AUTH_MODE=per_user
 ```
 
-It is not implemented yet.
+It is not implemented on the active entry point. The archived prototype does
+not enable this mode.
 
 Before implementing it:
 
