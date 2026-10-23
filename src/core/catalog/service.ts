@@ -1,6 +1,7 @@
 import { CatalogSelection } from './types.js';
 
 export interface CatalogService {
+  previewConsumableCreation(input: CatalogSelection & { fields: Record<string, unknown> }): Promise<unknown>;
   list(input: CatalogSelection & { start: number; limit: number; fetchAll: boolean; includeDeleted: boolean }): Promise<unknown>;
   get(input: CatalogSelection & { id: number }): Promise<unknown>;
   create(input: CatalogSelection & { fields: Record<string, unknown>; correlationId: string }): Promise<unknown>;

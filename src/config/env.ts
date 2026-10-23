@@ -32,13 +32,13 @@ export interface AppConfig {
   };
 }
 
-function optionalEnv(name: string): string | undefined {
-  const value = process.env[name];
+function optionalEnv(name: string, env: NodeJS.ProcessEnv): string | undefined {
+  const value = env[name];
   return value && value.trim() !== '' ? value : undefined;
 }
 
-function envInt(name: string, minimum = 0): number | undefined {
-  const raw = optionalEnv(name);
+function envInt(name: string, env: NodeJS.ProcessEnv, minimum = 0): number | undefined {
+  const raw = optionalEnv(name, env);
   if (!raw) return undefined;
   const n = Number.parseInt(raw, 10);
   if (!Number.isSafeInteger(n) || String(n) !== raw || n < minimum) {
@@ -60,8 +60,9 @@ function parseEnum<T extends readonly string[]>(
   return raw;
 }
 
-export function loadConfig(): AppConfig {
-  const glpiUrl = optionalEnv('GLPI_URL');
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const optional = (name: string) => optionalEnv(name, env);
+  const glpiUrl = optional('GLPI_URL');
   if (!glpiUrl) throw new Error('GLPI_URL environment variable is required');
   try {
     const parsedUrl = new URL(glpiUrl);
@@ -75,20 +76,20 @@ export function loadConfig(): AppConfig {
     throw new Error(`GLPI_URL is not a valid URL: "${glpiUrl}"`);
   }
 
-  const apiMode = parseEnum('GLPI_API_MODE', optionalEnv('GLPI_API_MODE'), API_MODES, 'legacy');
+  const apiMode = parseEnum('GLPI_API_MODE', optional('GLPI_API_MODE'), API_MODES, 'legacy');
   const authMode = parseEnum(
     'GLPI_AUTH_MODE',
-    optionalEnv('GLPI_AUTH_MODE'),
+    optional('GLPI_AUTH_MODE'),
     AUTH_MODES,
     'service_account'
   );
 
   const legacy = {
-    appToken: optionalEnv('GLPI_APP_TOKEN'),
-    userToken: optionalEnv('GLPI_USER_TOKEN'),
-    username: optionalEnv('GLPI_USERNAME'),
-    password: optionalEnv('GLPI_PASSWORD'),
-    addressingReportTransport: parseEnum('GLPI_ADDRESSING_REPORT_TRANSPORT', optionalEnv('GLPI_ADDRESSING_REPORT_TRANSPORT'), ['legacy_rest', 'native_web', 'companion_api'] as const, 'legacy_rest'),
+    appToken: optional('GLPI_APP_TOKEN'),
+    userToken: optional('GLPI_USER_TOKEN'),
+    username: optional('GLPI_USERNAME'),
+    password: optional('GLPI_PASSWORD'),
+    addressingReportTransport: parseEnum('GLPI_ADDRESSING_REPORT_TRANSPORT', optional('GLPI_ADDRESSING_REPORT_TRANSPORT'), ['legacy_rest', 'native_web', 'companion_api'] as const, 'legacy_rest'),
   };
 
   if ((apiMode === 'legacy' || apiMode === 'hybrid') && authMode === 'service_account') {
@@ -103,14 +104,14 @@ export function loadConfig(): AppConfig {
     throw new Error('GLPI_AUTH_MODE=per_user is planned but not implemented yet.');
   }
 
-  const apiVersion = optionalEnv('GLPI_API_VERSION') ?? '2.3';
+  const apiVersion = optional('GLPI_API_VERSION') ?? '2.3';
   if (!/^v?\d+\.\d+$/.test(apiVersion)) {
     throw new Error('GLPI_API_VERSION must use MAJOR.MINOR format, for example 2.3');
   }
 
   if (legacy.addressingReportTransport === 'companion_api' && ![
-    optionalEnv('GLPI_OAUTH_CLIENT_ID'), optionalEnv('GLPI_OAUTH_CLIENT_SECRET'),
-    optionalEnv('GLPI_OAUTH_USERNAME'), optionalEnv('GLPI_OAUTH_PASSWORD'),
+    optional('GLPI_OAUTH_CLIENT_ID'), optional('GLPI_OAUTH_CLIENT_SECRET'),
+    optional('GLPI_OAUTH_USERNAME'), optional('GLPI_OAUTH_PASSWORD'),
   ].every(Boolean)) {
     throw new Error('GLPI_ADDRESSING_REPORT_TRANSPORT=companion_api requires all GLPI OAuth credentials');
   }
@@ -122,18 +123,18 @@ export function loadConfig(): AppConfig {
     authMode,
     legacy,
     highlevel: {
-      oauthClientId: optionalEnv('GLPI_OAUTH_CLIENT_ID'),
-      oauthClientSecret: optionalEnv('GLPI_OAUTH_CLIENT_SECRET'),
-      oauthUsername: optionalEnv('GLPI_OAUTH_USERNAME'),
-      oauthPassword: optionalEnv('GLPI_OAUTH_PASSWORD'),
-      oauthRedirectUri: optionalEnv('GLPI_OAUTH_REDIRECT_URI'),
+      oauthClientId: optional('GLPI_OAUTH_CLIENT_ID'),
+      oauthClientSecret: optional('GLPI_OAUTH_CLIENT_SECRET'),
+      oauthUsername: optional('GLPI_OAUTH_USERNAME'),
+      oauthPassword: optional('GLPI_OAUTH_PASSWORD'),
+      oauthRedirectUri: optional('GLPI_OAUTH_REDIRECT_URI'),
     },
     http: {
-      timeoutMs: envInt('GLPI_TIMEOUT_MS', 1),
-      maxRetries: envInt('GLPI_MAX_RETRIES'),
+      timeoutMs: envInt('GLPI_TIMEOUT_MS', env, 1),
+      maxRetries: envInt('GLPI_MAX_RETRIES', env),
     },
     mcp: {
-      logLevel: optionalEnv('MCP_LOG_LEVEL') ?? 'info',
+      logLevel: optional('MCP_LOG_LEVEL') ?? 'info',
     },
   };
 }

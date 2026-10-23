@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { CatalogService } from '../../core/catalog/service.js';
 import { CatalogSelection } from '../../core/catalog/types.js';
 import { GlpiClient } from './glpi-client.js';
+import { consumableFields, isConsumableDefinition, normalizeConsumableName, validateConsumableStockPolicy } from '../../core/catalog/consumables.js';
 
 const FORBIDDEN_FIELD = /^(id|is_deleted|date_creation|date_mod|password|passwd|secret|community|token|authorization|cookie)$/i;
 function stable(value: unknown): unknown {
@@ -32,6 +33,39 @@ function equal(left: unknown, right: unknown): boolean {
 
 export class LegacyCatalogService implements CatalogService {
   constructor(private readonly client: GlpiClient) {}
+  async previewConsumableCreation(input: CatalogSelection & { fields: Record<string, unknown> }): Promise<unknown> {
+    if (!isConsumableDefinition(input.itemtype)) throw new Error('Only consumable definitions and types are supported by this preview');
+    const fields = consumableFields(input.itemtype, input.fields, true);
+    await this.validateConsumableReferences(input.itemtype, fields);
+    if (input.itemtype === 'ConsumableItem') validateConsumableStockPolicy(fields);
+    const duplicates = await this.consumableDuplicates(input, fields);
+    return { domain: input.domain, itemtype: input.itemtype, fields, duplicates, applicable: duplicates.length === 0,
+      modifies_data: false, creates_stock: false, warnings: ['Visible records only; concurrent creations are not serialized.',
+        ...(input.itemtype === 'ConsumableItem' && fields.alarm_threshold === undefined ? ['Alert threshold omitted: GLPI will use its configured default, not zero.'] : [])] };
+  }
+  private async validateConsumableReferences(itemtype: string, fields: Record<string, unknown>): Promise<void> {
+    if (itemtype !== 'ConsumableItem') return;
+    const references: Record<string, string> = { entities_id: 'Entity', consumableitemtypes_id: 'ConsumableItemType', manufacturers_id: 'Manufacturer', locations_id: 'Location', users_id: 'User', users_id_tech: 'User' };
+    for (const [field, type] of Object.entries(references)) {
+      if (fields[field] === undefined || (Number(fields[field]) === 0 && field !== 'entities_id')) continue;
+      const row = await this.client.getItem<Record<string, unknown>>(type, Number(fields[field]), { expand_dropdowns: false });
+      if (row.is_deleted === 1 || row.is_deleted === '1' || row.is_deleted === true) throw new Error(`${field} references a deleted ${type}`);
+    }
+  }
+  private async consumableDuplicates(input: CatalogSelection, fields: Record<string, unknown>, excludeId?: number): Promise<unknown[]> {
+    const rows = new Map<number, Record<string, unknown>>();
+    for (const includeDeleted of input.itemtype === 'ConsumableItem' ? [false, true] : [false]) {
+      const page = await this.list({ ...input, start: 0, limit: 1000, fetchAll: true, includeDeleted }) as { items: Record<string, unknown>[] };
+      for (const row of page.items) rows.set(Number(row.id), row);
+    }
+    return [...rows.values()].filter((row) => {
+      if (Number(row.id) === excludeId) return false;
+      if (input.itemtype === 'ConsumableItemType') return normalizeConsumableName(row.name) === normalizeConsumableName(fields.name);
+      if (Number(row.entities_id ?? 0) !== Number(fields.entities_id ?? 0) || Number(row.locations_id ?? 0) !== Number(fields.locations_id ?? 0)) return false;
+      return normalizeConsumableName(row.name) === normalizeConsumableName(fields.name) ||
+        (normalizeConsumableName(fields.ref) !== '' && normalizeConsumableName(row.ref) === normalizeConsumableName(fields.ref) && Number(row.manufacturers_id ?? 0) === Number(fields.manufacturers_id ?? 0));
+    }).map((row) => ({ id: row.id, name: row.name, ref: row.ref, entities_id: row.entities_id, locations_id: row.locations_id, is_deleted: row.is_deleted }));
+  }
   async list(input: CatalogSelection & { start: number; limit: number; fetchAll: boolean; includeDeleted: boolean }): Promise<unknown> {
     const cap = input.fetchAll ? 50000 : input.limit; const rows: Record<string, unknown>[] = [];
     for (let start = input.start; rows.length < cap; start += 1000) {
@@ -46,7 +80,13 @@ export class LegacyCatalogService implements CatalogService {
     return { domain: input.domain, itemtype: input.itemtype, item: await this.client.getItem(input.itemtype, input.id, { expand_dropdowns: false }), modifies_data: false };
   }
   async create(input: CatalogSelection & { fields: Record<string, unknown>; correlationId: string }): Promise<unknown> {
-    const payload = safeFields(input.itemtype, input.fields); const created = await this.client.createItem(input.itemtype, payload);
+    let payload = safeFields(input.itemtype, input.fields);
+    if (isConsumableDefinition(input.itemtype)) {
+      const preview = await this.previewConsumableCreation(input) as { fields: Record<string, unknown>; applicable: boolean; duplicates: unknown[] };
+      if (!preview.applicable) throw new Error(`Potential consumable duplicate; reuse or review existing objects: ${JSON.stringify(preview.duplicates)}`);
+      payload = preview.fields;
+    }
+    const created = await this.client.createItem(input.itemtype, payload);
     try {
       const after = await this.client.getItem<Record<string, unknown>>(input.itemtype, created.id, { expand_dropdowns: false });
       this.verify(after, payload); return { success: true, operation: 'create', domain: input.domain, itemtype: input.itemtype, id: created.id, after, correlation_id: input.correlationId, verification_status: 'verified' };
@@ -55,7 +95,18 @@ export class LegacyCatalogService implements CatalogService {
     }
   }
   async update(input: CatalogSelection & { id: number; fields: Record<string, unknown>; correlationId: string }): Promise<unknown> {
-    const payload = safeFields(input.itemtype, input.fields); const before = await this.client.getItem<Record<string, unknown>>(input.itemtype, input.id, { expand_dropdowns: false });
+    let payload = safeFields(input.itemtype, input.fields);
+    if (isConsumableDefinition(input.itemtype)) payload = consumableFields(input.itemtype, payload, false);
+    const before = await this.client.getItem<Record<string, unknown>>(input.itemtype, input.id, { expand_dropdowns: false });
+    if (isConsumableDefinition(input.itemtype)) {
+      await this.validateConsumableReferences(input.itemtype, payload);
+      const merged = { ...before, ...payload };
+      if (input.itemtype === 'ConsumableItem') validateConsumableStockPolicy(merged);
+      if (Object.keys(payload).some((field) => ['name', 'ref', 'manufacturers_id', 'entities_id', 'locations_id'].includes(field))) {
+        const duplicates = await this.consumableDuplicates(input, merged, input.id);
+        if (duplicates.length) throw new Error(`Potential consumable duplicate: ${JSON.stringify(duplicates)}`);
+      }
+    }
     await this.client.updateItem(input.itemtype, input.id, payload);
     try {
       const after = await this.client.getItem<Record<string, unknown>>(input.itemtype, input.id, { expand_dropdowns: false });
@@ -70,14 +121,14 @@ export class LegacyCatalogService implements CatalogService {
     const plan = { domain: input.domain, itemtype: input.itemtype, id: input.id, purge: input.purge, current,
       reference_scan: { complete: false, reason: 'generic Legacy item reads do not prove absence of every polymorphic relation' },
       recoverability: input.purge ? 'not_recoverable' : 'depends_on_itemtype_soft_delete_support' };
-    const noTrash = input.itemtype === 'LineType' || input.itemtype === 'LineOperator';
-    return { ...plan, preview_fingerprint: fingerprint(plan), applicable: !input.purge && !noTrash, blocked_reasons: input.purge ? ['purge_requires_complete_reference_scan'] : noTrash ? ['line_dropdown_has_no_soft_delete_support'] : [], modifies_data: false };
+    const noTrash = input.itemtype === 'LineType' || input.itemtype === 'LineOperator' || input.itemtype === 'ConsumableItemType';
+    return { ...plan, preview_fingerprint: fingerprint(plan), applicable: !input.purge && !noTrash, blocked_reasons: input.purge ? ['purge_requires_complete_reference_scan'] : noTrash ? ['dropdown_has_no_soft_delete_support'] : [], modifies_data: false };
   }
   async delete(input: CatalogSelection & { id: number; purge: boolean; previewFingerprint: string; confirmation: string; correlationId: string }): Promise<unknown> {
     const preview = await this.previewDelete(input) as Record<string, unknown>;
     if (preview.preview_fingerprint !== input.previewFingerprint) throw new Error('Delete preview is stale');
     if (input.purge) throw new Error('Purge blocked: reference scan is incomplete');
-    if (preview.applicable !== true) throw new Error('Deletion blocked: line dropdown has no soft-delete support or complete reference scan');
+    if (preview.applicable !== true) throw new Error('Deletion blocked: dropdown has no soft-delete support or complete reference scan');
     const before = preview.current;
     await this.client.deleteItem(input.itemtype, input.id, false, false);
     let after: unknown = null;

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { ConsumableService } from './core/consumables/service.js';
+import { consumableStockSchema, consumableChangeSchema, consumableApplySchema } from './core/consumables/schemas.js';
 
 /**
  * MCP Server for GLPI v3.0
@@ -18,6 +20,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
+  type Tool,
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
@@ -74,7 +77,7 @@ import { CatalogService } from './core/catalog/service.js';
 import { PhoneLineService } from './core/phone-lines/service.js';
 import { phoneLineListSchema, phoneLineIdSchema, phoneLineCreateSchema, phoneLineUpdateSchema, phoneLineCommentSchema, phoneLineItemSchema, phoneLineAttachSchema, phoneLineDetachPreviewSchema, phoneLineDetachSchema, phoneLineSimPreviewSchema, phoneLineSimApplySchema, phoneLineAuditSchema } from './core/phone-lines/schemas.js';
 import { CATALOG_DOMAINS, CATALOG_ITEMTYPES } from './core/catalog/types.js';
-import { catalogCreateSchema, catalogDeletePreviewSchema, catalogDeleteSchema, catalogGetSchema, catalogListSchema, catalogUpdateSchema } from './core/catalog/schemas.js';
+import { consumableCreationPreviewSchema, catalogCreateSchema, catalogDeletePreviewSchema, catalogDeleteSchema, catalogGetSchema, catalogListSchema, catalogUpdateSchema } from './core/catalog/schemas.js';
 import { GovernanceService } from './core/governance/service.js';
 import { ASSET_RELATION_KINDS, GOVERNANCE_AUDITS, RELATION_ASSET_TYPES } from './core/governance/types.js';
 import { assetRelationAttachSchema, assetRelationDetachPreviewSchema, assetRelationDetachSchema, assetRelationListSchema, dropdownUsageSchema, governanceAuditSchema } from './core/governance/schemas.js';
@@ -359,6 +362,7 @@ let addressingSyncService: AddressingSyncService;
 let assetImportRuleService: AssetImportRuleService;
 let inventoryInsightsService: InventoryInsightsService;
 let catalogService: CatalogService;
+let consumableService: ConsumableService;
 let phoneLineService: PhoneLineService;
 let governanceService: GovernanceService;
 let networkTopologyService: NetworkTopologyService;
@@ -454,7 +458,8 @@ const INVENTORY_INSIGHTS_TOOLS = new Set([
   'glpi_get_asset_network_identity',
 ]);
 const PHONE_LINE_TOOLS = new Set(['glpi_list_phone_lines', 'glpi_get_phone_line_overview', 'glpi_create_phone_line', 'glpi_update_phone_line', 'glpi_append_phone_line_comment', 'glpi_list_phone_line_items', 'glpi_list_item_phone_lines', 'glpi_attach_phone_line_to_item', 'glpi_preview_detach_phone_line_from_item', 'glpi_detach_phone_line_from_item', 'glpi_preview_set_simcard_phone_line', 'glpi_set_simcard_phone_line', 'glpi_audit_phone_lines', 'glpi_phone_lines_stats']);
-const CATALOG_TOOLS = new Set(['glpi_list_catalog_items', 'glpi_get_catalog_item', 'glpi_create_catalog_item', 'glpi_update_catalog_item', 'glpi_preview_delete_catalog_item', 'glpi_delete_catalog_item']);
+const CONSUMABLE_TOOLS = new Set(['glpi_get_consumable_stock', 'glpi_preview_consumable_stock_change', 'glpi_apply_consumable_stock_change']);
+const CATALOG_TOOLS = new Set(['glpi_preview_consumable_creation', 'glpi_list_catalog_items', 'glpi_get_catalog_item', 'glpi_create_catalog_item', 'glpi_update_catalog_item', 'glpi_preview_delete_catalog_item', 'glpi_delete_catalog_item']);
 const GOVERNANCE_TOOLS = new Set(['glpi_list_asset_relations', 'glpi_attach_asset_relation', 'glpi_preview_detach_asset_relation', 'glpi_detach_asset_relation', 'glpi_get_dropdown_usage', 'glpi_run_governance_audit']);
 const NETWORK_TOPOLOGY_TOOLS = new Set(['glpi_list_asset_network_ports', 'glpi_get_network_port', 'glpi_create_network_port', 'glpi_update_network_port', 'glpi_attach_vlan_to_port', 'glpi_connect_network_ports', 'glpi_preview_remove_network_link', 'glpi_remove_network_link', 'glpi_attach_ip_address', 'glpi_move_ip_address', 'glpi_preview_delete_network_object', 'glpi_delete_network_object']);
 const COMPONENT_RELATION_TOOLS = new Set(['glpi_list_asset_components','glpi_get_component_usage','glpi_attach_component_to_asset','glpi_update_asset_component','glpi_preview_detach_component','glpi_detach_component_from_asset']);
@@ -479,6 +484,7 @@ function isBackendServiceTool(toolName: string): boolean {
     INVENTORY_INSIGHTS_TOOLS.has(toolName) ||
     PHONE_LINE_TOOLS.has(toolName) ||
     CATALOG_TOOLS.has(toolName) ||
+    CONSUMABLE_TOOLS.has(toolName) ||
     GOVERNANCE_TOOLS.has(toolName) ||
     NETWORK_TOPOLOGY_TOOLS.has(toolName) ||
     COMPONENT_RELATION_TOOLS.has(toolName) ||
@@ -1891,6 +1897,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string', enum: [...new Set(Object.values(CATALOG_ITEMTYPES).flat())] }, start: { type: 'number', minimum: 0, default: 0 }, limit: { type: 'number', minimum: 1, maximum: 10000, default: 100 }, fetch_all: { type: 'boolean', default: false }, include_deleted: { type: 'boolean', default: false } }, required: ['domain', 'itemtype'] },
     },
     { name: 'glpi_get_catalog_item', description: 'Read one allowlisted catalog object by raw GLPI id.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 } }, required: ['domain', 'itemtype', 'id'] } },
+    { name: 'glpi_get_consumable_stock', description: 'Read a native consumable model stock: available and assigned units, alert threshold and replenishment target, with paginated units.', inputSchema: z.toJSONSchema(consumableStockSchema) as Tool['inputSchema'] },
+    { name: 'glpi_preview_consumable_stock_change', description: 'Read-only stock change preview: add units, assign exact available units to a user/group, or return exact units to stock. Checks entity scope and returns a snapshot fingerprint.', inputSchema: { type: 'object', ...z.toJSONSchema(consumableChangeSchema) } as Tool['inputSchema'] },
+    { name: 'glpi_apply_consumable_stock_change', description: 'Apply an explicitly confirmed native consumable stock change against a fresh preview. Reports partial/uncertain outcomes without automatically retrying. No plugin wizard calls.', inputSchema: z.toJSONSchema(consumableApplySchema) as Tool['inputSchema'] },
+    { name: 'glpi_preview_consumable_creation', description: 'Read-only preparation of a native consumable type or definition: validate fields and references, detect visible duplicates including trashed definitions, and report alert policy. Does not create stock or call the plugin wizard.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: ['ConsumableItemType', 'ConsumableItem'] }, fields: { type: 'object', minProperties: 1 } }, required: ['itemtype', 'fields'] } },
     { name: 'glpi_create_catalog_item', description: 'Create an allowlisted catalog object, reject controlled/secret fields and verify the returned object.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, fields: { type: 'object', minProperties: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['domain', 'itemtype', 'fields', 'correlation_id'] } },
     { name: 'glpi_update_catalog_item', description: 'Partially update an allowlisted catalog object with before/after state and post-write verification.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, fields: { type: 'object', minProperties: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['domain', 'itemtype', 'id', 'fields', 'correlation_id'] } },
     { name: 'glpi_preview_delete_catalog_item', description: 'Read-only delete preview with current state, recoverability warning, reference-scan completeness and fingerprint.', inputSchema: { type: 'object', additionalProperties: false, properties: { domain: { type: 'string', enum: [...CATALOG_DOMAINS] }, itemtype: { type: 'string' }, id: { type: 'number', minimum: 1 }, purge: { type: 'boolean', default: false } }, required: ['domain', 'itemtype', 'id'] } },
@@ -2268,6 +2278,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       case 'glpi_get_catalog_item': {
         const input = catalogGetSchema.parse(args); return text(await catalogService.get(input));
+      }
+      case 'glpi_get_consumable_stock': return text(await consumableService.getStock(consumableStockSchema.parse(args)));
+      case 'glpi_preview_consumable_stock_change': return text(await consumableService.previewChange(consumableChangeSchema.parse(args)));
+      case 'glpi_apply_consumable_stock_change': return text(await consumableService.applyChange(consumableApplySchema.parse(args)));
+      case 'glpi_preview_consumable_creation': {
+        const input = consumableCreationPreviewSchema.parse(args);
+        return text(await catalogService.previewConsumableCreation({ domain: input.itemtype === 'ConsumableItemType' ? 'dropdown' : 'asset', ...input }));
       }
       case 'glpi_create_catalog_item': {
         const input = catalogCreateSchema.parse(args); return text(await catalogService.create({ domain: input.domain, itemtype: input.itemtype, fields: input.fields, correlationId: input.correlation_id }));
@@ -3694,6 +3711,7 @@ async function main() {
     assetImportRuleService = apiRouter.services.assetImportRules;
     inventoryInsightsService = apiRouter.services.inventoryInsights;
     catalogService = apiRouter.services.catalog;
+    consumableService = apiRouter.services.consumables;
     phoneLineService = apiRouter.services.phoneLines;
     governanceService = apiRouter.services.governance;
     networkTopologyService = apiRouter.services.networkTopology;

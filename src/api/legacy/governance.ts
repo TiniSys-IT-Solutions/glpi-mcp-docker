@@ -18,6 +18,7 @@ const DROPDOWN_REFERENCES: Record<string, Array<{ itemtype: string; field: strin
   RequestType: ['Ticket', 'Problem', 'Change'].map((itemtype) => ({ itemtype, field: 'requesttypes_id' })),
   SupplierType: [{ itemtype: 'Supplier', field: 'suppliertypes_id' }],
   ContractType: [{ itemtype: 'Contract', field: 'contracttypes_id' }],
+  ConsumableItemType: [{ itemtype: 'ConsumableItem', field: 'consumableitemtypes_id' }],
   LineType: [{ itemtype: 'Line', field: 'linetypes_id' }],
   LineOperator: [{ itemtype: 'Line', field: 'lineoperators_id' }],
   DocumentType: [{ itemtype: 'Document', field: 'documenttypes_id' }],

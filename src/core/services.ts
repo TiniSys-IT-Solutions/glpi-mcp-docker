@@ -1,3 +1,4 @@
+import { ConsumableService } from './consumables/service.js';
 import { IPNetworkService } from './ip-networks/service.js';
 import { PhoneLineService } from './phone-lines/service.js';
 import { TicketService } from './tickets/service.js';
@@ -23,6 +24,7 @@ import { SiteNetworkProvisioningService } from './site-network-provisioning/serv
 import { AssetControlService } from './asset-controls/service.js';
 
 export interface GlpiServices {
+  consumables: ConsumableService;
   phoneLines: PhoneLineService;
   tickets: TicketService;
   ipNetworks?: IPNetworkService;

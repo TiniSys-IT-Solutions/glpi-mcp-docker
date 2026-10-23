@@ -1,3 +1,5 @@
+import { LegacyConsumableService } from '../api/legacy/consumables.js';
+import { HighLevelConsumableService } from '../api/highlevel/consumables.js';
 import { AppConfig } from '../config/env.js';
 import { GlpiClient } from '../api/legacy/glpi-client.js';
 import { HighLevelClient, HighLevelNotSupportedError } from '../api/highlevel/client.js';
@@ -98,6 +100,10 @@ export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
   glpi_list_catalog_items: 'legacy',
   glpi_get_catalog_item: 'legacy',
   glpi_create_catalog_item: 'legacy',
+  glpi_preview_consumable_creation: 'legacy',
+  glpi_get_consumable_stock: 'legacy',
+  glpi_preview_consumable_stock_change: 'legacy',
+  glpi_apply_consumable_stock_change: 'legacy',
   glpi_update_catalog_item: 'legacy',
   glpi_preview_delete_catalog_item: 'legacy',
   glpi_delete_catalog_item: 'legacy',
@@ -401,6 +407,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         assetImportRules: new HighLevelAssetImportRuleService(),
         inventoryInsights: new HighLevelInventoryInsightsService(),
         catalog: new HighLevelCatalogService(highlevel),
+        consumables: new HighLevelConsumableService(),
         governance: new HighLevelGovernanceService(),
         networkTopology: new HighLevelNetworkTopologyService(),
         componentRelations: new HighLevelComponentRelationService(highlevel),
@@ -439,6 +446,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       assetImportRules: new LegacyAssetImportRuleService(client),
       inventoryInsights: new LegacyInventoryInsightsService(client),
       catalog: new LegacyCatalogService(client),
+      consumables: new LegacyConsumableService(client),
       governance: new LegacyGovernanceService(client),
       networkTopology: new LegacyNetworkTopologyService(client),
       componentRelations: new LegacyComponentRelationService(client),

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createApiRouter, HYBRID_TOOL_BACKENDS } from '../src/routing/api-router.js';
 import { AppConfig } from '../src/config/env.js';
+import { CompanionAddressingSyncService } from '../src/api/highlevel/companion-addressing.js';
 
 function config(apiMode: AppConfig['apiMode']): AppConfig {
   return {
@@ -26,6 +27,15 @@ function config(apiMode: AppConfig['apiMode']): AppConfig {
 }
 
 for (const mode of ['legacy', 'hybrid'] as const) {
+  test(`${mode} selects the companion Addressing service independently of preview`, () => {
+    const input = config(mode);
+    input.legacy.addressingReportTransport = 'companion_api';
+    input.highlevel = {
+      oauthClientId: 'synthetic-client', oauthClientSecret: 'synthetic-secret',
+      oauthUsername: 'synthetic-user', oauthPassword: 'synthetic-password',
+    };
+    assert.ok(createApiRouter(input).services.addressingSync instanceof CompanionAddressingSyncService);
+  });
   test(`${mode} passes explicit native Addressing transport to its Legacy adapter only`, () => {
     const input = config(mode);
     input.legacy.addressingReportTransport = 'native_web';
@@ -156,11 +166,11 @@ test('hybrid matrix covers every registered MCP tool and contains no phantom too
   }
 
   assert.deepEqual(Object.keys(HYBRID_TOOL_BACKENDS).sort(), [...new Set(active)].sort());
-  assert.equal(new Set(active).size, 288, 'README and docs/TOOLS.md tool count must be updated when the registry changes');
+  assert.equal(new Set(active).size, 292, 'README and docs/TOOLS.md tool count must be updated when the registry changes');
   const catalogue = readFileSync(new URL('../docs/TOOLS.md', import.meta.url), 'utf8');
-  assert.match(catalogue, /lists the 288 tools currently registered/);
+  assert.match(catalogue, /lists the 292 tools currently registered/);
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /expose \*\*288 outils\*\*/);
+  assert.match(readme, /expose \*\*292 outils\*\*/);
   for (const tool of new Set(active)) {
     assert.ok(catalogue.includes(`\`${tool}\``), `${tool} must be documented in docs/TOOLS.md`);
   }

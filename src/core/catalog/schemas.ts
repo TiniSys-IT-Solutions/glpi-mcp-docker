@@ -17,3 +17,5 @@ export const catalogDeleteSchema = selection.extend({ id, purge: z.boolean().def
   if (value.purge && value.confirmation !== 'I_HAVE_VERIFIED_THE_CATALOG_PURGE') context.addIssue({ code: 'custom', path: ['confirmation'], message: 'Purge requires the purge confirmation phrase' });
   if (!value.purge && value.confirmation !== 'I_HAVE_VERIFIED_THE_CATALOG_DELETE') context.addIssue({ code: 'custom', path: ['confirmation'], message: 'Soft delete requires the delete confirmation phrase' });
 });
+
+export const consumableCreationPreviewSchema = z.object({ itemtype: z.enum(['ConsumableItemType', 'ConsumableItem']), fields }).strict();

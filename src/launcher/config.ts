@@ -1,3 +1,5 @@
+import { loadConfig } from '../config/env.js';
+
 export type ChildApiMode = 'legacy' | 'highlevel' | 'hybrid';
 
 export interface EndpointProcessConfig {
@@ -7,6 +9,18 @@ export interface EndpointProcessConfig {
   path: string;
   apiMode: ChildApiMode;
   critical: boolean;
+}
+
+export function validateEndpointAppConfigs(
+  configs: EndpointProcessConfig[],
+  env: NodeJS.ProcessEnv = process.env
+): void {
+  for (const config of configs) {
+    if (!config.enabled) continue;
+    // Supergateway can answer health checks even if its stdio child exits.
+    // Reject invalid child configuration before opening any public endpoint.
+    loadConfig({ ...env, GLPI_API_MODE: config.apiMode });
+  }
 }
 
 function optionalEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {

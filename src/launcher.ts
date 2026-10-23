@@ -1,7 +1,7 @@
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { loadEndpointProcessConfigs, EndpointProcessConfig } from './launcher/config.js';
+import { loadEndpointProcessConfigs, validateEndpointAppConfigs, EndpointProcessConfig } from './launcher/config.js';
 
 const gatewayEntry = resolve(__dirname, '../node_modules/supergateway/dist/index.js');
 const serverEntry = resolve(__dirname, 'index.js');
@@ -85,7 +85,9 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 }
 
 try {
-  for (const config of loadEndpointProcessConfigs()) start(config);
+  const configs = loadEndpointProcessConfigs();
+  validateEndpointAppConfigs(configs);
+  for (const config of configs) start(config);
 } catch (error) {
   console.error(`[launcher] configuration error: ${error instanceof Error ? error.message : error}`);
   process.exit(1);

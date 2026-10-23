@@ -6,6 +6,7 @@ export interface ToolAnnotations {
 }
 
 export function toolAnnotations(name: string): ToolAnnotations {
+  if (name === 'glpi_apply_consumable_stock_change') return { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
   if (name === 'glpi_phone_lines_stats') return { readOnlyHint: true, openWorldHint: false };
   if (name === 'glpi_attach_phone_line_to_item' || name === 'glpi_append_phone_line_comment') return { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
   if (name === 'glpi_detach_phone_line_from_item' || name === 'glpi_set_simcard_phone_line') return { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
