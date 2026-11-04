@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.14 — 2026-11-04
+
+- Refresh compatible dependencies to resolve the production dependency audit findings.
+
 ## 0.4.13 — 2026-11-04
 
 - Synchronize the server product identity with the package release version.
