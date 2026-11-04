@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { NetworkTopologyService } from '../../core/network-topology/service.js';
+import { GlpiError } from './http.js';
 import { GlpiClient } from './glpi-client.js';
 const ALLOWED = new Set(['name', 'mac', 'comment', 'logical_number', 'ifmtu', 'ifspeed', 'instantiation_type']);
 function clean(fields: Record<string, unknown>): Record<string, unknown> { for (const key of Object.keys(fields)) if (!ALLOWED.has(key)) throw new Error(`NetworkPort field ${key} is not writable`); return fields; }
@@ -8,7 +9,7 @@ function hash(value: unknown): string { return createHash('sha256').update(JSON.
 function n(value: unknown): number { return Number(value ?? 0); }
 export class LegacyNetworkTopologyService implements NetworkTopologyService {
   constructor(private readonly client: GlpiClient) {}
-  private async all(type: string): Promise<Record<string, unknown>[]> { const out: Record<string, unknown>[] = []; for (let start = 0; start < 50000; start += 1000) { const page = await this.client.getItems<Record<string, unknown>>(type, { range: `${start}-${start + 999}`, expand_dropdowns: false }); out.push(...page); if (page.length < 1000) break; } return out; }
+  private async all(type: string): Promise<Record<string, unknown>[]> { const out: Record<string, unknown>[] = []; for (let start = 0; start < 50000; start += 1000) { const page = await this.client.getItems<Record<string, unknown>>(type, { range: `${start}-${start + 999}`, expand_dropdowns: false }); out.push(...page); if (page.length < 1000) return out; } throw new Error(`Incomplete ${type} dependency scan: safety cap reached`); }
   async listPorts(input: { itemtype: string; assetId: number }): Promise<unknown> { await this.client.getItem(input.itemtype, input.assetId, { expand_dropdowns: false }); const ports = (await this.all('NetworkPort')).filter((r) => r.itemtype === input.itemtype && n(r.items_id) === input.assetId); return { itemtype: input.itemtype, asset_id: input.assetId, ports, returned: ports.length, complete: true, modifies_data: false }; }
   async getPort(id: number): Promise<unknown> { return { port: await this.client.getItem('NetworkPort', id, { expand_dropdowns: false }), modifies_data: false }; }
   async createPort(input: { itemtype: string; assetId: number; fields: Record<string, unknown>; correlationId: string }): Promise<unknown> { await this.client.getItem(input.itemtype, input.assetId, { expand_dropdowns: false }); const payload = { itemtype: input.itemtype, items_id: input.assetId, ...clean(input.fields) }; const created = await this.client.createItem('NetworkPort', payload); const after = await this.client.getItem('NetworkPort', created.id, { expand_dropdowns: false }); return { success: true, operation: 'create_port', id: created.id, after, correlation_id: input.correlationId, verification_status: 'verified' }; }
@@ -20,6 +21,47 @@ export class LegacyNetworkTopologyService implements NetworkTopologyService {
   private async findOrCreateNetworkName(portId: number, name: string | undefined, fqdnId: number | undefined): Promise<{ id: number; created: boolean }> { const names = (await this.all('NetworkName')).filter((row) => row.itemtype === 'NetworkPort' && n(row.items_id) === portId); const existing = names.find((row) => String(row.name ?? '') === String(name ?? '') && n(row.fqdns_id) === n(fqdnId)); if (existing) return { id: n(existing.id), created: false }; const created = await this.client.createItem('NetworkName', { itemtype: 'NetworkPort', items_id: portId, name: name ?? '', ...(fqdnId === undefined ? {} : { fqdns_id: fqdnId }) }); return { id: created.id, created: true }; }
   async attachIPAddress(input: { portId: number; address: string; networkName?: string; fqdnId?: number; correlationId: string }): Promise<unknown> { await this.client.getItem('NetworkPort', input.portId, { expand_dropdowns: false }); if (input.fqdnId !== undefined) await this.client.getItem('FQDN', input.fqdnId); const target = await this.findOrCreateNetworkName(input.portId, input.networkName, input.fqdnId); const existing = (await this.all('IPAddress')).find((row) => row.itemtype === 'NetworkName' && n(row.items_id) === target.id && String(row.name) === input.address); if (existing) return { success: true, idempotent: true, ip_address: existing, network_name_id: target.id, correlation_id: input.correlationId }; try { const created = await this.client.createItem('IPAddress', { itemtype: 'NetworkName', items_id: target.id, name: input.address }); return { success: true, operation: 'attach_ip', ip_address_id: created.id, network_name_id: target.id, network_name_created: target.created, after: await this.client.getItem('IPAddress', created.id), correlation_id: input.correlationId, verification_status: 'verified' }; } catch (error) { if (target.created) { try { await this.client.deleteItem('NetworkName', target.id, true); } catch { /* best effort rollback */ } } throw error; } }
   async moveIPAddress(input: { ipAddressId: number; targetPortId: number; networkName?: string; fqdnId?: number; expectedNetworkNameId?: number; correlationId: string }): Promise<unknown> { const before = await this.client.getItem<Record<string, unknown>>('IPAddress', input.ipAddressId, { expand_dropdowns: false }); if (before.itemtype !== 'NetworkName') throw new Error('IPAddress is not attached to a NetworkName'); if (input.expectedNetworkNameId !== undefined && n(before.items_id) !== input.expectedNetworkNameId) throw new Error('IPAddress attachment changed concurrently'); await this.client.getItem('NetworkPort', input.targetPortId); const target = await this.findOrCreateNetworkName(input.targetPortId, input.networkName, input.fqdnId); await this.client.updateItem('IPAddress', input.ipAddressId, { itemtype: 'NetworkName', items_id: target.id }); const after = await this.client.getItem('IPAddress', input.ipAddressId, { expand_dropdowns: false }); return { success: true, operation: 'move_ip', before, after, target_network_name_id: target.id, correlation_id: input.correlationId, verification_status: 'verified', source_network_name_preserved: true }; }
-  async previewDelete(input: { kind: 'ip_address' | 'network_port'; id: number }): Promise<unknown> { const type = input.kind === 'ip_address' ? 'IPAddress' : 'NetworkPort'; const current = await this.client.getItem(type, input.id, { expand_dropdowns: false }); const dependencies: Record<string, unknown[]> = {}; if (input.kind === 'network_port') { const names = (await this.all('NetworkName')).filter((r) => r.itemtype === 'NetworkPort' && n(r.items_id) === input.id); const nameIds = new Set(names.map((r) => n(r.id))); dependencies.network_names = names; dependencies.ip_addresses = (await this.all('IPAddress')).filter((r) => r.itemtype === 'NetworkName' && nameIds.has(n(r.items_id))); dependencies.vlan_links = (await this.all('NetworkPort_Vlan')).filter((r) => n(r.networkports_id) === input.id); dependencies.port_connections = (await this.all('NetworkPort_NetworkPort')).filter((r) => n(r.networkports_id_1) === input.id || n(r.networkports_id_2) === input.id); } const blocked = Object.values(dependencies).some((rows) => rows.length > 0); const plan = { kind: input.kind, id: input.id, itemtype: type, current, dependencies, operation: 'purge_exact_network_object' }; return { ...plan, preview_fingerprint: hash(plan), applicable: !blocked, blocked_reasons: blocked ? ['network_port_has_relations'] : [], modifies_data: false }; }
-  async delete(input: { kind: 'ip_address' | 'network_port'; id: number; previewFingerprint: string; confirmation: string; correlationId: string }): Promise<unknown> { const preview = await this.previewDelete(input) as Record<string, unknown>; if (preview.preview_fingerprint !== input.previewFingerprint) throw new Error('Network object delete preview is stale'); if (preview.applicable !== true) throw new Error(`Delete blocked: ${(preview.blocked_reasons as string[]).join(', ')}`); await this.client.deleteItem(String(preview.itemtype), input.id, true); return { success: true, operation: 'delete_network_object', kind: input.kind, id: input.id, before: preview.current, correlation_id: input.correlationId, verification_status: 'request_succeeded' }; }
+  async previewDelete(input: { kind: 'ip_address' | 'network_port'; id: number }): Promise<unknown> {
+    const type = input.kind === 'ip_address' ? 'IPAddress' : 'NetworkPort';
+    const current = await this.client.getItem<Record<string, unknown>>(type, input.id, { expand_dropdowns: false });
+    const dependencies: Record<string, unknown[]> = {};
+    if (input.kind === 'network_port') {
+      const names = (await this.all('NetworkName')).filter((r) => r.itemtype === 'NetworkPort' && n(r.items_id) === input.id);
+      const nameIds = new Set(names.map((r) => n(r.id)));
+      dependencies.network_names = names;
+      dependencies.ip_addresses = (await this.all('IPAddress')).filter((r) => r.itemtype === 'NetworkName' && nameIds.has(n(r.items_id)));
+      dependencies.vlan_links = (await this.all('NetworkPort_Vlan')).filter((r) => n(r.networkports_id) === input.id);
+      dependencies.port_connections = (await this.all('NetworkPort_NetworkPort')).filter((r) => n(r.networkports_id_1) === input.id || n(r.networkports_id_2) === input.id);
+    }
+    const blocked: string[] = [];
+    if (Object.values(dependencies).some((rows) => rows.length > 0)) blocked.push('network_port_has_relations');
+    if (input.kind === 'network_port') {
+      if (![0, 1, '0', '1', false, true].includes(current.is_deleted as never)) blocked.push('soft_delete_contract_missing');
+      if ([1, '1', true].includes(current.is_deleted as never)) blocked.push('already_in_trash');
+      if ([1, '1', true].includes(current.is_template as never)) blocked.push('template_deletion_excluded');
+    }
+    const plan = { kind: input.kind, id: input.id, itemtype: type, current, dependencies,
+      operation: input.kind === 'network_port' ? 'move_to_trash' : 'purge_exact_network_object',
+      recoverability: input.kind === 'network_port' ? 'trash' : 'not_recoverable', blocked_reasons: blocked };
+    return { ...plan, preview_fingerprint: hash(plan), applicable: blocked.length === 0, modifies_data: false };
+  }
+  async delete(input: { kind: 'ip_address' | 'network_port'; id: number; previewFingerprint: string; confirmation: string; correlationId: string }): Promise<unknown> {
+    if (input.confirmation !== 'I_HAVE_VERIFIED_THE_NETWORK_OBJECT_DELETE') throw new Error('Explicit network object deletion confirmation required');
+    const preview = await this.previewDelete(input) as Record<string, unknown>;
+    if (preview.preview_fingerprint !== input.previewFingerprint) throw new Error('Network object delete preview is stale');
+    if (preview.applicable !== true) throw new Error(`Delete blocked: ${(preview.blocked_reasons as string[]).join(', ')}`);
+    const type = String(preview.itemtype);
+    const permanent = preview.operation !== 'move_to_trash';
+    const result = { operation: 'delete_network_object', kind: input.kind, id: input.id, before: preview.current, recoverability: preview.recoverability, correlation_id: input.correlationId, retry_warning: 'do_not_retry_delete_blindly' };
+    try { await this.client.deleteItem(type, input.id, permanent); }
+    catch { return { ...result, success: false, write_status: 'outcome_uncertain', verification_status: 'not_verified' }; }
+    try {
+      const after = await this.client.getItem<Record<string, unknown>>(type, input.id, { expand_dropdowns: false });
+      const verified = !permanent && [1, '1', true].includes(after.is_deleted as never);
+      return { ...result, success: verified, verification_status: verified ? 'verified' : 'outcome_requires_review', after };
+    } catch (error) {
+      const absent = permanent && error instanceof GlpiError && error.status === 404 && error.glpiCode === 'ERROR_ITEM_NOT_FOUND';
+      return { ...result, success: absent, verification_status: absent ? 'verified' : 'outcome_requires_review' };
+    }
+  }
 }

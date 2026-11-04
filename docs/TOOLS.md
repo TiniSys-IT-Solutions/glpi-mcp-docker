@@ -1,6 +1,6 @@
 # Active MCP tools
 
-This catalogue lists the 292 tools currently registered by `src/index.ts` on
+This catalogue lists the 294 tools currently registered by `src/index.ts` on
 the active release branch. Unless stated otherwise, they are active through the Legacy
 API and through Hybrid mode's explicit Legacy routing. High-Level API support
 is available for the explicitly documented domains below.
@@ -760,3 +760,59 @@ post-write verification; see [consumable preparation](CONSUMABLES.md).
 
 These tools use explicit Legacy routing in Hybrid. High-Level returns not_supported.
 The plugin wizard and approval workflow are not invoked; see [Consommables](CONSUMABLES.md).
+
+## Guarded business object deletion
+
+| Tool | Access | Purpose |
+| --- | --- | --- |
+| `glpi_preview_delete_business_object` | Read | Inspect one allowlisted object, scan dependencies and return a SHA-256 fingerprint, recoverability and blocking reasons. |
+| `glpi_delete_business_object` | Destructive | Recompute the preview, require the exact fingerprint and literal confirmation, delete one object, and verify its resulting state. |
+
+Both tools accept `itemtype` and `id`. The allowlist is `Problem`, `Change`,
+`Project`, `IPNetwork`, `PluginGlpiinventoryIPRange` and `NetworkName`.
+The apply tool additionally requires `preview_fingerprint`, a UUID
+`correlation_id`, and `confirmation: "I_HAVE_VERIFIED_THE_OBJECT_DELETE"`.
+Legacy and Hybrid explicitly use the Legacy adapter. High-Level returns
+not-supported without trying another transport.
+
+| Object | Operation | Dependencies checked |
+| --- | --- | --- |
+| Problem | Trash, no purge | Ticket/change/problem links, assets, tasks, costs, followups, solutions, projects and documents |
+| Change | Trash, no purge | Ticket/problem/change links, assets, tasks, costs, validations, followups, solutions, projects and documents |
+| Project | Trash, no purge | Child projects including trash, tasks, assets, ITIL links, costs and documents |
+| IPNetwork | **Permanent** | Child networks, IPAddress_IPNetwork, VLAN links, NetworkName including trash |
+| Inventory IP range | **Permanent** | SNMP credential associations and JSON task-job targets |
+| NetworkName | Trash, no purge | IPAddress children including trash and NetworkAlias children; the parent port is preserved |
+
+`glpi_preview_delete_network_object` / `glpi_delete_network_object` retain the
+existing network dependency checks. Port deletion now uses native trash rather
+than forced purge, and verifies `is_deleted`. The parent asset need not be active;
+its ownership fields remain in the fingerprint. No VLAN, IP, name or physical
+connection is removed automatically. An IPAddress deletion remains permanent.
+
+An incomplete, forbidden, malformed or capped dependency scan blocks apply.
+Scans paginate up to 50,000 records per collection/state; the cap is a failure,
+never a claim of completeness. Completeness refers to the audited relations
+visible to the active GLPI profile, not a global database audit. Actor assignments,
+project teams and history are preserved by native soft deletion; they are not
+removed as dependencies. Third-party plugin hooks are not exhaustively audited.
+Legacy REST cannot lock the interval between the last scan and DELETE.
+
+A successful DELETE request alone does not prove completion. Trash is verified
+by reading `is_deleted`; permanent deletion requires the exact GLPI item-not-found
+404. Permission errors, timeouts and generic 404s yield `outcome_requires_review`.
+A failed DELETE yields `outcome_uncertain`; neither state triggers an automatic
+replay. These tools expose no general-purpose purge option.
+
+For the identified cleanup, a future separately authorized run should preview
+and trash NetworkName #12297 first, then obtain a fresh preview for NetworkPort
+#28741. Remaining dependencies must be resolved explicitly. This implementation
+and its local tests do not delete the production objects.
+
+Contract audit: GLPI 11.0.11 `CommonDBTM::delete`, `NetworkName` and `NetworkPort`
+(overrides of `useDeletedToLockIfDynamic` return false), `IPNetwork::cleanDBonPurge`,
+ITIL/project relation definitions and `install/mysql/glpi-empty.sql`; GLPI
+Inventory `iprange.class.php::post_purgeItem`, `taskjob.class.php::getTaskfromIPRange`
+and `plugin_glpiinventory-empty.sql`. These sources confirm trash for names/ports
+and the absence of trash for IPNetwork/Inventory IP ranges. The adapter uses only
+native `/apirest.php` resources, without SQL or automatic cascade cleanup.

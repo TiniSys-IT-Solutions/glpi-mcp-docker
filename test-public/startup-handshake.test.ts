@@ -68,7 +68,7 @@ test('initialize, tools/list and server info complete while GLPI warmup is pendi
     assert.equal(client.getServerVersion()?.name, 'glpi-mcp-docker');
     await warmupStarted;
     const tools = await client.listTools();
-    for (const name of ['glpi_addressing_get_report', 'glpi_addressing_set_ip_comment', 'glpi_preview_consumable_creation', 'glpi_get_consumable_stock', 'glpi_preview_consumable_stock_change', 'glpi_apply_consumable_stock_change']) {
+    for (const name of ['glpi_addressing_get_report', 'glpi_addressing_set_ip_comment', 'glpi_preview_consumable_creation', 'glpi_get_consumable_stock', 'glpi_preview_consumable_stock_change', 'glpi_apply_consumable_stock_change', 'glpi_preview_delete_business_object', 'glpi_delete_business_object']) {
       assert.ok(tools.tools.some((tool) => tool.name === name), `${name} missing`);
     }
     const info = await client.readResource({ uri: 'glpi://server/info' });

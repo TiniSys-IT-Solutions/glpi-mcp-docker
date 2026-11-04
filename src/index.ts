@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { DELETABLE_OBJECT_TYPES, DELETE_CONFIRMATION, ObjectDeletionService, deletionPreviewSchema, deletionApplySchema } from './core/object-deletion/service.js';
 import { ConsumableService } from './core/consumables/service.js';
 import { consumableStockSchema, consumableChangeSchema, consumableApplySchema } from './core/consumables/schemas.js';
 
@@ -365,6 +366,7 @@ let catalogService: CatalogService;
 let consumableService: ConsumableService;
 let phoneLineService: PhoneLineService;
 let governanceService: GovernanceService;
+let objectDeletionService: ObjectDeletionService;
 let networkTopologyService: NetworkTopologyService;
 let componentRelationService: ComponentRelationService;
 let assetSubobjectService: AssetSubobjectService;
@@ -486,6 +488,8 @@ function isBackendServiceTool(toolName: string): boolean {
     CATALOG_TOOLS.has(toolName) ||
     CONSUMABLE_TOOLS.has(toolName) ||
     GOVERNANCE_TOOLS.has(toolName) ||
+    toolName === 'glpi_preview_delete_business_object' ||
+    toolName === 'glpi_delete_business_object' ||
     NETWORK_TOPOLOGY_TOOLS.has(toolName) ||
     COMPONENT_RELATION_TOOLS.has(toolName) ||
     ASSET_SUBOBJECT_TOOLS.has(toolName) ||
@@ -1928,7 +1932,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     { name: 'glpi_remove_network_link', description: 'Remove only one fingerprinted VLAN membership or port connection after literal confirmation.', inputSchema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', enum: ['vlan', 'port_connection'] }, relation_id: { type: 'number', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_NETWORK_LINK_REMOVAL'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['kind', 'relation_id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
     { name: 'glpi_attach_ip_address', description: 'Idempotently attach an IPv4/IPv6 address to a port through an existing or newly verified NetworkName.', inputSchema: { type: 'object', additionalProperties: false, properties: { port_id: { type: 'number', minimum: 1 }, address: { type: 'string' }, network_name: { type: 'string' }, fqdn_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['port_id', 'address', 'correlation_id'] } },
     { name: 'glpi_move_ip_address', description: 'Move one IPAddress to a NetworkName on another port with an optional expected-current-parent guard.', inputSchema: { type: 'object', additionalProperties: false, properties: { ip_address_id: { type: 'number', minimum: 1 }, target_port_id: { type: 'number', minimum: 1 }, network_name: { type: 'string' }, fqdn_id: { type: 'number', minimum: 1 }, expected_network_name_id: { type: 'number', minimum: 1 }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['ip_address_id', 'target_port_id', 'correlation_id'] } },
-    { name: 'glpi_preview_delete_network_object', description: 'Preview deletion of one IP address or port; ports are blocked while any name, IP, VLAN or physical link remains.', inputSchema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', enum: ['ip_address', 'network_port'] }, id: { type: 'number', minimum: 1 } }, required: ['kind', 'id'] } },
+    { name: 'glpi_preview_delete_business_object', description: 'Preview deletion of an allowlisted business object with dependencies, fingerprint and explicit trash/permanent-delete warning. Incomplete scans block deletion.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...DELETABLE_OBJECT_TYPES] }, id: { type: 'integer', minimum: 1 } }, required: ['itemtype', 'id'] } },
+    { name: 'glpi_delete_business_object', description: 'Delete exactly one previewed object after explicit confirmation and fresh dependency checks. Uses trash for Problem, Change, Project and NetworkName; IPNetwork and Inventory IP ranges are permanently deleted. Verifies the result, never cascades or retries.', inputSchema: { type: 'object', additionalProperties: false, properties: { itemtype: { type: 'string', enum: [...DELETABLE_OBJECT_TYPES] }, id: { type: 'integer', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', const: DELETE_CONFIRMATION }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['itemtype', 'id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
+    { name: 'glpi_preview_delete_network_object', description: 'Preview permanent IPAddress deletion or NetworkPort move to trash; ports are blocked while any active name, IP, VLAN or physical link remains.', inputSchema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', enum: ['ip_address', 'network_port'] }, id: { type: 'number', minimum: 1 } }, required: ['kind', 'id'] } },
     { name: 'glpi_delete_network_object', description: 'Delete one exact fingerprinted IP address or dependency-free port after literal confirmation.', inputSchema: { type: 'object', additionalProperties: false, properties: { kind: { type: 'string', enum: ['ip_address', 'network_port'] }, id: { type: 'number', minimum: 1 }, preview_fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' }, confirmation: { type: 'string', enum: ['I_HAVE_VERIFIED_THE_NETWORK_OBJECT_DELETE'] }, correlation_id: { type: 'string', format: 'uuid' } }, required: ['kind', 'id', 'preview_fingerprint', 'confirmation', 'correlation_id'] } },
     { name:'glpi_list_asset_components',description:'List component relations of one source-audited Device type for an asset.',inputSchema:{type:'object',additionalProperties:false,properties:{itemtype:{type:'string',enum:[...COMPONENT_ASSET_TYPES]},asset_id:{type:'number',minimum:1},component_type:{type:'string',enum:[...COMPONENT_TYPES]}},required:['itemtype','asset_id','component_type']}},
     { name:'glpi_get_component_usage',description:'List every asset relation using a component definition and report whether deletion is safe.',inputSchema:{type:'object',additionalProperties:false,properties:{component_type:{type:'string',enum:[...COMPONENT_TYPES]},component_id:{type:'number',minimum:1}},required:['component_type','component_id']}},
@@ -2342,6 +2348,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'glpi_remove_network_link': { const input = networkLinkRemoveSchema.parse(args); return text(await networkTopologyService.removeLink({ kind: input.kind, relationId: input.relation_id, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id })); }
       case 'glpi_attach_ip_address': { const input = ipAttachSchema.parse(args); return text(await networkTopologyService.attachIPAddress({ portId: input.port_id, address: input.address, networkName: input.network_name, fqdnId: input.fqdn_id, correlationId: input.correlation_id })); }
       case 'glpi_move_ip_address': { const input = ipMoveSchema.parse(args); return text(await networkTopologyService.moveIPAddress({ ipAddressId: input.ip_address_id, targetPortId: input.target_port_id, networkName: input.network_name, fqdnId: input.fqdn_id, expectedNetworkNameId: input.expected_network_name_id, correlationId: input.correlation_id })); }
+      case 'glpi_preview_delete_business_object': return text(await objectDeletionService.preview(deletionPreviewSchema.parse(args)));
+      case 'glpi_delete_business_object': return text(await objectDeletionService.delete(deletionApplySchema.parse(args)));
       case 'glpi_preview_delete_network_object': { const input = topologyDeletePreviewSchema.parse(args); return text(await networkTopologyService.previewDelete(input)); }
       case 'glpi_delete_network_object': { const input = topologyDeleteSchema.parse(args); return text(await networkTopologyService.delete({ kind: input.kind, id: input.id, previewFingerprint: input.preview_fingerprint, confirmation: input.confirmation, correlationId: input.correlation_id })); }
       case 'glpi_list_asset_components':{const i=componentListSchema.parse(args);return text(await componentRelationService.list({itemtype:i.itemtype,assetId:i.asset_id,componentType:i.component_type}));}
@@ -3714,6 +3722,7 @@ async function main() {
     consumableService = apiRouter.services.consumables;
     phoneLineService = apiRouter.services.phoneLines;
     governanceService = apiRouter.services.governance;
+    objectDeletionService = apiRouter.services.objectDeletion;
     networkTopologyService = apiRouter.services.networkTopology;
     componentRelationService = apiRouter.services.componentRelations;
     assetSubobjectService = apiRouter.services.assetSubobjects;

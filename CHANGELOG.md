@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.12 — 2026-11-04
+
+- Add guarded business-object deletion preview/apply for Problem, Change, Project,
+  IPNetwork, Inventory IP ranges and NetworkName; the catalogue now has 294 tools.
+- Block incomplete dependency scans, stale fingerprints and unresolved relations;
+  require explicit confirmation and verify trash or exact item-not-found results.
+- Keep IPNetwork/Inventory range deletions explicitly permanent, use native trash
+  for NetworkName and NetworkPort, and preserve uncertain write outcomes without
+  automatic replay. Hybrid explicitly routes these operations to Legacy.
+- Validate cleanup order and protections with synthetic local fixtures only.
+
 ## 0.4.11 — 2026-10-23
 
 - Upgrade the MCP SDK to 1.32.1 and refresh ip-address to resolve the release dependency audit findings.

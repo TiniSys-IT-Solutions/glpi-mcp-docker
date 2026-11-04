@@ -165,13 +165,25 @@ test('hybrid matrix covers every registered MCP tool and contains no phantom too
     active.push(`glpi_inventory_list_${plural}`, `glpi_inventory_get_${singular}`);
   }
 
+  active.push('glpi_preview_delete_business_object', 'glpi_delete_business_object');
   assert.deepEqual(Object.keys(HYBRID_TOOL_BACKENDS).sort(), [...new Set(active)].sort());
-  assert.equal(new Set(active).size, 292, 'README and docs/TOOLS.md tool count must be updated when the registry changes');
+  assert.equal(new Set(active).size, 294, 'README and docs/TOOLS.md tool count must be updated when the registry changes');
   const catalogue = readFileSync(new URL('../docs/TOOLS.md', import.meta.url), 'utf8');
-  assert.match(catalogue, /lists the 292 tools currently registered/);
+  assert.match(catalogue, /lists the 294 tools currently registered/);
   const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /expose \*\*292 outils\*\*/);
+  assert.match(readme, /expose \*\*294 outils\*\*/);
   for (const tool of new Set(active)) {
     assert.ok(catalogue.includes(`\`${tool}\``), `${tool} must be documented in docs/TOOLS.md`);
   }
+});
+
+test('guarded business deletion is explicitly Legacy in Hybrid and unsupported in High-Level', async () => {
+  for (const tool of ['glpi_preview_delete_business_object', 'glpi_delete_business_object']) {
+    assert.equal(createApiRouter(config('legacy')).backendForTool(tool), 'legacy');
+    assert.equal(createApiRouter(config('hybrid')).backendForTool(tool), 'legacy');
+    assert.equal(createApiRouter(config('highlevel')).backendForTool(tool), 'highlevel');
+  }
+  const service = createApiRouter(config('highlevel')).services.objectDeletion;
+  await assert.rejects(() => service.preview({ itemtype: 'Problem', id: 1 }), /not supported/i);
+  await assert.rejects(() => service.delete({ itemtype: 'Problem', id: 1, preview_fingerprint: 'a'.repeat(64), confirmation: 'I_HAVE_VERIFIED_THE_OBJECT_DELETE', correlation_id: '123e4567-e89b-42d3-a456-426614174000' }), /not supported/i);
 });

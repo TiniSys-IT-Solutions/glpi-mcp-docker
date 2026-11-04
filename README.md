@@ -1,7 +1,7 @@
 # GLPI MCP Docker
 
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
-pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **292 outils**
+pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **294 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
 référentiels et statistiques.
 
@@ -19,7 +19,7 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 
 | Besoin | Document |
 | --- | --- |
-| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 292 outils](docs/TOOLS.md) |
+| Liste exhaustive, rôle et niveau d'accès de chaque outil | [Catalogue des 294 outils](docs/TOOLS.md) |
 | Compatibilité Legacy, High-Level et Hybrid | [Matrice API](docs/API_COMPATIBILITY_MATRIX.md) |
 | Authentification | [Authentification](docs/AUTHENTICATION.md) |
 | Réseaux IP et scans Inventory | [Réseaux IP](docs/IP_NETWORKS.md) |
@@ -30,6 +30,16 @@ obligatoire, aucune suppression, aucun ping automatique et aucun accès SQL dire
 | Audit des capacités GLPI 11 / GLPI Inventory et feuille de route CRUD | [Audit des sources](docs/GLPI_SOURCE_TOOL_AUDIT.md) |
 | Versions et tags | [Versioning](docs/VERSIONING.md) |
 | Exposition du service | [Sécurité](SECURITY.md) |
+
+## Développement en cours après 0.4.11
+
+Deux outils d’aperçu/suppression sécurisée complètent le nettoyage des objets
+métier : problèmes, changements, projets, réseaux IP, plages Inventory et noms
+réseau. Les suppressions utilisent une empreinte, une confirmation explicite,
+un contrôle des dépendances et une vérification après écriture. Les noms et
+ports réseau passent en corbeille ; les réseaux IP et plages Inventory sont
+supprimés définitivement. Voir [les contrats et limites](docs/TOOLS.md#guarded-business-object-deletion).
+Ces changements sont validés localement, sans suppression en production.
 
 ## État de la version 0.4.11
 

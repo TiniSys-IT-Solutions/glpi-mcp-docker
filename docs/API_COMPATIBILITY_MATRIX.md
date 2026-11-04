@@ -86,3 +86,11 @@ are explicitly routed to Legacy in Hybrid. High-Level stock operations and
 consumable catalog writes return `not_supported`, without Legacy fallback.
 High-Level model reads use the audited `Assets/Consumable` path. The plugin
 wizard remains outside this contract. See [Consommables](CONSUMABLES.md).
+
+Guarded business-object deletion (`glpi_preview_delete_business_object`,
+`glpi_delete_business_object`) is implemented in Legacy and explicitly routed to
+Legacy in Hybrid. Pure High-Level is unsupported. Problem, Change, Project and
+NetworkName use trash; IPNetwork and Inventory IP ranges are permanently deleted
+only after complete audited dependency scans and fingerprint confirmation.
+Existing NetworkPort deletion now uses trash and post-write verification.
+See [deletion contracts and limits](TOOLS.md#guarded-business-object-deletion).

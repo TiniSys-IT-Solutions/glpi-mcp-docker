@@ -1,3 +1,5 @@
+import { LegacyObjectDeletionService } from '../api/legacy/object-deletion.js';
+import { HighLevelObjectDeletionService } from '../api/highlevel/object-deletion.js';
 import { LegacyConsumableService } from '../api/legacy/consumables.js';
 import { HighLevelConsumableService } from '../api/highlevel/consumables.js';
 import { AppConfig } from '../config/env.js';
@@ -54,6 +56,8 @@ import { HighLevelAssetControlService } from '../api/highlevel/asset-controls.js
 export type BackendName = 'legacy' | 'highlevel';
 
 export const HYBRID_TOOL_BACKENDS: Record<string, BackendName> = {
+  glpi_preview_delete_business_object: 'legacy',
+  glpi_delete_business_object: 'legacy',
   glpi_list_tags: 'legacy',
   glpi_list_asset_tags: 'legacy',
   glpi_attach_tag_to_asset: 'legacy',
@@ -409,6 +413,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
         catalog: new HighLevelCatalogService(highlevel),
         consumables: new HighLevelConsumableService(),
         governance: new HighLevelGovernanceService(),
+        objectDeletion: new HighLevelObjectDeletionService(),
         networkTopology: new HighLevelNetworkTopologyService(),
         componentRelations: new HighLevelComponentRelationService(highlevel),
         assetSubobjects: new HighLevelAssetSubobjectService(highlevel),
@@ -448,6 +453,7 @@ export function createApiRouter(config: AppConfig): ApiRouter {
       catalog: new LegacyCatalogService(client),
       consumables: new LegacyConsumableService(client),
       governance: new LegacyGovernanceService(client),
+      objectDeletion: new LegacyObjectDeletionService(client),
       networkTopology: new LegacyNetworkTopologyService(client),
       componentRelations: new LegacyComponentRelationService(client),
       assetSubobjects: new LegacyAssetSubobjectService(client),

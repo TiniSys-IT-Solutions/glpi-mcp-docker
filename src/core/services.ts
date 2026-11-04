@@ -1,3 +1,4 @@
+import { ObjectDeletionService } from './object-deletion/service.js';
 import { ConsumableService } from './consumables/service.js';
 import { IPNetworkService } from './ip-networks/service.js';
 import { PhoneLineService } from './phone-lines/service.js';
@@ -24,6 +25,7 @@ import { SiteNetworkProvisioningService } from './site-network-provisioning/serv
 import { AssetControlService } from './asset-controls/service.js';
 
 export interface GlpiServices {
+  objectDeletion: ObjectDeletionService;
   consumables: ConsumableService;
   phoneLines: PhoneLineService;
   tickets: TicketService;
