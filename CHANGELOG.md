@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.13 — 2026-11-04
+
+- Synchronize the server product identity with the package release version.
+
 ## 0.4.12 — 2026-11-04
 
 - Add guarded business-object deletion preview/apply for Problem, Change, Project,
