@@ -14,6 +14,11 @@ export function normalizeHighLevelApiVersion(apiVersion: string): string {
   if (!withoutPrefix) {
     throw new Error('GLPI_API_VERSION must not be empty');
   }
+  // GLPI 12 exposes API v3 alongside v2.3. The adapters implement the v2.3
+  // schemas; using an unverified major version must fail before any request.
+  if (Number(withoutPrefix.split('.')[0]) >= 3) {
+    throw new Error('Use High-Level API 2.3 on GLPI 12; API v3 adapters are not implemented');
+  }
   return `v${withoutPrefix}`;
 }
 

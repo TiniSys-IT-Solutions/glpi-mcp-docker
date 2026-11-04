@@ -1,0 +1,77 @@
+name: GLPI 12 API integration
+
+on:
+  push:
+    branches: [glpi-v12]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4']
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: glpi
+          MARIADB_USER: glpi
+          MARIADB_PASSWORD: glpi-disposable
+          MARIADB_ROOT_PASSWORD: root-disposable
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin-source
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: bcmath, curl, dom, fileinfo, gd, intl, mbstring, mysqli, simplexml, sodium, zip
+          coverage: none
+      - name: Install disposable GLPI 12.0.1
+        run: |
+          curl --fail --location --output glpi.tgz \
+            https://github.com/glpi-project/glpi/releases/download/12.0.1/glpi-12.0.1.tgz
+          tar -xzf glpi.tgz
+          php glpi/bin/console database:install \
+            --db-host=127.0.0.1 --db-name=glpi --db-user=glpi --db-password=glpi-disposable \
+            --no-telemetry --no-interaction
+          touch glpi/.tinisys-disposable-test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: plugin-source/package-lock.json
+      - name: Prepare disposable API credentials
+        run: |
+          GLPI_TEST_ROOT="$PWD/glpi" GLPI12_TEST_FIXTURE="$RUNNER_TEMP/glpi12-fixture.json" \
+            php plugin-source/scripts/setup-glpi12-test.php
+          php -S 127.0.0.1:8080 -t glpi/public glpi/public/index.php > "$RUNNER_TEMP/glpi12-http.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/glpi12-http.pid"
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:8080/; then break; fi
+            sleep 1
+          done
+      - name: Check Legacy and High-Level v2.3 contracts
+        working-directory: plugin-source
+        env:
+          GLPI12_DISPOSABLE: '1'
+          GLPI12_TEST_URL: http://127.0.0.1:8080
+          GLPI12_TEST_FIXTURE: ${{ runner.temp }}/glpi12-fixture.json
+        run: |
+          npm ci --ignore-scripts
+          node --import tsx scripts/smoke-glpi12.ts
+      - name: Stop disposable HTTP server
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/glpi12-http.pid"; then kill "$(cat "$RUNNER_TEMP/glpi12-http.pid")" || true; fi
+          rm -f "$RUNNER_TEMP/glpi12-fixture.json"

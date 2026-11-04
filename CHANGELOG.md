@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0 — 2026-11-04
+
+- Prepare GLPI 12 through its Legacy and High-Level v2.3 compatibility endpoints.
+- Reject unimplemented High-Level API v3 before making an upstream request.
+- Add native GLPI 12 smoke instructions and a no-request API version regression.
+
 ## 0.4.14 — 2026-11-04
 
 - Refresh compatible dependencies to resolve the production dependency audit findings.

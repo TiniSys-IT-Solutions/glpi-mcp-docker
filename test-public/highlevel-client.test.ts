@@ -55,3 +55,14 @@ test('HighLevelClient builds /api.php/v2.3 for bare and prefixed versions', () =
   assert.equal(bare.baseUrl, 'https://glpi.example.local/api.php/v2.3');
   assert.equal(prefixed.baseUrl, 'https://glpi.example.local/api.php/v2.3');
 });
+
+
+test('GLPI 12 API v3 is rejected before credentials or HTTP are used', () => {
+  let requests = 0;
+  assert.throws(() => new HighLevelClient({
+    url: 'https://glpi.example.local',
+    apiVersion: '3.0',
+    fetchImpl: async () => { requests += 1; return new Response('{}'); },
+  }), /API v3 adapters are not implemented/);
+  assert.equal(requests, 0);
+});

@@ -1,5 +1,9 @@
 # GLPI MCP Docker
 
+> `glpi-v12`: GLPI 12 migration (0.5.0), using Legacy and High-Level API v2.3.
+> Native API v3 is explicitly unsupported. See [migration and validation](docs/GLPI12_MIGRATION.md).
+
+
 Serveur [Model Context Protocol](https://modelcontextprotocol.io/) Docker-first
 pour GLPI, maintenu par DooSys / TiniSys IT Solutions. Il expose **294 outils**
 pour les tickets, actifs, réseaux IP, GLPI Inventory, entités, LDAP, règles,
