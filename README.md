@@ -1,6 +1,6 @@
 # GLPI MCP Docker
 
-> `glpi-v12`: GLPI 12 migration (0.5.0), using Legacy and High-Level API v2.3.
+> `glpi-v12`: GLPI 12 migration (0.5.0-glpi12-beta.1), using Legacy and High-Level API v2.3.
 > Native API v3 is explicitly unsupported. See [migration and validation](docs/GLPI12_MIGRATION.md).
 
 
