@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0-glpi12-beta.1 - 2026-11-27
+
+First version compatible with GLPI 12.
+
+Préversion qualifiée sur GLPI 12.0.2.
+
+- Validate the Legacy session and High-Level v2.3 contracts against GLPI 12.0.2, including the GenBio Addressing companion.
+- Reject unsupported High-Level API v3 calls before sending an upstream request.
+- Update Hono and verify the production dependency audit, Docker image startup and health endpoint.
+
 ## 0.4.14 — 2026-11-04
 
 - Refresh compatible dependencies to resolve the production dependency audit findings.

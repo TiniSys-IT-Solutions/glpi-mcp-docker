@@ -39,6 +39,7 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/tinisys-it-solutions/glpi-mcp-docker
+          flavor: latest=false
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
